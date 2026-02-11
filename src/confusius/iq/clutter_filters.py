@@ -1,0 +1,627 @@
+"""Utilities for clutter filtering of beamformed IQ data."""
+
+from typing import TYPE_CHECKING, cast
+
+import numpy as np
+import numpy.typing as npt
+
+if TYPE_CHECKING:
+    pass
+
+
+def _check_frequency(freq: float, nyquist: float) -> float:
+    """Validate frequency parameter for digital filters.
+
+    Checks that the given frequency is within the valid range for digital signal
+    processing (0, Nyquist frequency) and returns it unchanged if valid.
+
+    Parameters
+    ----------
+    freq : float
+        Frequency value to validate, in Hertz.
+    nyquist : float
+        Nyquist frequency (half of sampling frequency), in Hertz.
+
+    Returns
+    -------
+    float
+        The input frequency unchanged (if valid).
+
+    Raises
+    ------
+    ValueError
+        If ``freq`` is not in the range ``(0, nyquist)``.
+    """
+    if not 0 < freq < nyquist:
+        raise ValueError(f"Frequency {freq} must be in range (0, {nyquist})")
+    return freq
+
+
+def _validate_block_and_clutter_mask(
+    block: npt.NDArray, clutter_mask: npt.NDArray | None = None
+) -> tuple[npt.NDArray, npt.NDArray]:
+    """Validate IQ block dimensions and prepare signals for clutter filtering.
+
+    Reshapes 4D IQ data to a 2D matrix for clutter filtering and applies spatial masking
+    if provided.
+
+    Parameters
+    ----------
+    block : (time, z, y, x) numpy.ndarray
+        Complex beamformed IQ data, where ``time`` is the temporal dimension and
+        ``(z, y, x)`` are spatial dimensions.
+    clutter_mask : (z, y, x) numpy.ndarray, optional
+        Boolean spatial mask. If provided, only voxels where mask is ``True`` are
+        included in the masked signals.
+
+    Returns
+    -------
+    signals : (time, z * y * x) numpy.ndarray
+        Reshaped IQ data where all spatial dimensions are flattened into the second
+        axis.
+    masked_signals : (time, mask.sum()) numpy.ndarray
+        IQ data for masked voxels only. If ``mask`` is ``None``, this is identical to
+        ``signals``.
+
+    Raises
+    ------
+    ValueError
+        If ``block`` is not 4D, or if ``mask`` shape doesn't match spatial dimensions
+        ``(z, y, x)`` of ``block``.
+    """
+    if block.ndim != 4:
+        raise ValueError(f"'block' must be 4D, got {block.ndim}D")
+
+    volumes, z, y, x = block.shape
+    signals = block.reshape(volumes, -1)
+
+    if clutter_mask is not None:
+        if clutter_mask.shape != (z, y, x):
+            raise ValueError(
+                f"Mask shape {clutter_mask.shape} doesn't match spatial dimensions "
+                f"({z}, {y}, {x})"
+            )
+        masked_signals = signals[:, clutter_mask.ravel()]
+    else:
+        masked_signals = signals
+
+    return signals, masked_signals
+
+
+def _compute_gram_eigendecomposition(
+    masked_signals: npt.NDArray,
+) -> tuple[npt.NDArray, npt.NDArray]:
+    """Compute eigendecomposition of the temporal Gram matrix.
+
+    Computes the eigenvalues and eigenvectors of the Gram matrix formed from masked IQ
+    signals. Results are sorted in descending order of eigenvalues (highest energy
+    first).
+
+    .. important::
+
+        The computation of the Gram matrix can lead to numerical instability when using
+        single-precision data types. It is recommended to cast `masked_signals` to
+        double-precision before calling this function.
+
+    Parameters
+    ----------
+    masked_signals : (time, voxels) numpy.ndarray
+        IQ signals for masked spatial voxels.
+
+    Returns
+    -------
+    eigenvalues : (min(time, voxels),) numpy.ndarray
+        Eigenvalues of the Gram matrix, sorted in descending order.
+    eigenvectors : (min(time, voxels), min(time, voxels)) numpy.ndarray
+        Eigenvectors of the Gram matrix, sorted in descending order of eigenvalues.
+
+    Notes
+    -----
+    The Gram matrix is computed as ``masked_signals @ masked_signals.conj().T``.
+    This is more efficient than full SVD when only the temporal correlations
+    are needed, avoiding computation of the large spatial covariance matrix.
+
+    .. todo::
+
+        Consider implementing dimension-based optimization. The eigendecomposition
+        of the Gram matrix is only more efficient when the number of spatial voxels
+        is much larger than the number of time points. When time > voxels, it would
+        be more efficient to compute the SVD directly on the data matrix instead of
+        forming the temporal Gram matrix. Add logic to choose the optimal approach
+        based on the data dimensions.
+    """
+    from scipy import linalg as sp_linalg
+
+    gram_matrix = masked_signals @ masked_signals.conj().T
+
+    eigenvalues, eigenvectors = sp_linalg.eigh(gram_matrix)
+
+    # eigh returns eigenvalues in ascending order. We want them in descending order when
+    # selecting high-energy components for clutter filtering.
+    eigenvectors = eigenvectors[:, ::-1]
+    eigenvalues = eigenvalues[::-1]
+
+    return eigenvalues, eigenvectors
+
+
+def _apply_clutter_filter(
+    signals: npt.NDArray, clutter_vectors: npt.NDArray
+) -> npt.NDArray:
+    """Apply clutter filtering by regressing out clutter vectors.
+
+    Performs orthogonal projection to remove clutter components from IQ signals.
+    The clutter vectors (typically eigenvectors corresponding to clutter) are
+    projected out of the signal space using the formula:
+    ``filtered = signals - clutter_vectors @ clutter_vectors.conj().T @ signals``
+
+    Parameters
+    ----------
+    signals : (time, voxels) numpy.ndarray
+        IQ signals to filter.
+    clutter_vectors : (time, components) numpy.ndarray
+        Clutter vectors to remove.
+
+    Returns
+    -------
+    (time, voxels) numpy.ndarray
+        Filtered signals with clutter components removed.
+    """
+    if clutter_vectors.size > 0:
+        filtered_signals = (
+            signals - clutter_vectors @ clutter_vectors.conj().T @ signals
+        )
+    else:
+        filtered_signals = signals
+
+    return filtered_signals
+
+
+def clutter_filter_svd_from_indices(
+    block: npt.NDArray,
+    mask: npt.NDArray | None = None,
+    low_cutoff: int | None = None,
+    high_cutoff: int | None = None,
+) -> npt.NDArray:
+    """Filter IQ data using SVD clutter filtering based on component indices.
+
+    This function performs singular value decomposition (SVD) on masked IQ signals
+    and removes clutter by regressing out singular vectors outside the provided
+    index range. Singular vectors are ordered by decreasing energy, so lower indices
+    correspond to higher-energy components (typically tissue clutter).
+
+    !!! warning
+        `block` will be cast to double-precision floating point to avoid numerical
+        instabilities.
+
+    Parameters
+    ----------
+    block : (time, z, y, x) numpy.ndarray
+        Complex beamformed IQ data, where ``time`` is the temporal dimension and
+        ``(z, y, x)`` are spatial dimensions.
+    mask : (z, y x) numpy.ndarray, optional
+        Boolean mask. SVD is computed only from masked voxels. If not provided, all
+        voxels are used.
+    low_cutoff : int, optional
+        Lower bound for singular vector indices to retain (inclusive). Vectors with
+        indices less than `low_cutoff` are treated as clutter and removed.
+        `low_cutoff` must be positive. If not provided, defaults to ``0`` (no
+        high-energy removal).
+    high_cutoff : int, optional
+        Upper bound for singular vector indices to retain (exclusive). Vectors with
+        indices greater than or equal to `high_cutoff` are treated as clutter and
+        removed. `high_cutoff` must be less than the maximum number of components, that
+        is, ``min(time, mask.sum())``. If not provided, defaults to the maximum
+        number of components (no low-energy removal).
+
+    Returns
+    -------
+    (time, z, y, x) numpy.ndarray
+        Filtered IQ data.
+
+    Raises
+    ------
+    ValueError
+        If ``block`` is not 4D, or if cutoff values are invalid.
+
+    Notes
+    -----
+    For efficiency, this function computes the eigendecomposition of the temporal
+    Gram matrix rather than full SVD of the data matrix, avoiding computation of
+    the large spatial covariance matrix.
+
+    References
+    ----------
+    [^1]:
+        Baranger, J., et al. "Adaptive Spatiotemporal SVD Clutter Filtering for
+        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors." IEEE
+        transactions on medical imaging 37.7 (2018): 1574-1586.
+    """
+    signals, masked_signals = _validate_block_and_clutter_mask(block, mask)
+
+    if masked_signals.size == 0:
+        return block
+
+    max_components = cast(int, min(masked_signals.shape))
+    if low_cutoff is None:
+        low_cutoff = 0
+    if high_cutoff is None:
+        high_cutoff = max_components
+
+    if not isinstance(low_cutoff, int) or not isinstance(high_cutoff, int):
+        raise ValueError("Cutoffs must be integers")
+    if not (0 <= low_cutoff < high_cutoff <= max_components):
+        raise ValueError(
+            f"Cutoffs must satisfy 0 <= low_cutoff ({low_cutoff}) < "
+            f"high_cutoff ({high_cutoff}) <= {max_components}"
+        )
+
+    if low_cutoff == 0 and high_cutoff == max_components:
+        return block
+
+    # Computing the eigendecomposition of the temporal Gram matrix is more efficient
+    # than computing the SVD of the data matrix directly, as we avoid computing the full
+    # spatial covariance matrix, which can be very large. Here, the eigenvalues
+    # correspond to the squared singular values, that is, the energies of the singular
+    # vectors.
+    eigenvalues, eigenvectors = _compute_gram_eigendecomposition(
+        # Casting to double-precision for stability.
+        masked_signals.astype(np.cdouble, copy=False)
+    )
+
+    clutter_components = np.concatenate(
+        [eigenvectors[:, :low_cutoff], eigenvectors[:, high_cutoff:]], axis=1
+    )
+
+    filtered_signals = _apply_clutter_filter(signals, clutter_components)
+
+    return filtered_signals.reshape(block.shape)
+
+
+def _validate_energy_cutoffs(
+    low_cutoff: int | float | None, high_cutoff: int | float | None
+) -> tuple[float, float]:
+    """Validate and normalize energy-based cutoff parameters.
+
+    Checks that cutoff values are valid (non-negative) and provides sensible
+    defaults. Used by energy-based clutter filtering functions.
+
+    Parameters
+    ----------
+    low_cutoff : int or float or None
+        Lower energy threshold. Components with energy below this value are treated as
+        clutter. If ``None``, defaults to ``0.0``.
+    high_cutoff : int or float or None
+        Upper energy threshold. Components with energy above this value are treated as
+        clutter. If ``None``, defaults to `numpy.inf`.
+
+    Returns
+    -------
+    low_cutoff : float
+        Validated lower cutoff value (positive).
+    high_cutoff : float
+        Validated upper cutoff value (greater than `low_cutoff`).
+
+    Raises
+    ------
+    ValueError
+        If cutoff values are negative, or if low_cutoff is greater than or equal to
+        high_cutoff.
+    """
+    if low_cutoff is not None and low_cutoff < 0:
+        raise ValueError("Low cutoff must be non-negative.")
+    if high_cutoff is not None and high_cutoff < 0:
+        raise ValueError("High cutoff must be non-negative.")
+
+    low_cutoff = low_cutoff if low_cutoff is not None else 0.0
+    high_cutoff = high_cutoff if high_cutoff is not None else np.inf
+
+    if low_cutoff >= high_cutoff:
+        raise ValueError(
+            f"Low cutoff ({low_cutoff}) must be lower than high cutoff ({high_cutoff})."
+        )
+
+    return low_cutoff, high_cutoff
+
+
+def clutter_filter_svd_from_energy(
+    block: npt.NDArray,
+    mask: npt.NDArray | None = None,
+    low_cutoff: int | float | None = None,
+    high_cutoff: int | float | None = None,
+) -> npt.NDArray:
+    """Filter IQ data using SVD clutter filtering based on component energies.
+
+    This function performs singular value decomposition (SVD) on masked IQ signals and
+    removes clutter by regressing out singular vectors whose energies fall outside the
+    specified range. This is an adaptive filtering approach that identifies clutter
+    based on signal energy rather than component indices.
+
+    !!! warning
+        `block` will be cast to double-precision floating point to avoid numerical
+        instabilities.
+
+    Parameters
+    ----------
+    block : (time, z, y, x) numpy.ndarray
+        Complex beamformed IQ data, where ``time`` is the temporal dimension and
+        ``(z, y, x)`` are spatial dimensions.
+    mask : (z, y, x) numpy.ndarray, optional
+        Boolean mask. SVD is computed only from masked voxels. If not provided, all
+        voxels are used.
+    low_cutoff : int or float, optional
+        Lower bound for singular vector energy to retain (inclusive). Vectors with
+        energy less than ``low_cutoff`` are treated as clutter and removed. `low_cutoff`
+        must be positive. If not provided, defaults to ``0.0`` (no low-energy removal).
+    high_cutoff : int or float, optional
+        Upper bound for singular vector energy to retain (inclusive). Vectors with
+        energy greater than ``high_cutoff`` are treated as clutter and removed. If not
+        provided, defaults to `numpy.inf` (no high-energy removal).
+
+    Returns
+    -------
+    (time, z, y, x) numpy.ndarray
+        Filtered IQ data.
+
+    Raises
+    ------
+    ValueError
+        If ``block`` is not 4D, or if cutoff values are invalid.
+
+    Notes
+    -----
+    For efficiency, this function computes the eigendecomposition of the temporal
+    Gram matrix rather than full SVD of the data matrix, avoiding computation of
+    the large spatial covariance matrix.
+
+    References
+    ----------
+    [^1]:
+        Baranger, J., et al. "Adaptive Spatiotemporal SVD Clutter Filtering for
+        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors." IEEE
+        transactions on medical imaging 37.7 (2018): 1574-1586.
+    """
+    signals, masked_signals = _validate_block_and_clutter_mask(block, mask)
+
+    if masked_signals.size == 0:
+        return block
+
+    low_cutoff, high_cutoff = _validate_energy_cutoffs(low_cutoff, high_cutoff)
+
+    if low_cutoff == 0.0 and high_cutoff == np.inf:
+        return block
+
+    # Computing the eigendecomposition of the temporal Gram matrix is more efficient
+    # than computing the SVD of the data matrix directly, as we avoid computing the full
+    # spatial covariance matrix, which can be very large. Here, the eigenvalues
+    # correspond to the squared singular values, that is, the energies of the singular
+    # vectors.
+    eigenvalues, eigenvectors = _compute_gram_eigendecomposition(
+        # Casting to double-precision for stability.
+        masked_signals.astype(np.cdouble, copy=False)
+    )
+
+    clutter_vectors = eigenvectors[
+        :, (eigenvalues < low_cutoff) | (eigenvalues > high_cutoff)
+    ]
+
+    filtered_signals = _apply_clutter_filter(signals, clutter_vectors)
+
+    return filtered_signals.reshape(block.shape)
+
+
+def clutter_filter_svd_from_cumulative_energy(
+    block: npt.NDArray,
+    mask: npt.NDArray | None = None,
+    low_cutoff: int | float | None = None,
+    high_cutoff: int | float | None = None,
+) -> npt.NDArray:
+    """Filter IQ data using SVD clutter filtering based on cumulative component energies.
+
+    This function performs singular value decomposition (SVD) on masked IQ signals
+    and removes clutter by regressing out singular vectors whose cumulative energies
+    fall outside the specified range. This approach allows filtering based on the
+    total energy contribution of components, useful for retaining a specific
+    percentage of total signal energy.
+
+    !!! warning
+        `block` will be cast to double-precision floating point to avoid numerical
+        instabilities.
+
+    Parameters
+    ----------
+    block : (time, z, y, x) numpy.ndarray
+        Complex beamformed IQ data, where ``time`` is the temporal dimension and
+        ``(z, y, x)`` are spatial dimensions.
+    mask : (z, y, x) numpy.ndarray, optional
+        Boolean mask. SVD is computed only from masked voxels. If not provided, all
+        voxels are used.
+    low_cutoff : int or float, optional
+        Lower bound for cumulative energy to retain (inclusive). Components with
+        cumulative energy lower than `low_cutoff` are treated as clutter and removed.
+        `low_cutoff` must be positive. If not provided, defaults to ``0.0`` (no
+        low-energy removal).
+    high_cutoff : int or float, optional
+        Upper bound for cumulative energy to retain (inclusive). Components with
+        cumulative energy greater than `high_cutoff` are treated as clutter and removed.
+        If not provided, defaults to `numpy.inf` (no high-energy removal).
+
+    Returns
+    -------
+    (time, z, y, x) numpy.ndarray
+        Filtered IQ data.
+
+    Raises
+    ------
+    ValueError
+        If ``block`` is not 4D, or if cutoff values are invalid.
+
+    Notes
+    -----
+    Cumulative energy is computed as the running sum of singular values squared.
+    This allows filtering based on the total energy contribution rather than
+    individual component energies.
+
+    For efficiency, this function computes the eigendecomposition of the temporal
+    Gram matrix rather than full SVD of the data matrix, avoiding computation of
+    the large spatial covariance matrix.
+
+    References
+    ----------
+    [^1]:
+        Baranger, J., et al. "Adaptive Spatiotemporal SVD Clutter Filtering for
+        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors." IEEE
+        transactions on medical imaging 37.7 (2018): 1574-1586.
+    """
+    signals, masked_signals = _validate_block_and_clutter_mask(block, mask)
+
+    if masked_signals.size == 0:
+        return block
+
+    low_cutoff, high_cutoff = _validate_energy_cutoffs(low_cutoff, high_cutoff)
+
+    if low_cutoff == 0.0 and high_cutoff == np.inf:
+        return block
+
+    # Computing the eigendecomposition of the temporal Gram matrix is more efficient
+    # than computing the SVD of the data matrix directly, as we avoid computing the full
+    # spatial covariance matrix, which can be very large. Here, the eigenvalues
+    # correspond to the squared singular values, that is, the energies of the singular
+    # vectors.
+    eigenvalues, eigenvectors = _compute_gram_eigendecomposition(
+        # Casting to double-precision for stability.
+        masked_signals.astype(np.cdouble, copy=False)
+    )
+
+    cumsum_energy = np.cumsum(eigenvalues)
+    clutter_vectors = eigenvectors[
+        :, np.logical_or(cumsum_energy < low_cutoff, cumsum_energy > high_cutoff)
+    ]
+
+    filtered_signals = _apply_clutter_filter(signals, clutter_vectors)
+
+    return filtered_signals.reshape(block.shape)
+
+
+def clutter_filter_sosfiltfilt(
+    block: npt.NDArray,
+    sos: npt.NDArray,
+) -> npt.NDArray:
+    """Filter IQ data using second-order sections (SOS) digital filter.
+
+    Applies a digital filter defined by second-order sections using forward-backward
+    filtering to eliminate phase distortion. This is a general-purpose filtering
+    function that accepts pre-computed SOS coefficients from any SciPy filter design.
+
+    Parameters
+    ----------
+    block : (time, z, y, x) numpy.ndarray
+        Complex beamformed IQ data, where ``time`` is the temporal dimension and
+        ``(z, y, x)`` are spatial dimensions.
+    sos : (sections, 6) numpy.ndarray
+        Second-order sections filter coefficients, typically obtained from SciPy
+        functions like `scipy.signal.butter`, `scipy.signal.cheby1`, etc.
+
+    Returns
+    -------
+    (time, z, y, x) numpy.ndarray
+        Filtered IQ data.
+
+    Raises
+    ------
+    ValueError
+        If ``block`` is not 4D.
+
+    Notes
+    -----
+    Forward-backward filtering (`scipy.signal.sosfiltfilt`) ensures zero phase delay by
+    filtering the signal twice: once forward and once backward.
+    """
+    import scipy.signal as sp_signal
+
+    if block.ndim != 4:
+        raise ValueError(f"'block' must be 4D, got {block.ndim}D")
+
+    return sp_signal.sosfiltfilt(sos, block, axis=0)
+
+
+def clutter_filter_butterworth(
+    block: npt.NDArray,
+    fs: float,
+    low_cutoff: float | None = None,
+    high_cutoff: float | None = None,
+    order: int = 4,
+) -> npt.NDArray:
+    """Filter IQ data using a Butterworth digital filter.
+
+    Applies a Butterworth infinite impulse response (IIR) filter using forward-backward
+    filtering (`scipy.signal.sosfiltfilt`) to eliminate phase distortion. Supports
+    low-pass, high-pass, and band-pass filtering based on the cutoff frequency
+    parameters.
+
+    Parameters
+    ----------
+    block : (time, z, y, x) numpy.ndarray
+        Complex beamformed IQ data, where ``time`` is the temporal dimension and
+        ``(z, y, x)`` are spatial dimensions.
+    fs : float
+        Sampling frequency in Hertz.
+    low_cutoff : float, optional
+        Low cutoff frequency in Hertz, in range ``(0, fs/2)``. If provided, applies
+        high-pass filtering above this frequency.
+    high_cutoff : float, optional
+        High cutoff frequency in Hertz, in range ``(0, fs/2)``. If provided, applies
+        low-pass filtering below this frequency.
+    order : int, default: 4
+        Filter order. Due to forward-backward filtering, the effective order is
+        doubled.
+
+    Returns
+    -------
+    (time, z, y, x) numpy.ndarray
+        Filtered IQ data.
+
+    Raises
+    ------
+    ValueError
+        If `block` is not 4D, if cutoff frequencies are invalid, or if both `low_cutoff`
+        and `high_cutoff` are ``None``.
+    """
+    import scipy.signal as sp_signal
+
+    if block.ndim != 4:
+        raise ValueError(f"'block' must be 4D, got {block.ndim}D")
+
+    if low_cutoff is None and high_cutoff is None:
+        return block
+
+    nyquist = fs / 2
+
+    if low_cutoff is not None and high_cutoff is not None:
+        if high_cutoff <= low_cutoff:
+            raise ValueError(
+                f"High cutoff frequency ({high_cutoff}) must be greater than "
+                f"low cutoff frequency ({low_cutoff})"
+            )
+
+    critical_freq = []
+    btype = None
+
+    if low_cutoff is not None:
+        btype = "high"
+        critical_freq.append(_check_frequency(low_cutoff, nyquist))
+
+    if high_cutoff is not None:
+        if btype is None:
+            btype = "low"
+        else:
+            btype = "band"
+        critical_freq.append(_check_frequency(high_cutoff, nyquist))
+
+    # For single cutoff filters, butter expects a scalar, for band filters it expects a
+    # length-2 sequence.
+    critical_freq_param: float | list[float] = (
+        critical_freq[0] if len(critical_freq) == 1 else critical_freq
+    )
+
+    sos = sp_signal.butter(order, critical_freq_param, btype=btype, fs=fs, output="sos")
+    return clutter_filter_sosfiltfilt(block, sos=sos)

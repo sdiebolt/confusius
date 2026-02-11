@@ -1,0 +1,36 @@
+:root > * {
+  --md-primary-fg-color: #ee5653;
+  --md-primary-fg-color--light: #ffccbc;
+  --md-primary-fg-color--dark: #c62828;
+  --md-accent-fg-color: #ee5653;
+  --md-accent-fg-color--transparent: #ee56531a;
+  --md-accent-bg-color: #ee5653;
+  --md-accent-bg-color--light: #ffccbc;
+}
+
+.md-typeset a {
+  text-decoration: none;
+}
+
+/* TODO: make this work */
+.doc-signature .autorefs a {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+/* Custom admonition: see-also */
+:root {
+  --md-admonition-icon--references: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-notebook-text" viewBox="0 0 24 24"><path d="M2 6h4m-4 4h4m-4 4h4m-4 4h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9.5 8h5m-5 4H16m-6.5 4H14"/></svg>');
+}
+
+.md-typeset .admonition.references,
+.md-typeset details.references {
+  background-color: rgba(142, 43, 155, 0.1);
+}
+
+.md-typeset .references > .admonition-title::before,
+.md-typeset .references > summary::before {
+  background-color: rgb(220, 139, 240);
+  -webkit-mask-image: var(--md-admonition-icon--references);
+          mask-image: var(--md-admonition-icon--references);
+}

@@ -1,0 +1,85 @@
+name: Bug report
+description: Report incorrect behaviour in ConfUSIus.
+labels: ["bug"]
+assignees:
+  - sdiebolt
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this bug report!
+        Please provide the following information.
+  - type: input
+    id: confusius-version
+    attributes:
+      label: ConfUSIus version
+      description: Value of ``confusius.__version__``
+      placeholder: v0.0.1, v0.0.2, etc.
+    validations:
+      required: true
+  - type: input
+    id: python-version
+    attributes:
+      label: Python version
+      description: Version of the Python interpreter
+      placeholder: 3.11, 3.12, 3.13 etc.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      description: Operating system
+      placeholder: Linux, Windows, macOS
+    validations:
+      required: true
+  - type: input
+    id: installation
+    attributes:
+      label: Installation
+      description: How was ConfUSIus installed?
+      placeholder: '"using uv", "using conda", etc.'
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: |
+        Explain why the current behavior is a problem, what the expected
+        output/behaviour is, and why the expected output/behaviour is a better solution.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: |
+        Minimal, reproducible code sample. Must list dependencies in [inline script
+        metadata](https://packaging.python.org/en/latest/specifications/inline-script-metadata/#example).
+        When put in a file named `issue.py` calling `uv run issue.py` should show the
+        issue.
+      value: |
+        ```python
+        # /// script
+        # requires-python = ">=3.11"
+        # dependencies = [
+        #   "confusius@git+https://github.com/sdiebolt/confusius.git@main",
+        # ]
+        # ///
+        #
+        # This script automatically imports the development branch of confusius to check
+        # for issues.
+
+        import confusius
+        # your reproducer code
+        ```
+    validations:
+      required: true
+  - type: textarea
+    id: additional-output
+    attributes:
+      label: Additional output
+      description: |
+        If you think it might be relevant, please provide the output from ``uv pip
+        freeze`` or ``conda env export`` depending on which was used to install Zarr.

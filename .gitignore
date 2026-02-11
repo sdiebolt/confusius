@@ -1,0 +1,24 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Documentation
+_build/
+docs/api/generated/
+docs/auto_examples/
+docs/gallery/
+docs/sg_execution_times.rst
+docs/_static/versions.json
+site/
+
+# Coverage
+htmlcov/
+.coverage
+coverage.*
