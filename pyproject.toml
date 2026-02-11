@@ -10,6 +10,16 @@ authors = [
 requires-python = ">=3.13"
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering :: Image Processing",
+    "Topic :: Scientific/Engineering :: Medical Science Apps",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
 ]
 dependencies = [
     "dask[complete]>=2025.9.0",
