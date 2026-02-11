@@ -3,6 +3,7 @@
 import xarray as xr
 
 from confusius.xarray.io import FUSIIOAccessor
+from confusius.xarray.iq import FUSIIQAccessor
 from confusius.xarray.plotting import FUSIPlotAccessor
 from confusius.xarray.registration import FUSIRegistrationAccessor
 from confusius.xarray.scale import FUSIScaleAccessor
@@ -103,3 +104,22 @@ class FUSIAccessor:
         >>> data.fusi.io.to_nii("recording.nii.gz")
         """
         return FUSIIOAccessor(self._obj)
+
+    @property
+    def iq(self) -> FUSIIQAccessor:
+        """Access IQ processing operations.
+
+        Returns
+        -------
+        FUSIIQAccessor
+            Accessor for IQ processing methods.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> ds = xr.open_zarr("output.zarr")
+        >>> iq = ds["iq"]
+        >>> pwd = iq.fusi.iq.process_to_power_doppler()
+        >>> velocity = iq.fusi.iq.process_to_axial_velocity()
+        """
+        return FUSIIQAccessor(self._obj)
