@@ -1,5 +1,6 @@
-![Version](https://img.shields.io/badge/version-0.0.1--a1-orange.svg)
-![Python](https://img.shields.io/badge/python-3.13%20%7C%203.14-blue.svg)
+![PyPI version](https://img.shields.io/pypi/v/confusius)
+![Python versions](https://img.shields.io/pypi/pyversions/confusius)
+![License](https://img.shields.io/pypi/l/confusius)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
@@ -33,21 +34,24 @@ If you already have a project folder, you may create a virtual environment as fo
 uv venv
 ```
 
-### 2. Install ConfUSIus from source
+### 2. Install ConfUSIus
 
-ConfUSIus is a package developed by Samuel Le Meur-Diebolt at the Cortexlab and is not
-yet available on PyPI. You can add it as a project dependency directly from the GitHub
-repository using the following command if your project is managed with `uv`:
+ConfUSIus is available on PyPI. Install it using:
+
+```bash
+uv add confusius
+```
+
+Or with pip:
+
+```bash
+pip install confusius
+```
+
+To install the latest development version from GitHub:
 
 ```bash
 uv add git+https://github.com/sdiebolt/confusius.git
-```
-
-Or if you simply created a virtual environment using `uv venv`:
-
-```bash
-source .venv/bin/activate
-uv pip install git+https://github.com/sdiebolt/confusius.git
 ```
 
 ### 3. Check installation
