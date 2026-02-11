@@ -1,0 +1,176 @@
+# ConfUSIus Agent Guidelines
+
+## Project Status
+
+This is a **pre-alpha package** under rapid iteration. Backward compatibility is not a concern - feel free to make breaking API changes when they improve the design.
+
+## Build/Lint/Test Commands
+
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management and [just](https://github.com/casey/just) as a command runner.
+
+### Build & Environment
+- `uv sync` - Install dependencies and sync the virtual environment
+- `uv build` - Build the package
+
+### Documentation
+- `just docs` (or `just d`) - Build documentation using Zensical
+- `just clean-docs` (or `just cd`) - Clean documentation build directory and generated API files
+
+### Linting, Formatting & Type Checking
+- `just pre-commit` (or `just pc`) - Run all pre-commit hooks (recommended)
+- `uv run ruff check . --fix` - Run Ruff linter with auto-fix
+- `uv run ruff format .` - Format code with Ruff
+- `uv run ty check src/` - Run ty type checking
+- `uv run codespell` - Run spell checker
+
+Pre-commit hooks include:
+- **ruff-check**: Linting with auto-fix
+- **ruff-format**: Code formatting
+- **ty**: Type checking (src/ directory only)
+- **codespell**: Spell checking
+- **numpydoc-validation**: Docstring validation
+
+### Testing
+- `just test` (or `just t`) - Run all tests with coverage
+- `just test-verbose` (or `just tv`) - Run all tests with verbose output
+- `uv run pytest path/to/test_file.py` - Run a single test file
+- `uv run pytest path/to/test_file.py::TestClass::test_method` - Run a single test
+- `uv run pytest -m "not slow"` - Skip slow tests
+- `uv run pytest -m "not real_data"` - Skip tests requiring real data files
+
+Coverage reports are generated automatically (terminal, HTML in `htmlcov/`, and XML).
+
+## Code Style Guidelines
+
+### Imports
+- Use absolute imports: `from confusius.io import AUTCDAT`
+- Group imports: standard library, third-party, local modules
+- Use type-only imports when possible: `from typing import TYPE_CHECKING`
+
+### Formatting
+- Use Ruff for auto-formatting (Black compatible)
+- Line length: follow Ruff defaults
+- Use double quotes for strings unless single quotes are needed for escaping
+
+### Comments
+1. Comments should not duplicate code.
+2. Good comments do not excuse unclear code.
+3. If you can't write a clear comment, there may be a problem with the code.
+4. Comments should dispel confusion, not cause it.
+5. Explain unidiomatic code in comments.
+6. Provide links to the original source of copied code.
+7. Include links to external references where they will be most helpful.
+8. Add comments when fixing bugs.
+9. Use `TODO:` prefix for comments to mark incomplete implementations.
+10. All comments should end with a period.
+
+### Types
+- Use comprehensive type hints with `numpy.typing` for arrays
+- Use `Literal` for string literal types
+- Use `TypedDict` for structured data dictionaries
+- Use `TypeAlias` for complex type definitions
+- Use `npt.NDArray` for NumPy arrays with specific dtypes
+- Enable `py.typed` marker for type checking
+
+### Naming Conventions
+- Functions/methods: `snake_case`
+- Classes: `PascalCase`
+- Constants: `UPPER_CASE`
+- Private functions/methods: leading underscore `_function_name`
+- Variables: descriptive `snake_case` names
+
+### Error Handling
+- Use specific exceptions: `ValueError`, `TypeError`, `FileNotFoundError`
+- Use `warnings.warn()` for non-critical issues
+- Validate inputs early with descriptive error messages
+- Use try/except blocks for external operations
+
+### Documentation
+- Use NumPy docstring format for all public functions
+- Include Parameters, Returns, Raises sections
+- Document complex algorithms with references
+- Use type hints in docstrings when helpful
+- Include default values in the type parameter as `arg : type, default: value`, or `arg
+  : type, optional` when the default is `None`.
+
+### Code Structure
+- Use pathlib.Path for file operations
+- Use context managers for file handling
+- Prefer functional programming where appropriate
+- Use list/dict comprehensions for simple transformations
+- Keep functions focused on single responsibilities
+
+### Performance
+- Use NumPy operations for array computations
+- Use Dask for large array processing
+- Prefer vectorized operations over loops
+- Use appropriate data types to minimize memory usage
+
+## Commit Message Convention
+
+This project follows the [Commitizen](https://commitizen.github.io/cz-cli/) convention for commit messages.
+
+### Format
+```
+<type>(<scope>): <short summary>
+
+<body>
+```
+
+### Types
+- **feat**: A new feature
+- **fix**: A bug fix
+- **docs**: Documentation only changes
+- **style**: Code style changes (formatting, semicolons, etc.)
+- **refactor**: Code changes that neither fix a bug nor add a feature
+- **perf**: Performance improvements
+- **test**: Adding or correcting tests
+- **chore**: Changes to build process or auxiliary tools
+
+### Scopes
+Use a scope that describes the affected component:
+- `io`, `nifti`, `autc`, `zarr` - for I/O modules
+- `xarray`, `io-accessor`, `plotting`, `registration` - for xarray extensions
+- `iq`, `reduce`, `clutter` - for IQ processing
+- `docs`, `mkdocs`, `api` - for documentation
+- `tests` - for test infrastructure
+
+### Examples
+```
+feat(nifti): add support for NIfTI sidecar metadata
+
+docs(mkdocs): update installation instructions
+
+test(nifti): add fixtures for 2D/3D/4D NIfTI files
+
+refactor(iq): simplify power reduction algorithm
+```
+
+## Testing Guidelines
+
+### Philosophy
+- **No useless tests**: Tests must fail if the function returns garbage. Avoid tests that only
+  check shape preservation or that output differs from input.
+- **Concise test suite**: No redundant tests. Each test should verify something unique.
+- **Test public API only**: Do not test private functions (prefixed with `_`). They are
+  implementation details covered by testing the public functions that use them.
+
+### What to Test
+1. **Edge cases**: Empty inputs, boundary conditions, special values.
+2. **Error validation**: Ensure expected exceptions are raised for invalid inputs.
+3. **Reference implementations**: Compare against known-correct implementations (e.g., scipy
+   for wrappers, naive implementations for optimized code).
+
+### When to Use Property-Based Tests
+- **Only** when no reference implementation exists.
+- Examples: mathematical properties (idempotence, commutativity, invariants).
+- Prefer reference implementation tests when available.
+
+### Test Structure
+- Use pytest fixtures for reusable test data.
+- Use `numpy.testing.assert_allclose` for floating-point comparisons.
+- Use `numpy.testing.assert_array_equal` for exact comparisons.
+- Use `pytest.raises` for expected exceptions.
+- Use `pytest.warns` for expected warnings.
+- Keep tests fast by using small array sizes.
+- Use seeded random number generators for reproducibility.

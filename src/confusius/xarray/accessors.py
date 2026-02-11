@@ -1,0 +1,105 @@
+"""Xarray accessor for fUSI-specific operations."""
+
+import xarray as xr
+
+from confusius.xarray.io import FUSIIOAccessor
+from confusius.xarray.plotting import FUSIPlotAccessor
+from confusius.xarray.registration import FUSIRegistrationAccessor
+from confusius.xarray.scale import FUSIScaleAccessor
+
+__all__ = ["FUSIAccessor"]
+
+
+@xr.register_dataarray_accessor("fusi")
+class FUSIAccessor:
+    """Xarray accessor for fUSI-specific operations.
+
+    Provides convenient methods for functional ultrasound imaging data analysis.
+
+    Parameters
+    ----------
+    xarray_obj : xarray.DataArray
+        The ``DataArray`` to wrap.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> import numpy as np
+    >>> from confusius import xarray as cxr  # Registers the accessor
+    >>> data = xr.DataArray([1, 10, 100, 1000])
+    >>> data.fusi.scale.db(factor=20)
+    <xarray.DataArray (dim_0: 4)>
+    array([-60., -40., -20.,   0.])
+    """
+
+    def __init__(self, xarray_obj: xr.DataArray) -> None:
+        self._obj = xarray_obj
+
+    @property
+    def scale(self) -> FUSIScaleAccessor:
+        """Access scaling operations.
+
+        Returns
+        -------
+        FUSIScaleAccessor
+            Accessor for scaling transformations.
+
+        Examples
+        --------
+        >>> data = xr.DataArray([1, 10, 100, 1000])
+        >>> data.fusi.scale.db(factor=10)
+        <xarray.DataArray (dim_0: 4)>
+        array([-30., -20., -10.,   0.])
+        """
+        return FUSIScaleAccessor(self._obj)
+
+    @property
+    def plot(self) -> FUSIPlotAccessor:
+        """Access plotting operations.
+
+        Returns
+        -------
+        FUSIPlotAccessor
+            Accessor for plotting methods.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> data = xr.open_zarr("output.zarr")["iq"]
+        >>> viewer, layer = data.fusi.plot.napari()
+        """
+        return FUSIPlotAccessor(self._obj)
+
+    @property
+    def register(self) -> FUSIRegistrationAccessor:
+        """Access registration operations.
+
+        Returns
+        -------
+        FUSIRegistrationAccessor
+            Accessor for registration methods.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> data = xr.open_zarr("output.zarr")["pwd"]
+        >>> registered = data.fusi.register.volumewise(reference_time=0)
+        """
+        return FUSIRegistrationAccessor(self._obj)
+
+    @property
+    def io(self) -> FUSIIOAccessor:
+        """Access IO operations.
+
+        Returns
+        -------
+        FUSIIOAccessor
+            Accessor for IO methods (to_nii, etc.).
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> data = xr.open_zarr("output.zarr")["pwd"]
+        >>> data.fusi.io.to_nii("recording.nii.gz")
+        """
+        return FUSIIOAccessor(self._obj)
