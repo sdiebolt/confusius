@@ -2,9 +2,6 @@
 ![Python versions](https://img.shields.io/pypi/pyversions/confusius)
 ![License](https://img.shields.io/pypi/l/confusius)
 [![DOI](https://zenodo.org/badge/1155356116.svg)](https://doi.org/10.5281/zenodo.18611124)
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![ty](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ty/main/assets/badge/v0.json)](https://github.com/astral-sh/ty)
 [![codecov](https://codecov.io/github/sdiebolt/confusius/graph/badge.svg?token=TL5AIRNSHS)](https://codecov.io/github/sdiebolt/confusius)
 
 # ConfUSIus
