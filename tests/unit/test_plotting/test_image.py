@@ -442,3 +442,35 @@ class TestPlotCarpet:
         fig, ax = plot_carpet(sample_data, decimation_threshold=None)
 
         assert fig is mock_fig
+
+    @patch("matplotlib.pyplot.subplots")
+    def test_plot_carpet_with_dask_array(self, mock_subplots):
+        """`plot_carpet` works with Dask-backed arrays without explicit compute."""
+        import dask.array as da
+
+        mock_fig = MagicMock()
+        mock_ax = MagicMock()
+        mock_subplots.return_value = (mock_fig, mock_ax)
+
+        # Create a Dask-backed DataArray (simulating lazy-loaded data).
+        np.random.seed(42)
+        dask_array = da.from_array(
+            np.random.randn(100, 20, 1, 30) + 1j * np.random.randn(100, 20, 1, 30),
+            # Keep time axis unchunked for detrend/standardize operations.
+            chunks=(100, 10, 1, 15),
+        )
+        dask_data = xr.DataArray(
+            dask_array,
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": np.linspace(0, 10, 100),
+                "z": np.linspace(0, 5, 20),
+                "y": [0.0],
+                "x": np.linspace(0, 10, 30),
+            },
+        )
+
+        # This should not raise NotImplementedError about .item() on Dask arrays.
+        fig, ax = plot_carpet(dask_data)
+
+        assert fig is mock_fig

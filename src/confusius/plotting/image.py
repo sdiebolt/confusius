@@ -316,9 +316,9 @@ def plot_carpet(
         signals.attrs["units"] = "z-score"
 
     if vmin is None or vmax is None:
-        std_val = signals.std(axis=0).mean().item()
-        default_vmin = signals.mean() - (2 * std_val)
-        default_vmax = signals.mean() + (2 * std_val)
+        std_val = float(signals.std(axis=0).mean().values)
+        default_vmin = float(signals.mean().values - (2 * std_val))
+        default_vmax = float(signals.mean().values + (2 * std_val))
         vmin = vmin or default_vmin
         vmax = vmax or default_vmax
 
