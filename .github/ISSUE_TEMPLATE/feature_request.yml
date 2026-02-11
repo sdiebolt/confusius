@@ -1,0 +1,14 @@
+name: Feature request
+description: Request a new feature for ConfUSIus
+labels: ["enhancement"]
+assignees:
+  - sdiebolt
+body:
+- type: textarea
+  attributes:
+    label: Describe the new feature you'd like
+    description: >
+      Please provide a description of what new feature or functionality you'd like to
+      see in ConfUSIus.
+  validations:
+    required: true
