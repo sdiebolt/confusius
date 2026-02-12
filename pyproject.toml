@@ -3,7 +3,8 @@ name = "confusius"
 version = "0.0.1-a1"
 description = "Python package for analysis and visualization of functional ultrasound imaging data."
 readme = "README.md"
-license = "BSD-3-Clause"
+license = "BSD-3-Clause AND Apache-2.0"
+license-files = ["LICENSE-BSD-3-Clause", "LICENSE-Apache-2.0"]
 authors = [
     { name = "Samuel Le Meur-Diebolt", email = "samuel@diebolt.io" }
 ]

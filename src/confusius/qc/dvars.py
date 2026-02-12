@@ -1,4 +1,8 @@
-"""DVARS computation for quality control."""
+"""DVARS computation for quality control.
+
+Portions of this file are derived from Nipype, which is licensed under the Apache
+License 2.0. See ``NOTICE`` file for details.
+"""
 
 import numpy as np
 import numpy.typing as npt
@@ -26,7 +30,7 @@ def _ar1_yule_walker(signal: npt.NDArray) -> float:
     Notes
     -----
     For AR(1), we only need autocorrelation at lags 0 and 1, so we use direct
-    computation ($O(n)$) rather than FFT-based methods ($O(n log n)$).
+    computation (``O(n)``) rather than FFT-based methods (``O(n log n)``).
     """
     signal = np.asarray(signal, dtype=np.float64)
     signal = signal - signal.mean()
