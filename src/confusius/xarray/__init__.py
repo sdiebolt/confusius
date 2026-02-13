@@ -7,12 +7,14 @@ __all__ = [
     "FUSIPlotAccessor",
     "FUSIRegistrationAccessor",
     "FUSIScaleAccessor",
+    "FUSIExtractAccessor",
     "db_scale",
     "log_scale",
     "power_scale",
 ]
 
 from confusius.xarray.accessors import FUSIAccessor
+from confusius.xarray.extract import FUSIExtractAccessor
 from confusius.xarray.io import FUSIIOAccessor
 from confusius.xarray.iq import FUSIIQAccessor
 from confusius.xarray.plotting import FUSIPlotAccessor

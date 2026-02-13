@@ -1,4 +1,4 @@
-"""Registration accessor for fUSI data."""
+"""Xarray accessor for registration."""
 
 import xarray as xr
 

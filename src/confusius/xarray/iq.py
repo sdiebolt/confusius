@@ -1,4 +1,4 @@
-"""IQ processing accessor for fUSI data."""
+"""Xarray accessor for IQ processing."""
 
 from typing import TYPE_CHECKING, Literal
 

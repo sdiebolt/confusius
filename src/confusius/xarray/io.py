@@ -1,4 +1,4 @@
-"""IO operations and accessor for fUSI data."""
+"""Xarray accessor for IO operations."""
 
 from pathlib import Path
 from typing import TYPE_CHECKING

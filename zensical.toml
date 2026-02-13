@@ -25,6 +25,7 @@ nav = [
         { "Plotting" = "api/plotting.md" },
         { "Quality Control" = "api/qc.md" },
         { "Registration" = "api/registration.md" },
+        { "Signal Extraction" = "api/extract.md" },
         { "Xarray Integration" = "api/xarray.md" }
     ]},
     { "Examples" = "examples/index.md" },

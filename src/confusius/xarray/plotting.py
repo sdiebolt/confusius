@@ -1,4 +1,4 @@
-"""Plotting operations and accessor for fUSI data."""
+"""Xarray accessor for plotting."""
 
 from typing import TYPE_CHECKING, Any, Literal
 

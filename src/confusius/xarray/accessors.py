@@ -2,6 +2,7 @@
 
 import xarray as xr
 
+from confusius.xarray.extract import FUSIExtractAccessor
 from confusius.xarray.io import FUSIIOAccessor
 from confusius.xarray.iq import FUSIIQAccessor
 from confusius.xarray.plotting import FUSIPlotAccessor
@@ -123,3 +124,26 @@ class FUSIAccessor:
         >>> velocity = iq.fusi.iq.process_to_axial_velocity()
         """
         return FUSIIQAccessor(self._obj)
+
+    @property
+    def extract(self) -> FUSIExtractAccessor:
+        """Access signal extraction operations.
+
+        Returns
+        -------
+        FUSIExtractAccessor
+            Accessor for extracting signals from fUSI data and reconstructing fUSI data
+            from processed signals.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> data = xr.open_zarr("output.zarr")["pwd"]
+        >>> mask = xr.open_zarr("brain_mask.zarr")["mask"]
+        >>> signals = data.fusi.extract.with_mask(mask)
+        >>> # ... process signals ...
+        >>> restored = signals.fusi.extract.unmask(
+        ...     processed, mask=mask, new_dim='component'
+        ... )
+        """
+        return FUSIExtractAccessor(self._obj)

@@ -1,4 +1,4 @@
-"""Scaling operations and accessor for fUSI data."""
+"""Xarray accessor for scaling operations."""
 
 import numpy as np
 import xarray as xr
