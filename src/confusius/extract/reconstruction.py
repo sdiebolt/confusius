@@ -1,4 +1,4 @@
-"""Implementation of `unmask` reconstruction function."""
+"""Reconstruction of fUSI DataArrays from N-D signals using masks."""
 
 import numpy as np
 import xarray as xr

@@ -1,4 +1,4 @@
-"""Implementation of `with_mask` extraction function."""
+"""Extraction of signals using binary masks."""
 
 import numpy as np
 import xarray as xr

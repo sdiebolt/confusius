@@ -146,6 +146,6 @@ class FUSIExtractAccessor:
         >>> spatial_pca.dims
         ("component", "z", "y", "x")
         """
-        from confusius.extract.unmask import unmask
+        from confusius.extract.reconstruction import unmask
 
         return unmask(signals, mask, new_dims, new_dims_coords, attrs, fill_value)

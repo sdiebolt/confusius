@@ -1,9 +1,19 @@
 """Python package for analysis and visualization of functional ultrasound imaging data."""
 
-__all__ = ["io", "iq", "plotting", "qc", "registration", "xarray", "__version__"]
+__all__ = [
+    "extract",
+    "io",
+    "iq",
+    "plotting",
+    "qc",
+    "registration",
+    "validation",
+    "xarray",
+    "__version__",
+]
 
 from importlib import metadata
 
 __version__ = metadata.version("confusius")
 
-from confusius import io, iq, plotting, qc, registration, xarray
+from confusius import extract, io, iq, plotting, qc, registration, validation, xarray
