@@ -80,13 +80,13 @@ ConfUSIus supports the complete fUSI analysis pipeline, from raw data acquisitio
 ```mermaid
  flowchart TB
     subgraph acquire["Data Acquisition"]
-        A[Ultrasound system<br/>AUTC / EchoFrame / etc.]
+        A[fUSI system]
     end
 
     acquire --> convert
 
     subgraph convert["Format Conversion"]
-        B["Source formats (Iconeus, AUTC, EchoFrame)"]
+        B["Source formats"]
         C[Xarray]
         B --> C
     end

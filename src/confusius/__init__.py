@@ -7,6 +7,7 @@ __all__ = [
     "plotting",
     "qc",
     "registration",
+    "signal",
     "validation",
     "xarray",
     "__version__",
@@ -16,4 +17,14 @@ from importlib import metadata
 
 __version__ = metadata.version("confusius")
 
-from confusius import extract, io, iq, plotting, qc, registration, validation, xarray
+from confusius import (
+    extract,
+    io,
+    iq,
+    plotting,
+    qc,
+    registration,
+    signal,
+    validation,
+    xarray,
+)

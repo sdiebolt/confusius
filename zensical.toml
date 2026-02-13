@@ -16,16 +16,18 @@ nav = [
         { "Getting Started" = "user-guide/getting-started.md" },
         { "Installation" = "user-guide/installation.md" },
         { "Input/Output" = "user-guide/io.md" },
+        { "Beamformed IQ" = "user-guide/beamformed-iq.md" },
         { "Xarray Integration" = "user-guide/xarray.md" }
     ]},
     { "API Reference" = [
         { "Overview" = "api/index.md" },
-        { "I/O" = "api/io.md" },
+        { "Input/Output" = "api/io.md" },
         { "Beamformed IQ" = "api/iq.md" },
         { "Plotting" = "api/plotting.md" },
         { "Quality Control" = "api/qc.md" },
         { "Registration" = "api/registration.md" },
         { "Signal Extraction" = "api/extract.md" },
+        { "Signal Processing" = "api/signal.md" },
         { "Xarray Integration" = "api/xarray.md" }
     ]},
     { "Examples" = "examples/index.md" },
