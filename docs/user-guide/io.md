@@ -6,34 +6,109 @@ icon: lucide/file-input
 
 ## Overview
 
-ConfUSIus is designed to handle large-scale fUSI datasets efficiently. To achieve this,
-it relies on [Xarray](https://docs.xarray.dev/) and
-[Zarr](https://zarr.readthedocs.io/).
+ConfUSIus is designed to handle large-scale fUSI datasets efficiently. This guide
+explains how to work with different data formats and convert them to work with
+ConfUSIus.
 
-- **Xarray**: Used for labeled multi-dimensional arrays. This allows you to access data
-  using meaningful axis names (e.g., ``time``, ``x``) and coordinates (e.g., time in
-  seconds, depth in mm) rather than raw array indices.
-- **Zarr**: A cloud-native, chunked, compressed, N-dimensional array format. It allows
-  ConfUSIus to process datasets that are larger than memory (out-of-core processing) by
-  loading only the necessary chunks of data.
+## Working with Xarray
 
-ConfUSIus is designed to handle the full fUSI workflow. You may load beamformed IQ data
-to perform clutter filtering and compute power Doppler signals, or work from
-already-processed acquisition data (e.g., power Doppler or velocity acquisitions) and
-jump straight to denoising and statistical analysis.
+ConfUSIus uses [Xarray](https://docs.xarray.dev/) as its core data structure for
+representing multi-dimensional fUSI data. Xarray provides several advantages over raw
+NumPy arrays:
 
-## Supported beamformed IQ formats
+- **Named dimensions**: access data using meaningful names (e.g., `time`, `x`, `y`, `z`)
+  instead of remembering axis indices.
+- **Coordinates**: associate physical coordinates with each dimension (e.g., time
+  in seconds, depth in millimeters).
+- **Metadata storage**: keep acquisition parameters, units, and other metadata alongside
+  your data
+- **Unified API**: use the same operations regardless of the underlying storage format
 
-ConfUSIus requires beamformed IQ data to be in an Xarray-compatible format (e.g., Zarr) 
-to leverage its full capabilities[^iq-dask]. Currently, ConfUSIus supports automatic
-conversion of beamformed IQ data obtained from AUTC and EchoFrame systems to an
-Xarray-compatible Zarr format. 
+### Xarray-Compatible Formats
+
+Xarray can read and write data from multiple storage formats, including:
+
+- **[Zarr](https://zarr.dev/)**: Chunked, compressed, cloud-native format (recommended for large datasets).
+- **[HDF5](https://www.hdfgroup.org/solutions/hdf5/)**: Hierarchical format widely used in research.
+- **[netCDF](https://www.unidata.ucar.edu/software/netcdf)**: Self-describing format
+  common in scientific computing (e.g., basis of the
+  [MINC](https://mcin.ca/technology/minc/) 1.0 format).
+
+Additionally, ConfUSIus provides utilities to read and write
+[**NIfTI**](https://nifti.nimh.nih.gov/) files (the standard neuroimaging format for
+BIDS) as Xarray DataArrays, enabling seamless integration with BIDS-compliant fUSI
+datasets.
+
+### Recommended Formats for fUSI
+
+ConfUSIus works with all Xarray-compatible formats, but two formats are particularly
+well-suited for fUSI workflows:
+
+=== "NIfTI for Sharing and Interoperability"
+
+    [NIfTI](https://nifti.nimh.nih.gov/) is the standard format for:
+
+    - **fUSI-BIDS compliance**: required for sharing datasets following the BIDS
+      specification.
+    - **Neuroimaging pipelines**: compatible with tools like
+      [Nilearn](https://nilearn.github.io/),
+      [ANTsPy](https://antspy.readthedocs.io/en/stable/), and
+      [FSL](https://fsl.fmrib.ox.ac.uk/fsl/docs/), which have been used in some fUSI
+      studies.
+    - **Derived acquisitions**: power Doppler, velocity, and other processed signals.
+
+    Use NIfTI when you need to share data, ensure BIDS compliance, or integrate with
+    existing neuroimaging analysis tools.
+
+=== "Zarr for Large-Scale Processing"
+
+    [Zarr](https://zarr.readthedocs.io/) excels at handling massive datasets through:
+
+    - **Out-of-core processing**: Work with datasets larger than memory by loading only
+      needed chunks.
+    - **Compression**: Reduce storage footprint without sacrificing access speed.
+    - **Parallel I/O**: Read and write data concurrently from multiple processes.
+    - **Cloud compatibility**: Store and access data on remote object storage (S3, GCS,
+      etc.).
+
+    Use Zarr for beamformed IQ data, large-scale analyses, and cloud-based processing
+    workflows. ConfUSIus converts beamformed IQ data to Zarr by default for optimal
+    performance with large-scale datasets.
+
+## fUSI Data Types
+
+fUSI workflows involve two main categories of data:
+
+=== "Beamformed IQ Data"
+
+    Complex-valued signals resulting from ultrasound beamforming of RF signals. These
+    signals are typically further processed to extract derived signals such as power Doppler
+    or velocity. Beamformed IQ datasets are typically very large (10s to 100s of GB per
+    acquisition session), and stored in proprietary formats depending on the acquisition
+    system (e.g., Iconeus, AUTC, EchoFrame, etc.).
+
+=== "Derived Acquisitions"
+
+    Processed data products such as power Doppler, velocity, or other signals derived from
+    beamformed IQ data. These datasets are generally much smaller than the original IQ data
+    (often 10-100x smaller) and are frequently stored in standardized formats like NIfTI for 
+    interoperability and BIDS compliance. 
+
+    !!! tip 
+        Large-scale derived acquisitions (e.g., long power Doppler recordings) can also
+        benefit from storage in Zarr for efficient processing.
+
+## Converting Beamformed IQ Data
+
+Most fUSI acquisition systems output beamformed IQ data in proprietary binary formats.
+ConfUSIus currently provides built-in conversion utilities for **AUTC** and
+**EchoFrame** systems to transform their data into Zarr for efficient processing.
 
 !!! question "Using beamformed IQ data from other sources?"
-    You may also convert beamformed IQ data to any Xarray-compatible format (e.g.,
-    netCDF, HDF5, memory-mapped NumPy arrays) and use them with ConfUSIus, but AUTC and
+    You may convert beamformed IQ data to any Xarray-compatible format (e.g., netCDF,
+    HDF5, or any Dask-compatible array) and use them with ConfUSIus. However, AUTC and
     EchoFrame formats are currently the only ones with built-in conversion utilities.
-    Other formats may be supported in the future, and contributions are welcome. 
+    Other formats may be supported in the future, and contributions are welcome.
 
 === "AUTC DATs"
 
@@ -79,7 +154,7 @@ Xarray-compatible Zarr format.
     convert_echoframe_dat_to_zarr(
         dat_path="path/to/data.dat",
         meta_path="path/to/metadata.mat",
-        output_path="sub-01_task-awake_iq.zarr"
+        output_path="sub-01_task-awake_iq.zarr",
         # Optional: specify block start times. Other metadata (e.g., transmit frequency,
         # axis coordinates) will be automatically extracted from the metadata file.
         block_times=block_times,
@@ -93,13 +168,38 @@ Xarray-compatible Zarr format.
     - Metadata attributes (e.g., `voxdim`, `transmit_frequency`, `plane_wave_angles`) as
       extracted from the metadata file.
 
-## Loading beamformed IQ data
+## Converting Derived Acquisitions
 
-Once your beamformed IQ data is converted to Zarr, you can easily load it using Xarray.
+Derived acquisitions (power Doppler, velocity, etc.) are often stored in NIfTI format
+for compatibility with neuroimaging standards like BIDS. ConfUSIus provides utilities to
+load NIfTI files into Xarray (see [Loading NIfTI Files](#loading-nifti-files)).
+
+For large derived acquisitions or workflows requiring repeated access to subsets of
+data, converting NIfTI to Zarr provides better performance:
+
+```python
+from confusius.io import convert_nifti_to_zarr
+
+# Convert NIfTI to Zarr for efficient chunked access.
+convert_nifti_to_zarr(
+    input_path="sub-01_task-awake_pwd.nii.gz",
+    output_path="sub-01_task-awake_pwd.zarr",
+)
+```
+
+ConfUSIus automatically preserves BIDS sidecar metadata during conversion, ensuring
+acquisition parameters remain accessible.
+
+## Loading Data
+
+### Loading Zarr Files
+
+Once your data is in Zarr format, load it using Xarray's standard interface:
 
 ```python
 import xarray as xr
 
+# Load beamformed IQ data.
 ds = xr.open_zarr("sub-01_task-awake_iq.zarr")
 iq_data = ds["iq"]
 
@@ -129,74 +229,68 @@ Attributes:
     beamforming_method:           Fourier
 ```
 
-## Loading derived acquisitions (e.g., power Doppler, velocity)
+Notice that the data remains on disk (shown by `dask.array<...>`) until you explicitly
+compute operations on it.
 
-ConfUSIus supports NIfTI, the standard format for fUSI-BIDS compatibility. NIfTI files
-allow interoperability with neuroimaging analysis tools and preserve spatial metadata
-(voxel dimensions, affine transformations).
+### Loading NIfTI Files
 
-### Loading NIfTI files
-
-Use [`load_nifti`][confusius.io.load_nifti] to load NIfTI files as lazy Xarray DataArrays:
+Use [`load_nifti`][confusius.io.load_nifti] to load NIfTI files as lazy Xarray
+DataArrays:
 
 ```python
 from confusius.io import load_nifti
 
-# Load with automatic BIDS sidecar metadata
+# Load with automatic BIDS sidecar metadata.
 da = load_nifti("sub-01_task-awake_pwd.nii.gz", load_sidecar=True)
 print(da.dims)
 # Output: ('time', 'z', 'y', 'x')
 ```
 
-By default, ConfUSIus will automatically load a JSON sidecar file with same basename
+By default, ConfUSIus automatically loads a JSON sidecar file with the same basename
 (e.g., `sub-01_task-awake_pwd.json`) if present, following the BIDS specification for
 fUSI metadata.
 
+## Saving Data
+
 ### Saving to NIfTI
 
-You can save DataArrays to NIfTI using either the module function or the Xarray accessor:
+You can save DataArrays to NIfTI using either the module function or the Xarray
+accessor:
 
-**Using the module function:**
+=== "Module function"
+
+    ```python
+    from confusius.io import save_nifti
+
+    save_nifti(data_array, "output.nii.gz", save_sidecar=True)
+    ```
+
+=== "Xarray accessor"
+
+    ```python
+    data_array.fusi.io.to_nifti("output.nii.gz")
+    ```
+
+Both methods create a JSON sidecar file containing additional metadata (coordinates,
+units, custom attributes) alongside the NIfTI file, ensuring BIDS compatibility.
+
+### Saving to Zarr
+
+Use Xarray's built-in Zarr support:
 
 ```python
-from confusius.io import save_nifti
-
-save_nifti(data_array, "output.nii.gz", save_sidecar=True)
+# Save DataArray to Zarr.
+data_array.to_zarr("output.zarr")
 ```
 
-**Using the Xarray accessor:**
+## Format Conversion Reference
 
-```python
-# Save via accessor (shorter syntax)
-data.fusi.io.to_nifti("output.nii.gz")
-```
+Quick reference for converting between formats:
 
-Both methods create a JSON sidecar file containing additional metadata (coordinates, units, custom attributes) alongside the NIfTI file.
+| From | To | Function |
+|------|-----|----------|
+| AUTC DATs | Zarr | [`convert_autc_dats_to_zarr`][confusius.io.convert_autc_dats_to_zarr] |
+| EchoFrame DAT | Zarr | [`convert_echoframe_dat_to_zarr`][confusius.io.convert_echoframe_dat_to_zarr] |
+| NIfTI | Zarr | [`convert_nifti_to_zarr`][confusius.io.convert_nifti_to_zarr] |
+| Xarray DataArray | NIfTI | [`save_nifti`][confusius.io.save_nifti] or `.fusi.io.to_nifti()` |
 
-### Converting between formats
-
-ConfUSIus provides utilities to convert between NIfTI and Zarr formats:
-
-```python
-from confusius.io import convert_nifti_to_zarr
-
-# Convert NIfTI to Zarr for efficient chunked access
-convert_nifti_to_zarr(
-    "brain.nii.gz",
-    "brain.zarr",
-    chunks="auto"
-)
-
-# Load the converted Zarr with Xarray
-import xarray as xr
-ds = xr.open_zarr("brain.zarr")
-```
-
-[^iq-dask]:
-    While ConfUSIus has been designed to use Xarray for handling beamformed IQ data,
-    some functions (e.g., [`process_iq_blocks`][confusius.iq.process_iq_blocks])
-    may be used using Dask arrays directly, allowing the use of any Dask-compatible
-    array format (e.g., HDF5, memory-mapped NumPy arrays, or even in-memory arrays).
-    However, using Xarray provides additional benefits such as automatic handling of
-    coordinates, metadata, and integration with the rest of the ConfUSIus processing
-    pipeline.
