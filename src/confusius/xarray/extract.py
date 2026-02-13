@@ -48,7 +48,6 @@ class FUSIExtractAccessor:
     ... )
     >>> spatial_components.dims
     ("component", "z", "y", "x")
-
     """
 
     def __init__(self, xarray_obj: xr.DataArray) -> None:
@@ -84,7 +83,6 @@ class FUSIExtractAccessor:
         >>>
         >>> # Full mask shape reconstruction
         >>> full = signals.fusi.extract.unmask(signals.values, mask)
-
         """
         from confusius.extract.mask import with_mask
 
@@ -147,7 +145,6 @@ class FUSIExtractAccessor:
         ... )
         >>> spatial_pca.dims
         ("component", "z", "y", "x")
-
         """
         from confusius.extract.unmask import unmask
 

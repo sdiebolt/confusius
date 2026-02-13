@@ -93,7 +93,6 @@ def unmask(
     ... )
     >>> spatial_pose.dims
     ("component", "pose", "z", "y", "x")
-
     """
     if isinstance(signals, np.ndarray):
         n_voxels_mask = int(mask.sum().values)

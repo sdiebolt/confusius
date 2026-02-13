@@ -78,7 +78,6 @@ def with_mask(
     >>> pose_signals = extract.with_mask(pose_data, mask)
     >>> pose_signals.dims
     ("time", "pose", "voxels")
-
     """
     spatial_dims = list(mask.dims)
 
