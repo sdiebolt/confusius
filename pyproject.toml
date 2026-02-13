@@ -17,8 +17,8 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Operating System :: OS Independent",
     "Intended Audience :: Science/Research",
+    "Topic :: Scientific/Engineering",
     "Topic :: Scientific/Engineering :: Image Processing",
-    "Topic :: Scientific/Engineering :: Medical Science Apps",
     "Topic :: Scientific/Engineering :: Visualization",
     "Typing :: Typed",
 ]
