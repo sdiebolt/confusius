@@ -6,7 +6,23 @@ on:
       - 'v*'
 
 jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  verify-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync
+      - name: Build documentation
+        run: uv run zensical build --clean
+
   publish:
+    needs: [test, verify-docs]
     runs-on: ubuntu-latest
     environment:
       name: pypi
