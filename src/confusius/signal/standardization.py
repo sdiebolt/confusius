@@ -1,12 +1,15 @@
 """Standardization functions for signal preprocessing."""
 
 import warnings
+from typing import Literal
 
 import numpy as np
 import xarray as xr
 
 
-def standardize(signals: xr.DataArray, method: str = "zscore") -> xr.DataArray:
+def standardize(
+    signals: xr.DataArray, method: Literal["zscore", "psc"] = "zscore"
+) -> xr.DataArray:
     """Standardize signals across time.
 
     This function operates along the ``time`` dimension and works with arrays of any
@@ -18,7 +21,7 @@ def standardize(signals: xr.DataArray, method: str = "zscore") -> xr.DataArray:
         Array to standardize. Must have a ``time`` dimension. Can be any shape, e.g.,
         extracted signals ``(time, voxels)``, full 4D imaging data ``(time, z, y, x)``,
         or regional signals ``(time, regions)``.
-    method : str, default: "zscore"
+    method : {"zscore", "psc"}, default: "zscore"
         Standardization method:
 
         - ``"zscore"``: ``(x - mean) / std`` using sample standard deviation with
@@ -29,7 +32,7 @@ def standardize(signals: xr.DataArray, method: str = "zscore") -> xr.DataArray:
 
     Returns
     -------
-    xr.DataArray
+    xarray.DataArray
         Standardized array with same shape and coordinates as input.
 
     Raises
