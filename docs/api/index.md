@@ -5,34 +5,65 @@ guide](../user_guide/index.md) for more detailed explanations and usage examples
 
 ## Core Modules
 
-### Data I/O
+<div class="grid cards" markdown>
 
-- **[I/O](io.md)**: Load and save fUSI data in various formats, including those from
-  AUTC and EchoFrame systems, as well as general-purpose formats like Zarr and NIfTI.
+- **[:lucide-file-input: Input/Output](io.md)**
 
-### Beamformed In-phase/Quadrature Signals
+    ---
 
-- **[Beamformed in-phase/quadrature (IQ) signals](iq.md)**: Processing of beamformed IQ
-  signals, including clutter filtering and computation of derived measures such as power
-  Doppler and axial velocity.
+    Loading and saving fUSI data in various formats, including those from AUTC and
+    EchoFrame systems, as well as general-purpose formats like Zarr and NIfTI.
 
-### Signal Extraction
+- **[:lucide-check: Data Validation](validation.md)**
 
-- **[Signal extraction](extract.md)**: Extract and reconstruct signals from fUSI data
-  using spatial masks. Flatten spatial dimensions for analysis and unmask processed
-  signals back to volumetric space.
+    ---
 
-### Visualization
+    Validation of fUSI data compatibility with expected formats in ConfUSIus.
 
-- **[Plotting](plotting.md)**: Rich visualization utilities for fUSI data including
-  static plots and interactive napari viewers.
+- **[:lucide-audio-waveform: Beamformed IQ Signals](iq.md)**
 
-### Registration
+    ---
 
-- **[Registration](registration.md)**: Motion correction and spatial alignment tools for
-  aligning fUSI data across time points or with anatomical references.
+    Processing of beamformed IQ signals, clutter filtering, and computation of derived
+    measures such as power Doppler and axial velocity.
 
-### Xarray Integration
+- **[:lucide-chart-area: Visualization](plotting.md)**
 
-- **[Xarray](xarray.md)**: Xarray integration providing DataArray accessors for fUSI
-  data.
+    ---
+
+    Rich visualization utilities for fUSI data including static plots and interactive
+    napari viewers.
+
+- **[:lucide-gauge: Quality Control](qc.md)**
+
+    ---
+
+    Quality control metrics for assessing fUSI data quality.
+
+- **[:lucide-images: Registration](registration.md)**
+
+    ---
+
+    Motion correction and spatial alignment tools for aligning fUSI data across time
+    points or with anatomical references.
+
+- **[:lucide-funnel: Signal Extraction](extract.md)**
+
+    ---
+
+    Extract and reconstruct signals from fUSI data using spatial masks.
+
+- **[:lucide-brush-cleaning: Signal Processing](signal.md)**
+
+    ---
+
+    Signal processing tools for fUSI time series including denoising and motion artifact
+    correction.
+
+- **[:lucide-brackets: Xarray Integration](xarray.md)**
+
+    ---
+
+    Xarray integration providing DataArray accessors for fUSI data.
+
+</div>

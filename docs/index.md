@@ -18,7 +18,7 @@ statistical analysis of functional ultrasound imaging (fUSI) data.
 
 <div class="grid cards" markdown>
 
--   [:material-book-open-variant:{ .lg .middle } **User Guide**](user-guide/index.md)
+-   [:material-book-open-variant:{ .lg .middle } **User Guide**](user-guide/getting-started.md)
 
     ---
 

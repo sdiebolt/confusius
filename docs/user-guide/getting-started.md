@@ -20,13 +20,13 @@ Functional ultrasound imaging (fUSI) is a neuroimaging technique that measures b
 activity by detecting changes in cerebral blood volume[^mace2011] [^deffieux2021]
 [^montaldo2022]. fUSI offers:
 
-- **High spatiotemporal resolution**: Sub-millimeter spatial resolution (typically ~100
-  μm in-plane and ~500 μm out-of-plane with 15 MHz probes) with temporal resolution on
+- **High spatiotemporal resolution**: Sub-millimeter spatial resolution (~100 μm
+  in-plane and ~500 μm out-of-plane with 15 MHz probes) with temporal resolution on
   the order of 0.5–10 Hz, depending on the acquisition protocol.
 - **Wide field of view**: Ability to image large cortical and subcortical regions
   simultaneously.
-- **Awake imaging**: Compatible with awake, behaving animals and various experimental
-  paradigms.
+- **Awake preclinical imaging**: Compatible with awake, behaving animals and various
+  experimental paradigms.
 - **Multimodal integration**: Can be combined with electrophysiology, optogenetics, and
   other techniques for comprehensive studies of brain function.
 

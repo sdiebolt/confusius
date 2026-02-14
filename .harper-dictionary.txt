@@ -1,5 +1,6 @@
 ANTsPy
 AUTC
+Butterworth
 ConfUSIus
 DataArrays
 EchoFrame
@@ -9,6 +10,7 @@ MINC
 NIfTI
 Nilearn
 RF
+SVD
 Xarray
 Zarr
 analyses
@@ -18,3 +20,5 @@ denoising
 fUSI
 hemodynamic
 netCDF
+spatiotemporal
+spatiotemporally
