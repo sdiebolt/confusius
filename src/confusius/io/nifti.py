@@ -242,17 +242,20 @@ def load_nifti(
                 sidecar_attrs = json.load(f)
                 attrs.update(sidecar_attrs)
 
-    data_obj = img.dataobj
-    nifti_shape = data_obj.shape
+    # We use np.asanyarray to get the memory-mapped array behind Nibabel's proxy. This
+    # will allow Dask to create a lazy array without loading the entire dataset into
+    # memory.
+    data_obj = np.asanyarray(img.dataobj)
 
     # NIfTI stores data with shape (x, y, z, time) in column-major order.
     # ConfUSIus uses (time, z, y, x) in row-major order. These two conventions are
-    # equivalent and one can be obtained from the other by transposing the array, which
-    # creates a simple view without copying data.
-    dask_arr = da.from_array(data_obj, chunks=chunks, asarray=False)
-    dask_arr = dask_arr.transpose()
+    # equivalent and one can be obtained from the other by transposing the array. This
+    # will not copy data.
+    data_obj = data_obj.T
 
-    ndim = len(nifti_shape)
+    dask_arr = da.from_array(data_obj, chunks=chunks, asarray=False)
+
+    ndim = dask_arr.ndim
     confusius_dims = _NIFTI_DIM_ORDER[:ndim][::-1]
     confusius_shape = dask_arr.shape
 
