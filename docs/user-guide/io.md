@@ -254,8 +254,8 @@ fUSI metadata.
 
 ### Saving to NIfTI
 
-You can save DataArrays to NIfTI using either the module function or the Xarray
-accessor:
+You can save DataArrays to NIfTI using either the module function
+[`save_nifti`][confusius.io.save_nifti] or the Xarray accessor:
 
 === "Module function"
 

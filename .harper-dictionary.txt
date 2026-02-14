@@ -20,5 +20,6 @@ denoising
 fUSI
 hemodynamic
 netCDF
+pulsatility
 spatiotemporal
 spatiotemporally

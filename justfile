@@ -13,6 +13,7 @@ serve-docs:
 
 # Clean documentation build artifacts.
 clean-docs:
+    rm -rf .cache/
     rm -rf site/
 
 # Run all tests.
