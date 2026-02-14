@@ -10,6 +10,10 @@ repo_url = "https://github.com/sdiebolt/confusius"
 repo_name = "sdiebolt/confusius"
 edit_uri = "edit/main/docs/"
 extra_css = ["stylesheets/extra.css"]
+extra_javascript = [
+    "javascripts/mathjax.js",
+    "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js"
+]
 nav = [
     { "Home" = "index.md" },
     { "User Guide" = [
@@ -22,13 +26,14 @@ nav = [
     { "API Reference" = [
         { "Overview" = "api/index.md" },
         { "Input/Output" = "api/io.md" },
+        { "Data Validation" = "api/validation.md"},
         { "Beamformed IQ" = "api/iq.md" },
         { "Plotting" = "api/plotting.md" },
         { "Quality Control" = "api/qc.md" },
         { "Registration" = "api/registration.md" },
         { "Signal Extraction" = "api/extract.md" },
         { "Signal Processing" = "api/signal.md" },
-        { "Xarray Integration" = "api/xarray.md" }
+        { "Xarray Integration" = "api/xarray.md" },
     ]},
     { "Examples" = "examples/index.md" },
     { "Contributing" = "contributing.md" },
@@ -173,3 +178,5 @@ permalink = true
 
 [project.markdown_extensions.def_list]
 
+[project.markdown_extensions.pymdownx.arithmatex]
+generic = true
