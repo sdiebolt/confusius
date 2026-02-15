@@ -55,7 +55,7 @@ def compute_dvars(
     standardize: bool = True,
     normalization_factor: float | None = 1000,
     remove_zero_variance: bool = True,
-    variance_tol: float = 0.0,
+    variance_tolerance: float = 0.0,
 ) -> npt.NDArray[np.floating]:
     """Compute the DVARS metric.
 
@@ -84,7 +84,7 @@ def compute_dvars(
         Whether to exclude signals with near-zero variance. Zero-variance signals can
         artificially reduce the median during intensity normalization and should
         typically be removed.
-    variance_tol : float, default: 0.0
+    variance_tolerance : float, default: 0.0
         Tolerance for identifying zero-variance signals. Signals with robust standard
         deviation (``IQR/1.349``) less than or equal to this value are considered to
         have zero variance.
@@ -166,7 +166,7 @@ def compute_dvars(
     signals_sd = signals_sd / 1.349
 
     if remove_zero_variance:
-        nonzero_mask = signals_sd > variance_tol
+        nonzero_mask = signals_sd > variance_tolerance
         if not np.any(nonzero_mask):
             raise ValueError(
                 "All signals have variance below tolerance. Check input data or adjust "

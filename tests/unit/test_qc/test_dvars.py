@@ -156,7 +156,7 @@ class TestZeroVarianceHandling:
             standardize=True,
             normalization_factor=None,
             remove_zero_variance=True,
-            variance_tol=1e-10,
+            variance_tolerance=1e-10,
         )
 
         # Compute on original signals without zero-variance columns
@@ -174,7 +174,7 @@ class TestZeroVarianceHandling:
         signals = np.ones((50, 10)) * 1e-15
 
         with pytest.raises(ValueError, match="All signals have variance"):
-            compute_dvars(signals, remove_zero_variance=True, variance_tol=1e-10)
+            compute_dvars(signals, remove_zero_variance=True, variance_tolerance=1e-10)
 
 
 class TestInputValidation:
