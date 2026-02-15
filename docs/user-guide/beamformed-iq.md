@@ -25,9 +25,9 @@ depending on your application:
 
 - **Structural imaging** (B-mode): Use amplitude information to visualize tissue
   anatomy.
-- **Hemodynamic measures** (power Doppler): Separate blood from tissue to quantify
+- **Blood volume** (power Doppler): Separate blood from tissue to quantify
   cerebral blood volume changes.
-- **Flow velocimetry** (color Doppler): Estimate blood flow speed and direction.
+- **Blood flow velocimetry** (color Doppler): Estimate blood flow speed and direction.
 - **Tissue motion**: Track tissue displacement (e.g., cardiac pulsatility, respiration).
 
 This guide covers the **IQ processing functions in ConfUSIus**, which focus primarily on
@@ -176,13 +176,14 @@ config:
 ---
 
 flowchart LR
-    IQ["IQ Volumes"] -->|Window 1| F1{{"User Function"}}
-    IQ["IQ Volumes"] --> ellipsis{{"..."}}
-    IQ["IQ Volumes"] -->|Window *n*| F2{{"User Function"}}
+    IQ -->|Window 1| F1{{"User Function"}}
+    IQ --> ellipsis{{"..."}}
+    IQ -->|Window *n*| F2{{"User Function"}}
 
     F1 -->|"Output Volume(s)"| output
     F2 -->|"Output Volume(s)"| output
 
+    IQ@{ shape: processes, label: "Input IQ Volumes" }
     output@{ shape: processes, label: "Stacked Output Volumes" }
     ellipsis@{ shape: text}
 ```
@@ -218,7 +219,7 @@ config:
 ---
 
 flowchart LR
-    IQ["IQ Volumes"] -->|"Outer Window 1"| CF1{{"Clutter Filter"}}
+    IQ -->|"Outer Window 1"| CF1{{"Clutter Filter"}}
     IQ --> ellipsis{{"..."}}
     IQ -->|"Outer Window *n*"| CFn{{"Clutter Filter"}}
 
@@ -235,6 +236,7 @@ flowchart LR
     C3 -->|"Output Volume"| output
     C4 -->|"Output Volume"| output
 
+    IQ@{ shape: processes, label: "Input IQ Volumes" }
     output@{ shape: processes, label: "Stacked Output Volumes" }
     ellipsis@{ shape: text}
     e1@{ shape: text}
@@ -295,13 +297,14 @@ ConfUSIus provides several clutter filtering methods, each with different trade-
       vector energies. Adjusts to varying motion levels, but its interpretation can be
       less intuitive.
     - **`svd_cumulative_energy`**: Adaptively determines the threshold based on
-      cumulative energy distribution. More robust to noise variations, but removes
+      cumulative energy distribution. More robust to motion variations, but removes
       global energy variations across windows (similar to global signal regression).
 
     !!! info "Static vs. adaptive SVD filters"
 
         **Static SVD filters** (`svd_indices`) are the standard method used in the vast
-        majority of fUSI studies. They are well-tested and effective for typical imaging
+        majority of fUSI studies[^ferrier2020] [^rabut2020] [^brunner2021]
+        [^nunez-elizalde2022]. They are well-tested and effective for typical imaging
         conditions.
 
         However, static filters assume constant tissue energy levels throughout the
@@ -340,7 +343,8 @@ ConfUSIus provides several clutter filtering methods, each with different trade-
         motion), and they remove slow blood flows in capillaries and small vessels.
 
         May be used as a pre-processing step before SVD filtering[^brunner2020]
-        [^lemeurdiebolt2025] or for specialized applications like tissue motion tracking.
+        [^nunez-elizalde2022] [^lemeurdiebolt2025] or for specialized applications like
+        tissue motion tracking.
 
 ### Filter Parameters
 
@@ -430,6 +434,7 @@ function or the corresponding Xarray accessor method.
 
     ```python
     import xarray as xr
+    import confusius
 
     # Load IQ data.
     ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
@@ -535,6 +540,7 @@ function or the corresponding Xarray accessor method.
 
     ```python
     import xarray as xr
+    import confusius
 
     # Load IQ data.
     ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
@@ -642,3 +648,25 @@ volumes, you're ready to:
     Breathing Rate Assessment in Neurofunctional Ultrasound Imaging.” eBioMedicine, vol.
     112, Feb. 2025, p. 105581. DOI.org (Crossref),
     <https://doi.org/10.1016/j.ebiom.2025.105581>.
+
+[^ferrier2020]:
+    Ferrier, Jeremy, et al. “Functional Imaging Evidence for Task-Induced Deactivation
+    and Disconnection of a Major Default Mode Network Hub in the Mouse Brain.” Proceedings
+    of the National Academy of Sciences, vol. 117, no. 26, June 2020, pp. 15270–80. DOI.org
+    (Crossref), <https://doi.org/10.1073/pnas.1920475117>.
+
+[^rabut2020]:
+    Rabut, Claire, et al. “Pharmaco-fUS: Quantification of Pharmacologically-Induced
+    Dynamic Changes in Brain Perfusion and Connectivity by Functional Ultrasound Imaging
+    in Awake Mice.” NeuroImage, vol. 222, Nov. 2020, p. 117231. DOI.org (Crossref),
+    <https://doi.org/10.1016/j.neuroimage.2020.117231>.
+
+[^brunner2021]:
+    Brunner, Clément, et al. “Whole-Brain Functional Ultrasound Imaging in Awake
+    Head-Fixed Mice.” Nature Protocols, vol. 16, no. 7, July 2021, pp. 3547–71. DOI.org
+    (Crossref), <https://doi.org/10.1038/s41596-021-00548-8>.
+
+[^nunez-elizalde2022]:
+    Nunez-Elizalde, Anwar O., et al. “Neural Correlates of Blood Flow Measured by
+    Ultrasound.” Neuron, vol. 110, no. 10, May 2022, pp. 1631-1640.e4. DOI.org
+    (Crossref), <https://doi.org/10.1016/j.neuron.2022.02.012>.

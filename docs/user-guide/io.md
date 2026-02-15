@@ -314,6 +314,8 @@ You can save DataArrays to NIfTI using either the module function
 === "Xarray accessor"
 
     ```python
+    import confusius
+
     data_array.fusi.io.to_nifti("output.nii.gz")
     ```
 
