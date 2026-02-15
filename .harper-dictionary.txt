@@ -2,6 +2,8 @@ ANTsPy
 AUTC
 Butterworth
 ConfUSIus
+Dask
+DataArray
 DataArrays
 EchoFrame
 FSL
@@ -23,3 +25,5 @@ netCDF
 pulsatility
 spatiotemporal
 spatiotemporally
+subspaces
+velocimetry

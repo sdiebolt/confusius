@@ -10,10 +10,10 @@ ConfUSIus provides a custom Xarray accessor that adds fUSI-specific functionalit
 
 The accessor is registered under the `.fusi` namespace and provides four main sub-accessors:
 
-- **`.fusi.scale`**: Scaling transformations (decibel, log, power)
-- **`.fusi.io`**: Input/output operations
-- **`.fusi.plot`**: Visualization methods
-- **`.fusi.register`**: Image registration
+- **`.fusi.scale`**: Scaling transformations (decibel, log, power).
+- **`.fusi.io`**: Input/output operations.
+- **`.fusi.plot`**: Visualization methods.
+- **`.fusi.register`**: Image registration.
 
 To use the accessor, simply import ConfUSIus:
 

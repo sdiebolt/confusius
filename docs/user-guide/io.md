@@ -16,13 +16,13 @@ ConfUSIus uses [Xarray](https://docs.xarray.dev/) as its core data structure for
 representing multi-dimensional fUSI data. Xarray provides several advantages over raw
 NumPy arrays:
 
-- **Named dimensions**: access data using meaningful names (e.g., `time`, `x`, `y`, `z`)
+- **Named dimensions**: Access data using meaningful names (e.g., `time`, `x`, `y`, `z`)
   instead of remembering axis indices.
-- **Coordinates**: associate physical coordinates with each dimension (e.g., time
+- **Coordinates**: Associate physical coordinates with each dimension (e.g., time
   in seconds, depth in millimeters).
-- **Metadata storage**: keep acquisition parameters, units, and other metadata alongside
-  your data
-- **Unified API**: use the same operations regardless of the underlying storage format
+- **Metadata storage**: Keep acquisition parameters, units, and other metadata alongside
+  your data.
+- **Unified API**: Use the same operations regardless of the underlying storage format.
 
 ### Xarray-Compatible Formats
 
@@ -48,14 +48,14 @@ well-suited for fUSI workflows:
 
     [NIfTI](https://nifti.nimh.nih.gov/) is the standard format for:
 
-    - **fUSI-BIDS compliance**: required for sharing datasets following the BIDS
+    - **fUSI-BIDS compliance**: Required for sharing datasets following the BIDS
       specification.
-    - **Neuroimaging pipelines**: compatible with tools like
+    - **Neuroimaging pipelines**: Compatible with tools like
       [Nilearn](https://nilearn.github.io/),
       [ANTsPy](https://antspy.readthedocs.io/en/stable/), and
       [FSL](https://fsl.fmrib.ox.ac.uk/fsl/docs/), which have been used in some fUSI
       studies.
-    - **Derived acquisitions**: power Doppler, velocity, and other processed signals.
+    - **Derived acquisitions**: Power Doppler, velocity, and other processed signals.
 
     Use NIfTI when you need to share data, ensure BIDS compliance, or integrate with
     existing neuroimaging analysis tools.
@@ -129,6 +129,7 @@ ConfUSIus currently provides built-in conversion utilities for **AUTC** and
         block_times=block_times,
         compound_sampling_frequency=500.0,
         transmit_frequency=15.625e6,
+        sound_velocity=1510.0,
     )
     ```
 
@@ -231,6 +232,51 @@ Attributes:
 
 Notice that the data remains on disk (shown by `dask.array<...>`) until you explicitly
 compute operations on it.
+
+### Loading IQ Data from Unsupported Formats
+
+If you're working with IQ data from ultrasound manufacturers other than AUTC or
+EchoFrame, you'll need to load the data from their proprietary formats yourself. After
+loading your data as an Xarray DataArray, use
+[`validate_iq`][confusius.validation.validate_iq] to ensure it meets ConfUSIus
+requirements:
+
+```python
+import xarray as xr
+from confusius.validation import validate_iq
+
+# Load IQ data from an unsupported format (example using your own loading function).
+iq = your_loader_function("path/to/iq_data")
+
+# Validate the IQ data structure and required attributes.
+try:
+    iq_validated = validate_iq(iq)
+    print("✓ IQ data is valid and ready for processing")
+except ValueError as e:
+    print(f"✗ Validation failed: {e}")
+```
+
+The [`validate_iq`][confusius.validation.validate_iq] function checks that your data:
+
+- Has the correct dimensions: `(time, z, y, x)`.
+- Is complex-valued ([`numpy.complex64`][numpy.complex64] or
+  [`numpy.complex128`][numpy.complex128]).
+- Contains required attributes:
+    - `compound_sampling_frequency`: Effective IQ sampling frequency in Hz.
+    - `transmit_frequency`: Ultrasound transmit frequency in Hz.
+    - `sound_velocity`: Speed of sound in m/s.
+
+!!! question "Finding attribute values"
+    If you're unsure about the correct values for these attributes:
+
+    - `compound_sampling_frequency`: Check your acquisition software settings. The
+      compound sampling frequency is generally around 500-1000 Hz for fUSI acquisitions,
+      but can vary based on the system and settings used.
+    - `transmit_frequency`: Found in your probe specifications or acquisition settings.
+      Generally around 5-10 MHz for clinical probes, and 12-20 MHz for high-frequency
+      probes used in small animal imaging.
+    - `sound_velocity`: Typically 1540 m/s for brain tissues, but may vary with
+      temperature and tissue type.
 
 ### Loading NIfTI Files
 
