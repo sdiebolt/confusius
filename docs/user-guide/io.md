@@ -340,5 +340,5 @@ Quick reference for converting between formats:
 | AUTC DATs | Zarr | [`convert_autc_dats_to_zarr`][confusius.io.convert_autc_dats_to_zarr] |
 | EchoFrame DAT | Zarr | [`convert_echoframe_dat_to_zarr`][confusius.io.convert_echoframe_dat_to_zarr] |
 | NIfTI | Zarr | [`convert_nifti_to_zarr`][confusius.io.convert_nifti_to_zarr] |
-| Xarray DataArray | NIfTI | [`save_nifti`][confusius.io.save_nifti] or `.fusi.io.to_nifti()` |
+| Xarray DataArray | NIfTI | [`save_nifti`][confusius.io.save_nifti] or [`.fusi.io.to_nifti`][confusius.xarray.FUSIIOAccessor.to_nifti] |
 
