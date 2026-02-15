@@ -100,7 +100,7 @@ import xarray as xr
 import numpy as np
 import confusius
 
-# Create sample 4D fUSI data
+# Create sample 3D+t fUSI data
 data = xr.DataArray(
     np.random.rand(10, 32, 1, 64),
     dims=["time", "z", "y", "x"],
