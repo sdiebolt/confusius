@@ -169,9 +169,12 @@ def _process_block_with_clutter_filter(
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
         used.
-    low_cutoff, high_cutoff : int or float, optional
-        Low and high cutoffs of the clutter filter. See `filter_method` for details.
-        If not provided, the respective bound of the range is used.
+    low_cutoff : int or float, optional
+        Low cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the lower bound of the range is used.
+    high_cutoff : int or float, optional
+        High cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the upper bound of the range is used.
     window_width : int, optional
         Width of the sliding window. If not provided, the window width will be set to
         the number of IQ volumes.
@@ -315,9 +318,12 @@ def compute_power_doppler_volume(
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
         used.
-    low_cutoff, high_cutoff : int or float, optional
-        Low and high cutoffs for clutter filtering. Interpretation depends on
-        `filter_method`. If not provided, uses method-specific defaults.
+    low_cutoff : int or float, optional
+        Low cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the lower bound of the range is used.
+    high_cutoff : int or float, optional
+        High cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the upper bound of the range is used.
     fs : float, optional
         When using the Butterworth clutter filter, sampling frequency in Hertz.
     butterworth_order : int, default: 4
@@ -414,9 +420,12 @@ def compute_axial_velocity_volume(
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
         used.
-    low_cutoff, high_cutoff : int or float, optional
-        Low and high cutoffs for clutter filtering. Interpretation depends on
-        `filter_method`. If not provided, uses method-specific defaults.
+    low_cutoff : int or float, optional
+        Low cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the lower bound of the range is used.
+    high_cutoff : int or float, optional
+        High cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the upper bound of the range is used.
     butterworth_order : int, default: 4
         Order of Butterworth filter. Effective order is doubled due to forward-backward
         filtering.
@@ -695,9 +704,12 @@ def process_iq_to_power_doppler(
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
         used.
-    low_cutoff, high_cutoff : int or float, optional
-        Low and high cutoffs for clutter filtering. Interpretation depends on
-        `filter_method`. If not provided, uses method-specific defaults.
+    low_cutoff : int or float, optional
+        Low cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the lower bound of the range is used.
+    high_cutoff : int or float, optional
+        High cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the upper bound of the range is used.
     butterworth_order : int, default: 4
         Order of Butterworth filter. Effective order is doubled due to forward-backward
         filtering.
@@ -893,9 +905,12 @@ def process_iq_to_axial_velocity(
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
         used.
-    low_cutoff, high_cutoff : int or float, optional
-        Low and high cutoffs for clutter filtering. Interpretation depends on
-        `filter_method`. If not provided, uses method-specific defaults.
+    low_cutoff : int or float, optional
+        Low cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the lower bound of the range is used.
+    high_cutoff : int or float, optional
+        High cutoff of the clutter filter. See `filter_method` for details. If not
+        provided, the upper bound of the range is used.
     butterworth_order : int, default: 4
         Order of Butterworth filter. Effective order is doubled due to forward-backward
         filtering.
