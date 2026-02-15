@@ -19,8 +19,8 @@ def standardize(
     ----------
     signals : (time, ...) xarray.DataArray
         Array to standardize. Must have a ``time`` dimension. Can be any shape, e.g.,
-        extracted signals ``(time, voxels)``, full 4D imaging data ``(time, z, y, x)``,
-        or regional signals ``(time, regions)``.
+        extracted signals ``(time, voxels)``, full 3D+t imaging data ``(time, z, y,
+        x)``, or regional signals ``(time, regions)``.
     method : {"zscore", "psc"}, default: "zscore"
         Standardization method:
 
@@ -60,13 +60,13 @@ def standardize(
     >>> standardized.mean(dim="time").values  # Should be close to 0.
     >>> standardized.std(dim="time", ddof=1).values  # Should be close to 1.
 
-    Standardize 4D imaging data directly:
+    Standardize 3D+t imaging data directly:
 
     >>> imaging_data = xr.DataArray(
     ...     np.random.randn(100, 10, 20, 30),
     ...     dims=["time", "z", "y", "x"]
     ... )
-    >>> standardized_4d = standardize(imaging_data, method="psc")
+    >>> standardized_3dt = standardize(imaging_data, method="psc")
     >>> # Each voxel is independently standardized across time.
     """
     if method not in {"zscore", "psc"}:
