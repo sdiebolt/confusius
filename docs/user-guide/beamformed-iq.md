@@ -132,26 +132,6 @@ In this example, the PRF is 15 kHz, but the data uses compound imaging with a
 results from combining 30 individual pulses, giving an effective temporal sampling
 period of 2 ms rather than 67 μs.
 
-### Memory Considerations
-
-Beamformed IQ datasets are typically very large (tens to hundreds of GB). ConfUSIus
-relies on the Dask backend for Xarray to enable out-of-core processing, allowing you to
-work with datasets larger than available RAM. Dask uses lazy evaluation, meaning data
-stays on disk until you explicitly compute results:
-
-```python
-# This loads metadata only. No data is read into memory yet.
-iq = xr.open_zarr("large_iq_data.zarr")["iq"]
-
-# Processing operations build a computation graph but don't execute.
-pwd = iq.fusi.iq.process_to_power_doppler(low_cutoff=40)
-
-# Only when you save or visualize is data actually loaded and processed. Data saved in a
-# new Zarr file will be computed and written to disk in chunks, allowing you to process
-# datasets larger than RAM.
-pwd.to_zarr("power_doppler.zarr")
-```
-
 ## How ConfUSIus Processes IQ Data
 
 ConfUSIus offers a flexible framework for processing IQ data using sliding windows. At
@@ -249,6 +229,55 @@ This nested approach allows independent control over:
   `clutter_window_stride`.
 - **Measure computation temporal resolution**: Controlled by `doppler_window_width` /
   `velocity_window_width` and their corresponding strides.
+
+### Memory and Performance Optimization
+
+Beamformed IQ datasets are typically very large (tens to hundreds of GB). ConfUSIus
+relies on the Dask backend for Xarray to enable out-of-core processing, allowing you to
+work with datasets larger than available RAM. Dask uses **lazy evaluation**, meaning data
+stays on disk until you explicitly compute results. This allows you to build complex
+processing pipelines that only execute when needed.
+
+For optimal performance, **always start a Dask distributed `Client`** before running
+computations. Even for local processing (single machine), the distributed scheduler
+provides significantly better performance than the default scheduler, along with task
+monitoring and a web-based dashboard to track progress:
+
+```python
+from dask.distributed import Client
+import xarray as xr
+import confusius
+
+# Start a local Dask cluster.
+client = Client()
+
+# The client prints a dashboard link for monitoring progress.
+# Example: http://127.0.0.1:8787/status
+
+# Load IQ data (metadata only, no data in memory yet).
+iq = xr.open_zarr("large_iq_data.zarr")["iq"]
+
+# Build computation graph (still no execution).
+pwd = iq.fusi.iq.process_to_power_doppler(low_cutoff=40)
+
+# Execute and save results (data processed in chunks, written to disk).
+pwd.to_zarr("power_doppler.zarr")
+```
+
+!!! tip "Customizing the cluster"
+    You can customize cluster resources based on your system:
+
+    ```python
+    # Limit workers and memory.
+    client = Client(
+        n_workers=4,              # Number of worker processes.
+        threads_per_worker=2,     # Threads per worker.
+        memory_limit="8GB"        # Memory limit per worker.
+    )
+    ```
+
+    See the [Dask documentation](https://docs.dask.org/en/stable/) for more configuration
+    options.
 
 ## Clutter Filtering
 
@@ -413,8 +442,12 @@ function or the corresponding Xarray accessor method.
 === "Function API"
 
     ```python
+    from dask.distributed import Client
     import xarray as xr
     import confusius as cf
+
+    # Start a local Dask cluster for optimal performance.
+    client = Client()
 
     # Load IQ data.
     ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
@@ -433,8 +466,12 @@ function or the corresponding Xarray accessor method.
 === "Xarray accessor"
 
     ```python
+    from dask.distributed import Client
     import xarray as xr
     import confusius
+
+    # Start a local Dask cluster for optimal performance.
+    client = Client()
 
     # Load IQ data.
     ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
@@ -517,8 +554,12 @@ function or the corresponding Xarray accessor method.
 === "Function API"
 
     ```python
+    from dask.distributed import Client
     import xarray as xr
     import confusius as cf
+
+    # Start a local Dask cluster for optimal performance.
+    client = Client()
 
     # Load IQ data.
     ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
@@ -539,8 +580,12 @@ function or the corresponding Xarray accessor method.
 === "Xarray accessor"
 
     ```python
+    from dask.distributed import Client
     import xarray as xr
     import confusius
+
+    # Start a local Dask cluster for optimal performance.
+    client = Client()
 
     # Load IQ data.
     ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
