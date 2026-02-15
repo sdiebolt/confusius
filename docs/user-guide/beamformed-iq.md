@@ -401,7 +401,7 @@ brain_mask = xr.open_zarr("brain_mask.zarr")["mask"]
 # Use the mask for clutter filtering.
 pwd = iq.fusi.iq.process_to_power_doppler(
     filter_method="svd_indices",
-    clutter_mask=brain_mask.values,  # Extract the NumPy array from the DataArray.
+    clutter_mask=brain_mask,
     low_cutoff=50,
 )
 ```

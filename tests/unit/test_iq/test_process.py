@@ -359,3 +359,142 @@ class TestProcessIqToAxialVelocity:
 
         assert result.attrs["ultrasound_frequency"] == 10e6
         assert result.attrs["sound_velocity"] == 1500.0
+
+
+class TestDataArrayClutterMask:
+    """Tests for DataArray clutter mask support in wrapper functions."""
+
+    def test_dataarray_mask_matches_ndarray_mask_power_doppler(
+        self, sample_iq_dataset, spatial_mask
+    ):
+        """DataArray mask produces same result as ndarray mask for power Doppler."""
+        iq = sample_iq_dataset["iq"]
+
+        # Create DataArray mask with matching coordinates.
+        mask_dataarray = xr.DataArray(
+            spatial_mask,
+            dims=("z", "y", "x"),
+            coords={
+                "z": iq.coords["z"],
+                "y": iq.coords["y"],
+                "x": iq.coords["x"],
+            },
+        )
+
+        result_ndarray = process_iq_to_power_doppler(
+            iq,
+            clutter_mask=spatial_mask,
+            low_cutoff=2,
+            high_cutoff=8,
+        )
+
+        result_dataarray = process_iq_to_power_doppler(
+            iq,
+            clutter_mask=mask_dataarray,
+            low_cutoff=2,
+            high_cutoff=8,
+        )
+
+        assert_allclose(result_ndarray.values, result_dataarray.values)
+
+    def test_dataarray_mask_matches_ndarray_mask_axial_velocity(
+        self, sample_iq_dataset, spatial_mask
+    ):
+        """DataArray mask produces same result as ndarray mask for axial velocity."""
+        iq = sample_iq_dataset["iq"]
+
+        # Create DataArray mask with matching coordinates.
+        mask_dataarray = xr.DataArray(
+            spatial_mask,
+            dims=("z", "y", "x"),
+            coords={
+                "z": iq.coords["z"],
+                "y": iq.coords["y"],
+                "x": iq.coords["x"],
+            },
+        )
+
+        result_ndarray = process_iq_to_axial_velocity(
+            iq,
+            clutter_mask=spatial_mask,
+            low_cutoff=2,
+            high_cutoff=8,
+        )
+
+        result_dataarray = process_iq_to_axial_velocity(
+            iq,
+            clutter_mask=mask_dataarray,
+            low_cutoff=2,
+            high_cutoff=8,
+        )
+
+        assert_allclose(result_ndarray.values, result_dataarray.values)
+
+    def test_dataarray_mask_coordinate_mismatch_raises(self, sample_iq_dataset, spatial_mask):
+        """DataArray mask with mismatched coordinates raises ValueError."""
+        iq = sample_iq_dataset["iq"]
+
+        # Create mask with different coordinates.
+        mask_dataarray = xr.DataArray(
+            spatial_mask,
+            dims=("z", "y", "x"),
+            coords={
+                "z": iq.coords["z"] + 1.0,  # Shifted coordinates.
+                "y": iq.coords["y"],
+                "x": iq.coords["x"],
+            },
+        )
+
+        with pytest.raises(ValueError, match="does not match IQ data coordinates"):
+            process_iq_to_power_doppler(
+                iq,
+                clutter_mask=mask_dataarray,
+                low_cutoff=2,
+                high_cutoff=8,
+            )
+
+    def test_dataarray_mask_missing_coordinate_raises(self, sample_iq_dataset, spatial_mask):
+        """DataArray mask missing a coordinate raises ValueError."""
+        iq = sample_iq_dataset["iq"]
+
+        # Create mask missing 'z' coordinate.
+        mask_dataarray = xr.DataArray(
+            spatial_mask,
+            dims=("z", "y", "x"),
+            coords={
+                "y": iq.coords["y"],
+                "x": iq.coords["x"],
+            },
+        )
+
+        with pytest.raises(ValueError, match="missing coordinate 'z'"):
+            process_iq_to_power_doppler(
+                iq,
+                clutter_mask=mask_dataarray,
+                low_cutoff=2,
+                high_cutoff=8,
+            )
+
+    def test_dataarray_mask_shape_mismatch_raises(self, sample_iq_dataset):
+        """DataArray mask with wrong shape raises ValueError."""
+        iq = sample_iq_dataset["iq"]
+
+        # Create mask with wrong shape.
+        wrong_mask = np.ones((2, 2, 2), dtype=bool)
+        mask_dataarray = xr.DataArray(
+            wrong_mask,
+            dims=("z", "y", "x"),
+            coords={
+                "z": np.arange(2),
+                "y": np.arange(2),
+                "x": np.arange(2),
+            },
+        )
+
+        with pytest.raises(ValueError, match="does not match IQ spatial dimensions"):
+            process_iq_to_power_doppler(
+                iq,
+                clutter_mask=mask_dataarray,
+                low_cutoff=2,
+                high_cutoff=8,
+            )

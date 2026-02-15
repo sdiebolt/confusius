@@ -15,10 +15,65 @@ from confusius.iq.clutter_filters import (
     clutter_filter_svd_from_energy,
     clutter_filter_svd_from_indices,
 )
+from confusius.validation.iq import validate_iq
 
 if TYPE_CHECKING:
     import dask.array as da
     from dask.array import Array
+
+
+def _validate_and_extract_clutter_mask(
+    clutter_mask: xr.DataArray | npt.NDArray | None, iq: xr.DataArray
+) -> npt.NDArray | None:
+    """Validate and extract clutter mask array from DataArray or ndarray.
+
+    Parameters
+    ----------
+    clutter_mask : xarray.DataArray or numpy.ndarray or None
+        Clutter mask to validate. If DataArray, coordinates must match IQ data.
+    iq : xarray.DataArray
+        IQ data to validate mask against.
+
+    Returns
+    -------
+    numpy.ndarray or None
+        Validated mask as numpy array, or None if no mask provided.
+
+    Raises
+    ------
+    ValueError
+        If mask shape doesn't match IQ spatial dimensions, or if DataArray
+        coordinates don't match IQ coordinates.
+    """
+    if clutter_mask is None:
+        return None
+
+    if isinstance(clutter_mask, xr.DataArray):
+        expected_shape = iq.shape[1:]
+        if clutter_mask.shape != expected_shape:
+            raise ValueError(
+                f"Clutter mask shape {clutter_mask.shape} does not match "
+                f"IQ spatial dimensions {expected_shape}"
+            )
+
+        for dim in ["z", "y", "x"]:
+            if dim not in clutter_mask.coords:
+                raise ValueError(
+                    f"Clutter mask DataArray is missing coordinate '{dim}'"
+                )
+            if not np.allclose(clutter_mask.coords[dim], iq.coords[dim]):
+                raise ValueError(
+                    f"Clutter mask coordinate '{dim}' does not match IQ data coordinates"
+                )
+        return clutter_mask.values
+    else:
+        expected_shape = iq.shape[1:]
+        if clutter_mask.shape != expected_shape:
+            raise ValueError(
+                f"Clutter mask shape {clutter_mask.shape} does not match "
+                f"IQ spatial dimensions {expected_shape}"
+            )
+        return clutter_mask
 
 
 def compute_processed_volume_times(
@@ -662,7 +717,7 @@ def process_iq_to_power_doppler(
     filter_method: Literal[
         "svd_indices", "svd_energy", "svd_cumulative_energy", "butterworth"
     ] = "svd_indices",
-    clutter_mask: npt.NDArray | None = None,
+    clutter_mask: xr.DataArray | npt.NDArray | None = None,
     low_cutoff: int | float | None = None,
     high_cutoff: int | float | None = None,
     butterworth_order: int = 4,
@@ -700,10 +755,11 @@ def process_iq_to_power_doppler(
         - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
         - ``"butterworth"``: Butterworth frequency-domain filter.
 
-    clutter_mask : (z, y, x) numpy.ndarray, optional
+    clutter_mask : (z, y, x) xarray.DataArray or numpy.ndarray, optional
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
-        used.
+        used. If a DataArray is provided, its spatial coordinates (z, y, x) must match
+        the IQ data coordinates.
     low_cutoff : int or float, optional
         Low cutoff of the clutter filter. See `filter_method` for details. If not
         provided, the lower bound of the range is used.
@@ -771,9 +827,9 @@ def process_iq_to_power_doppler(
     import dask.array as da
     from dask.array import Array
 
-    from confusius.validation.iq import validate_iq
-
     iq = validate_iq(iq)
+
+    clutter_mask_array = _validate_and_extract_clutter_mask(clutter_mask, iq)
 
     dask_iq: Array = iq.data
     if not isinstance(dask_iq, Array):
@@ -798,7 +854,7 @@ def process_iq_to_power_doppler(
         window_width=clutter_window_width,
         window_stride=clutter_window_stride,
         filter_method=filter_method,
-        clutter_mask=clutter_mask,
+        clutter_mask=clutter_mask_array,
         low_cutoff=low_cutoff,
         high_cutoff=high_cutoff,
         fs=fs,
@@ -901,10 +957,11 @@ def process_iq_to_axial_velocity(
         - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
         - ``"butterworth"``: Butterworth frequency-domain filter.
 
-    clutter_mask : (z, y, x) numpy.ndarray, optional
+    clutter_mask : (z, y, x) xarray.DataArray or numpy.ndarray, optional
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
-        used.
+        used. If a DataArray is provided, its spatial coordinates (z, y, x) must match
+        the IQ data coordinates.
     low_cutoff : int or float, optional
         Low cutoff of the clutter filter. See `filter_method` for details. If not
         provided, the lower bound of the range is used.
@@ -987,9 +1044,9 @@ def process_iq_to_axial_velocity(
     import dask.array as da
     from dask.array import Array
 
-    from confusius.validation.iq import validate_iq
-
     iq = validate_iq(iq)
+
+    clutter_mask_array = _validate_and_extract_clutter_mask(clutter_mask, iq)
 
     dask_iq: Array = iq.data
     if not isinstance(dask_iq, Array):
@@ -1016,7 +1073,7 @@ def process_iq_to_axial_velocity(
         window_stride=clutter_window_stride,
         fs=fs,
         filter_method=filter_method,
-        clutter_mask=clutter_mask,
+        clutter_mask=clutter_mask_array,
         low_cutoff=low_cutoff,
         high_cutoff=high_cutoff,
         butterworth_order=butterworth_order,
