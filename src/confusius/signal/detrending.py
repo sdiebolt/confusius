@@ -1,7 +1,6 @@
 """Detrending functions for signal preprocessing."""
 
 import warnings
-from typing import Literal
 
 import numpy as np
 import scipy.signal
@@ -34,11 +33,7 @@ def _polynomial_detrend_wrapper(data, axis, order):
     return result
 
 
-def detrend(
-    signals: xr.DataArray,
-    type: Literal["constant", "linear", "polynomial"] = "linear",
-    order: int = 1,
-) -> xr.DataArray:
+def detrend(signals: xr.DataArray, order: int = 1) -> xr.DataArray:
     """Remove trends from signals across time.
 
     This function operates along the ``time`` dimension and works with arrays of any
@@ -55,16 +50,12 @@ def detrend(
             The ``time`` dimension must NOT be chunked. Chunk only spatial dimensions:
             ``data.chunk({'time': -1})``.
 
-    type : {"constant", "linear", "polynomial"}, default: "linear"
-        Detrending method:
-
-        - ``"constant"``: remove mean.
-        - ``"linear"``: remove linear trend using least squares regression.
-        - ``"polynomial"``: remove polynomial trend of specified order.
-
     order : int, default: 1
-        Polynomial order. Only used when ``type="polynomial"``. For ``order=1``, this is
-        equivalent to ``type="linear"``.
+        Polynomial order for detrending:
+
+        - ``0``: Remove mean (constant detrending).
+        - ``1``: Remove linear trend using least squares regression (default).
+        - ``2+``: Remove polynomial trend of specified order.
 
     Returns
     -------
@@ -74,8 +65,7 @@ def detrend(
     Raises
     ------
     ValueError
-        If `type` is not recognized. If `signals` does not have a ``time`` dimension. If
-        `order` is negative.
+        If `signals` does not have a ``time`` dimension. If `order` is negative.
 
     Warns
     -----
@@ -84,35 +74,34 @@ def detrend(
 
     Notes
     -----
-    - For ``"linear"`` and ``"constant"``, uses `scipy.signal.detrend`.
-    - For ``"polynomial"``, fits a polynomial of the specified order and subtracts it.
+    - For ``order=0`` and ``order=1``, uses `scipy.signal.detrend`.
+    - For ``order >= 2``, fits a polynomial of the specified order and subtracts it.
 
     Examples
     --------
-    Remove linear trend from extracted signals:
+    Remove mean (constant detrending):
 
     >>> import xarray as xr
     >>> import numpy as np
-    >>> # Create signals with linear drift.
+    >>> signals = xr.DataArray(
+    ...     np.random.randn(100, 50) + 10,  # Noise with offset.
+    ...     dims=["time", "voxels"]
+    ... )
+    >>> detrended = detrend(signals, order=0)  # Remove mean.
+
+    Remove linear trend (default):
+
     >>> time = np.arange(100)
     >>> drift = time[:, None] * 0.5  # Linear drift.
     >>> noise = np.random.randn(100, 50)
-    >>> signals = xr.DataArray(
-    ...     drift + noise,
-    ...     dims=["time", "voxels"]
-    ... )
-    >>> detrended = detrend(signals, type="linear")
-    >>> # Drift is removed, only noise remains.
+    >>> signals = xr.DataArray(drift + noise, dims=["time", "voxels"])
+    >>> detrended = detrend(signals)  # order=1 by default.
 
-    Remove polynomial trend:
+    Remove quadratic trend:
 
-    >>> # Create signals with quadratic drift.
     >>> quadratic_drift = (time[:, None] ** 2) * 0.01
-    >>> signals_quad = xr.DataArray(
-    ...     quadratic_drift + noise,
-    ...     dims=["time", "voxels"]
-    ... )
-    >>> detrended_quad = detrend(signals_quad, type="polynomial", order=2)
+    >>> signals_quad = xr.DataArray(quadratic_drift + noise, dims=["time", "voxels"])
+    >>> detrended_quad = detrend(signals_quad, order=2)
 
     Works on 3D+t data:
 
@@ -120,7 +109,7 @@ def detrend(
     ...     np.random.randn(100, 10, 20, 30),
     ...     dims=["time", "z", "y", "x"]
     ... )
-    >>> detrended_3dt = detrend(imaging_3dt, type="linear")
+    >>> detrended_3dt = detrend(imaging_3dt, order=1)
 
     With Dask arrays (ensure time is not chunked):
 
@@ -130,15 +119,10 @@ def detrend(
     ...     da.from_array(np.random.randn(100, 50), chunks=(100, 25)),
     ...     dims=["time", "voxels"]
     ... )
-    >>> detrended_dask = detrend(dask_data, type="linear")
+    >>> detrended_dask = detrend(dask_data, order=1)
     >>> # If your data is chunked along time, rechunk first:
     >>> # dask_data = dask_data.chunk({'time': -1})
     """
-    if type not in {"linear", "constant", "polynomial"}:
-        raise ValueError(
-            f"type must be 'linear', 'constant', or 'polynomial', got '{type}'"
-        )
-
     if "time" not in signals.dims:
         raise ValueError("signals must have a 'time' dimension")
 
@@ -164,25 +148,34 @@ def detrend(
                 f"Data is chunked along the 'time' dimension ({len(time_chunks)} "
                 f"chunks), but detrending requires the full time series. "
                 f"Rechunk your data so 'time' is not chunked: "
-                f"data.chunk({{'time': -1}}) or use chunks=({signals.sizes['time']}, ...)"
+                f"data.chunk({{'time': -1}})"
             )
 
     time_axis = signals.get_axis_num("time")
 
-    if type == "polynomial":
+    # Use scipy for order 0 (constant) and order 1 (linear).
+    if order == 0:
+        result = xr.apply_ufunc(
+            scipy.signal.detrend,
+            signals,
+            kwargs={"axis": time_axis, "type": "constant"},
+            dask="parallelized",
+        )
+    elif order == 1:
+        result = xr.apply_ufunc(
+            scipy.signal.detrend,
+            signals,
+            kwargs={"axis": time_axis, "type": "linear"},
+            dask="parallelized",
+        )
+    else:
+        # Use custom polynomial detrending for order >= 2.
         result = xr.apply_ufunc(
             _polynomial_detrend_wrapper,
             signals,
             kwargs={"axis": time_axis, "order": order},
             dask="parallelized",
             output_dtypes=[signals.dtype],
-        )
-    else:
-        result = xr.apply_ufunc(
-            scipy.signal.detrend,
-            signals,
-            kwargs={"axis": time_axis, "type": type},
-            dask="parallelized",
         )
 
     return result

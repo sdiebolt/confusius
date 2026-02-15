@@ -114,7 +114,7 @@ def signals_with_cubic_trend():
 
 def test_detrend_linear(signals_with_linear_trend):
     """Test linear detrending removes linear trend."""
-    result = detrend(signals_with_linear_trend, type="linear")
+    result = detrend(signals_with_linear_trend, order=1)
 
     # Check shape and coordinates preserved.
     assert result.dims == signals_with_linear_trend.dims
@@ -135,7 +135,7 @@ def test_detrend_linear(signals_with_linear_trend):
 
 def test_detrend_constant(signals_with_linear_trend):
     """Test constant detrending removes mean."""
-    result = detrend(signals_with_linear_trend, type="constant")
+    result = detrend(signals_with_linear_trend, order=0)
 
     # Check shape and coordinates preserved.
     assert result.dims == signals_with_linear_trend.dims
@@ -154,8 +154,8 @@ def test_detrend_constant(signals_with_linear_trend):
 
 def test_detrend_polynomial_order1(signals_with_linear_trend):
     """Test polynomial order 1 is equivalent to linear."""
-    result_poly = detrend(signals_with_linear_trend, type="polynomial", order=1)
-    result_linear = detrend(signals_with_linear_trend, type="linear")
+    result_poly = detrend(signals_with_linear_trend, order=1)
+    result_linear = detrend(signals_with_linear_trend, order=1)
 
     # Should be equivalent (within numerical precision).
     assert_allclose(result_poly.values, result_linear.values, rtol=1e-8)
@@ -163,7 +163,7 @@ def test_detrend_polynomial_order1(signals_with_linear_trend):
 
 def test_detrend_polynomial_order2(signals_with_quadratic_trend):
     """Test polynomial order 2 removes quadratic trend."""
-    result = detrend(signals_with_quadratic_trend, type="polynomial", order=2)
+    result = detrend(signals_with_quadratic_trend, order=2)
 
     # Check shape and coordinates preserved.
     assert result.dims == signals_with_quadratic_trend.dims
@@ -182,7 +182,7 @@ def test_detrend_polynomial_order2(signals_with_quadratic_trend):
 
 def test_detrend_polynomial_order3(signals_with_cubic_trend):
     """Test polynomial order 3 removes cubic trend."""
-    result = detrend(signals_with_cubic_trend, type="polynomial", order=3)
+    result = detrend(signals_with_cubic_trend, order=3)
 
     # Check shape and coordinates preserved.
     assert result.dims == signals_with_cubic_trend.dims
@@ -222,7 +222,7 @@ def test_detrend_polynomial_order4():
         },
     )
 
-    result = detrend(signals, type="polynomial", order=4)
+    result = detrend(signals, order=4)
 
     # Check shape and coordinates preserved.
     assert result.dims == signals.dims
@@ -238,12 +238,6 @@ def test_detrend_polynomial_order4():
     assert_allclose(result.values, naive_result, rtol=1e-8)
 
 
-def test_detrend_invalid_type(signals_with_linear_trend):
-    """Test error raised for invalid type."""
-    with pytest.raises(ValueError, match="type must be"):
-        detrend(signals_with_linear_trend, type="invalid")
-
-
 def test_detrend_no_time_dimension():
     """Test error raised when signals have no time dimension."""
     signals = xr.DataArray(
@@ -252,13 +246,13 @@ def test_detrend_no_time_dimension():
     )
 
     with pytest.raises(ValueError, match="must have a 'time' dimension"):
-        detrend(signals, type="linear")
+        detrend(signals, order=1)
 
 
 def test_detrend_negative_order(signals_with_linear_trend):
     """Test error raised for negative polynomial order."""
     with pytest.raises(ValueError, match="order must be non-negative"):
-        detrend(signals_with_linear_trend, type="polynomial", order=-1)
+        detrend(signals_with_linear_trend, order=-1)
 
 
 def test_detrend_single_timepoint():
@@ -269,7 +263,7 @@ def test_detrend_single_timepoint():
     )
 
     with pytest.warns(UserWarning, match="only 1 timepoint"):
-        result = detrend(signals, type="linear")
+        result = detrend(signals, order=1)
 
     # Should return unchanged (but a copy).
     assert_allclose(result.values, signals.values)
@@ -300,7 +294,7 @@ def test_detrend_3dt_imaging_data():
         },
     )
 
-    result = detrend(imaging_3dt, type="linear")
+    result = detrend(imaging_3dt, order=1)
 
     # Check shape and dimensions preserved.
     assert result.dims == imaging_3dt.dims
@@ -316,11 +310,11 @@ def test_detrend_3dt_imaging_data():
 
 
 def test_detrend_default_parameters(signals_with_linear_trend):
-    """Test default parameters (type='linear', order=1)."""
+    """Test default parameters (order=1)."""
     result = detrend(signals_with_linear_trend)
 
-    # Should be same as explicitly passing type='linear'.
-    expected = detrend(signals_with_linear_trend, type="linear")
+    # Should be same as explicitly passing order=1.
+    expected = detrend(signals_with_linear_trend, order=1)
     assert_allclose(result.values, expected.values)
 
 
@@ -345,7 +339,7 @@ def test_detrend_polynomial_3dt():
         },
     )
 
-    result = detrend(imaging_3dt, type="polynomial", order=2)
+    result = detrend(imaging_3dt, order=2)
 
     assert result.dims == imaging_3dt.dims
     assert result.shape == imaging_3dt.shape
@@ -380,7 +374,7 @@ def test_detrend_dask_compatibility():
         },
     )
 
-    result = detrend(signals_dask, type="linear")
+    result = detrend(signals_dask, order=1)
 
     assert isinstance(result.data, da.Array)
 
@@ -409,7 +403,7 @@ def test_detrend_polynomial_dask_compatibility():
         },
     )
 
-    result = detrend(signals_dask, type="polynomial", order=2)
+    result = detrend(signals_dask, order=2)
 
     assert isinstance(result.data, da.Array)
 
@@ -435,4 +429,4 @@ def test_detrend_raises_on_time_chunking():
     with pytest.raises(
         ValueError, match="chunked along the 'time' dimension.*requires the full"
     ):
-        detrend(signals_bad_chunks, type="linear")
+        detrend(signals_bad_chunks, order=1)
