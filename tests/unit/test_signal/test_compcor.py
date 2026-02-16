@@ -433,52 +433,70 @@ def test_compute_compcor_time_chunked():
         compute_compcor_confounds(signals, noise_mask=noise_mask, n_components=5)
 
 
-def test_compute_compcor_explained_variance_ratio(sample_timeseries):
-    """Test that explained variance ratio is correctly computed."""
-    signals = sample_timeseries(n_time=100, n_voxels=50)
+def test_compute_compcor_explained_variance_ratio():
+    """Test explained variance ratio against known ground truth.
 
-    mask_values = np.zeros(50, dtype=bool)
-    mask_values[:20] = True
-    noise_mask = _create_mask_like(signals.isel(time=0), mask_values)
-
-    components = compute_compcor_confounds(
-        signals, noise_mask=noise_mask, n_components=5, detrend=False
-    )
-
-    # Check coordinate exists
-    assert "explained_variance_ratio" in components.coords
-
-    variance_ratio = components.coords["explained_variance_ratio"].values
-
-    # Check properties
-    assert variance_ratio.shape == (5,)
-    assert np.all(variance_ratio >= 0)
-    assert np.all(variance_ratio <= 1)
-    assert variance_ratio.sum() <= 1.0
-
-    # Check descending order (first component explains most variance)
-    assert np.all(np.diff(variance_ratio) <= 0)
-
-
-def test_compute_compcor_variance_ratio_all_components(sample_timeseries):
-    """Test that variance ratio sums to 1.0 when extracting all components."""
+    Creates synthetic data from orthogonal components with known singular values,
+    then verifies that the computed variance ratios match the expected values.
+    """
     n_time = 100
     n_voxels = 20
-    signals = sample_timeseries(n_time=n_time, n_voxels=n_voxels)
+    n_components = 3
 
-    mask_values = np.zeros(n_voxels, dtype=bool)
-    mask_values[:15] = True
-    noise_mask = _create_mask_like(signals.isel(time=0), mask_values)
+    rng = np.random.default_rng(42)
 
-    # Extract all possible components (min of n_samples, n_voxels_selected)
-    n_selected = 15
-    n_components_max = min(n_time, n_selected)
+    # Create orthonormal temporal components (columns of U in SVD)
+    U_basis = rng.normal(size=(n_time, n_components))
+    U_basis, _ = np.linalg.qr(U_basis)
+
+    # Create orthonormal voxel loadings (columns of V in SVD)
+    V_basis = rng.normal(size=(n_voxels, n_components))
+    V_basis, _ = np.linalg.qr(V_basis)
+
+    # Set specific singular values to control variance contributions
+    singular_values = np.array([10.0, 5.0, 2.0])
+
+    # Construct signals: X = U @ diag(s) @ V^T
+    signals_data = U_basis @ np.diag(singular_values) @ V_basis.T
+
+    signals = xr.DataArray(
+        signals_data,
+        dims=["time", "voxels"],
+        coords={"time": np.arange(n_time) * 0.1, "voxels": np.arange(n_voxels)},
+    )
+
+    # Our function standardizes (z-score) before PCA, so we need to compute
+    # expected variance ratio after standardization
+    signals_centered = signals - signals.mean(dim="time")
+    signals_std = signals_centered / signals_centered.std(dim="time")
+
+    # Compute expected variance ratio via SVD
+    _, s, _ = np.linalg.svd(signals_std.values, full_matrices=False)
+    expected_ratio = (s[:n_components] ** 2) / (s**2).sum()
+
+    # Test with all voxels
+    mask = xr.DataArray(
+        np.ones(n_voxels, dtype=bool),
+        dims=["voxels"],
+        coords={"voxels": np.arange(n_voxels)},
+    )
 
     components = compute_compcor_confounds(
-        signals, noise_mask=noise_mask, n_components=n_components_max, detrend=False
+        signals, noise_mask=mask, n_components=n_components, detrend=False
     )
 
     variance_ratio = components.coords["explained_variance_ratio"].values
 
-    # When extracting all components, should explain 100% of variance
-    assert_allclose(variance_ratio.sum(), 1.0, rtol=1e-10)
+    # Should match expected values exactly (within numerical precision)
+    assert_allclose(variance_ratio, expected_ratio, rtol=1e-10)
+
+    # Verify descending order
+    assert np.all(np.diff(variance_ratio) <= 0)
+
+    # Test extracting all components - should sum to 1.0
+    components_all = compute_compcor_confounds(
+        signals, noise_mask=mask, n_components=min(n_time, n_voxels), detrend=False
+    )
+
+    variance_ratio_all = components_all.coords["explained_variance_ratio"].values
+    assert_allclose(variance_ratio_all.sum(), 1.0, rtol=1e-10)
