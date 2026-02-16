@@ -10,20 +10,15 @@ from confusius import extract
 class TestWithMask:
     """Tests for extract.with_mask function."""
 
-    def test_mask_validation(self):
+    def test_mask_validation(self, sample_4d_volume):
         """Test that non-boolean mask raises error."""
-        data = xr.DataArray(
-            np.random.randn(10, 5, 6, 7),
-            dims=["time", "z", "y", "x"],
-        )
-
         mask = xr.DataArray(
-            np.random.rand(5, 6, 7),
+            np.random.rand(*sample_4d_volume.shape[1:]),
             dims=["z", "y", "x"],
         )
 
         with pytest.raises(TypeError, match="boolean dtype"):
-            extract.with_mask(data, mask)
+            extract.with_mask(sample_4d_volume, mask)
 
     def test_insufficient_spatial_dims(self):
         """Test that data with < 2 spatial dims raises error."""

@@ -4,12 +4,6 @@ import numpy as np
 import pytest
 
 
-@pytest.fixture(scope="session")
-def rng():
-    """Seeded random number generator for reproducible tests."""
-    return np.random.default_rng(42)
-
-
 @pytest.fixture
 def sample_iq_block_4d(rng):
     """Create a sample 4D IQ block with shape (time, z, y, x).

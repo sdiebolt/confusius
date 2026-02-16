@@ -6,12 +6,6 @@ import SimpleITK as sitk
 import xarray as xr
 
 
-@pytest.fixture(scope="session")
-def rng():
-    """Seeded random number generator for reproducible tests."""
-    return np.random.default_rng(42)
-
-
 @pytest.fixture
 def sample_2d_image():
     """Create a simple 2D test image with a recognizable pattern."""

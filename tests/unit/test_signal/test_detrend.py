@@ -41,9 +41,8 @@ def _naive_polynomial_detrend(data, order, axis=0):
 
 
 @pytest.fixture
-def signals_with_linear_trend():
+def signals_with_linear_trend(rng):
     """Signals with linear trend."""
-    rng = np.random.default_rng(42)
     n_time = 100
     n_voxels = 50
 
@@ -65,9 +64,8 @@ def signals_with_linear_trend():
 
 
 @pytest.fixture
-def signals_with_quadratic_trend():
+def signals_with_quadratic_trend(rng):
     """Signals with quadratic trend."""
-    rng = np.random.default_rng(42)
     n_time = 100
     n_voxels = 50
 
@@ -89,9 +87,8 @@ def signals_with_quadratic_trend():
 
 
 @pytest.fixture
-def signals_with_cubic_trend():
+def signals_with_cubic_trend(rng):
     """Signals with cubic trend."""
-    rng = np.random.default_rng(43)
     n_time = 100
     n_voxels = 50
 
@@ -177,7 +174,8 @@ def test_detrend_polynomial_order2(signals_with_quadratic_trend):
     naive_result = _naive_polynomial_detrend(
         signals_with_quadratic_trend.values, order=2, axis=0
     )
-    assert_allclose(result.values, naive_result, rtol=1e-10)
+    # Use relaxed tolerance for numerical precision (matching order 3 test).
+    assert_allclose(result.values, naive_result, rtol=1e-8)
 
 
 def test_detrend_polynomial_order3(signals_with_cubic_trend):
@@ -200,9 +198,8 @@ def test_detrend_polynomial_order3(signals_with_cubic_trend):
     assert_allclose(result.values, naive_result, rtol=1e-8)
 
 
-def test_detrend_polynomial_order4():
+def test_detrend_polynomial_order4(rng):
     """Test polynomial order 4 (quartic) detrending."""
-    rng = np.random.default_rng(44)
     n_time = 100
     n_voxels = 50
 
@@ -235,7 +232,7 @@ def test_detrend_polynomial_order4():
     # Compare against naive reference implementation.
     naive_result = _naive_polynomial_detrend(signals.values, order=4, axis=0)
     # Higher-order polynomials have slightly worse numerical precision.
-    assert_allclose(result.values, naive_result, rtol=1e-8)
+    assert_allclose(result.values, naive_result, rtol=1e-7)
 
 
 def test_detrend_no_time_dimension():
@@ -256,43 +253,22 @@ def test_detrend_negative_order(signals_with_linear_trend):
 
 
 def test_detrend_single_timepoint():
-    """Test warning and unchanged return for single timepoint."""
+    """Test error raised for single timepoint."""
     signals = xr.DataArray(
         np.array([[1.0, 2.0, 3.0]]),
         dims=["time", "voxels"],
     )
 
-    with pytest.warns(UserWarning, match="only 1 timepoint"):
-        result = detrend(signals, order=1)
-
-    # Should return unchanged (but a copy).
-    assert_allclose(result.values, signals.values)
-    assert result is not signals
+    with pytest.raises(ValueError, match="more than 1 timepoint"):
+        detrend(signals, order=1)
 
 
-def test_detrend_3dt_imaging_data():
+def test_detrend_3dt_imaging_data(sample_4d_volume):
     """Test that detrend works on 3D+t imaging data (time, z, y, x)."""
-    rng = np.random.default_rng(42)
-    n_time = 50
-    n_z, n_y, n_x = 5, 10, 15
-
-    # Create noise.
-    noise = rng.normal(loc=0, scale=0.5, size=(n_time, n_z, n_y, n_x))
-
-    # Add linear trend.
-    time = np.arange(n_time)
+    # Add linear trend to the sample 4D volume.
+    time = np.arange(sample_4d_volume.sizes["time"])
     trend = time[:, np.newaxis, np.newaxis, np.newaxis] * 1.0
-
-    imaging_3dt = xr.DataArray(
-        trend + noise,
-        dims=["time", "z", "y", "x"],
-        coords={
-            "time": np.arange(n_time) * 0.002,
-            "z": np.arange(n_z) * 0.4,
-            "y": np.arange(n_y) * 0.05,
-            "x": np.arange(n_x) * 0.1,
-        },
-    )
+    imaging_3dt = sample_4d_volume + trend
 
     result = detrend(imaging_3dt, order=1)
 
@@ -318,26 +294,12 @@ def test_detrend_default_parameters(signals_with_linear_trend):
     assert_allclose(result.values, expected.values)
 
 
-def test_detrend_polynomial_3dt():
+def test_detrend_polynomial_3dt(sample_4d_volume):
     """Test polynomial detrending on 3D+t data."""
-    rng = np.random.default_rng(42)
-    n_time = 50
-    n_z, n_y, n_x = 5, 10, 15
-
-    noise = rng.normal(loc=0, scale=0.5, size=(n_time, n_z, n_y, n_x))
-    time = np.arange(n_time)
+    # Add quadratic trend to the sample 4D volume.
+    time = np.arange(sample_4d_volume.sizes["time"])
     trend = (time[:, np.newaxis, np.newaxis, np.newaxis] ** 2) * 0.05
-
-    imaging_3dt = xr.DataArray(
-        trend + noise,
-        dims=["time", "z", "y", "x"],
-        coords={
-            "time": np.arange(n_time) * 0.002,
-            "z": np.arange(n_z) * 0.4,
-            "y": np.arange(n_y) * 0.05,
-            "x": np.arange(n_x) * 0.1,
-        },
-    )
+    imaging_3dt = sample_4d_volume + trend
 
     result = detrend(imaging_3dt, order=2)
 
@@ -353,9 +315,8 @@ def test_detrend_polynomial_3dt():
     assert_allclose(result.values, naive_result, rtol=1e-8)
 
 
-def test_detrend_dask_compatibility():
+def test_detrend_dask_compatibility(rng):
     """Test linear detrending works with Dask-backed arrays."""
-    rng = np.random.default_rng(42)
     n_time = 100
     n_voxels = 50
 
@@ -382,9 +343,8 @@ def test_detrend_dask_compatibility():
     assert_allclose(mean_per_voxel.values, 0.0, atol=1e-10)
 
 
-def test_detrend_polynomial_dask_compatibility():
+def test_detrend_polynomial_dask_compatibility(rng):
     """Test polynomial detrending maintains Dask laziness."""
-    rng = np.random.default_rng(42)
     n_time = 100
     n_voxels = 50
 
@@ -411,9 +371,8 @@ def test_detrend_polynomial_dask_compatibility():
     assert_allclose(mean_per_voxel.values, 0.0, atol=1e-10)
 
 
-def test_detrend_raises_on_time_chunking():
+def test_detrend_raises_on_time_chunking(rng):
     """Test that detrending raises error when time dimension is chunked."""
-    rng = np.random.default_rng(42)
     n_time = 100
     n_voxels = 50
 

@@ -22,18 +22,15 @@ def create_signals_with_time(shape, sampling_rate=100, **kwargs):
 class TestFilterButterworth:
     """Tests for Butterworth filtering."""
 
-    def test_lowpass_matches_scipy(self):
+    def test_lowpass_matches_scipy(self, sample_timeseries):
         """Low-pass filter should match scipy.signal.butter + sosfiltfilt."""
-        np.random.seed(42)
         n_timepoints = 500
         n_voxels = 10
         sampling_rate = 100
-        data = np.random.randn(n_timepoints, n_voxels)
-        signals = xr.DataArray(
-            data,
-            dims=["time", "voxels"],
-            coords={"time": np.arange(n_timepoints) / sampling_rate},
+        signals = sample_timeseries(
+            n_time=n_timepoints, n_voxels=n_voxels, sampling_rate=sampling_rate
         )
+        data = signals.values
 
         # Apply our filter.
         low_pass = 0.1
@@ -52,19 +49,15 @@ class TestFilterButterworth:
 
         np.testing.assert_allclose(filtered.values, expected, rtol=1e-10)
 
-    def test_highpass_matches_scipy(self):
+    def test_highpass_matches_scipy(self, sample_timeseries):
         """High-pass filter should match scipy.signal.butter + sosfiltfilt."""
-        np.random.seed(42)
         n_timepoints = 500
         n_voxels = 10
         sampling_rate = 100
-        data = np.random.randn(n_timepoints, n_voxels)
-        signals = create_signals_with_time(
-            (n_timepoints, n_voxels),
-            sampling_rate=sampling_rate,
-            dims=["time", "voxels"],
+        signals = sample_timeseries(
+            n_time=n_timepoints, n_voxels=n_voxels, sampling_rate=sampling_rate
         )
-        signals.values[:] = data  # Use the seeded data
+        data = signals.values
 
         # Apply our filter.
         high_pass = 0.01
@@ -83,19 +76,15 @@ class TestFilterButterworth:
 
         np.testing.assert_allclose(filtered.values, expected, rtol=1e-10)
 
-    def test_bandpass_matches_scipy(self):
+    def test_bandpass_matches_scipy(self, sample_timeseries):
         """Band-pass filter should match scipy.signal.butter + sosfiltfilt."""
-        np.random.seed(42)
         n_timepoints = 500
         n_voxels = 10
         sampling_rate = 100
-        data = np.random.randn(n_timepoints, n_voxels)
-        signals = create_signals_with_time(
-            (n_timepoints, n_voxels),
-            sampling_rate=sampling_rate,
-            dims=["time", "voxels"],
+        signals = sample_timeseries(
+            n_time=n_timepoints, n_voxels=n_voxels, sampling_rate=sampling_rate
         )
-        signals.values[:] = data  # Use the seeded data
+        data = signals.values
 
         # Apply our filter (keep frequencies between 0.01 and 0.1 Hz).
         low_cutoff = 0.01
@@ -198,13 +187,15 @@ class TestFilterButterworth:
         assert filtered.shape == signals.shape
         assert filtered.dims == signals.dims
 
-    def test_single_vs_multiple_voxels_consistency(self):
+    def test_single_vs_multiple_voxels_consistency(self, sample_timeseries):
         """Filtering single voxel should match first column of multi-voxel result."""
-        np.random.seed(42)
         n_timepoints = 500
         n_voxels = 50
         sampling_rate = 100
-        data = np.random.randn(n_timepoints, n_voxels)
+        multi_voxel = sample_timeseries(
+            n_time=n_timepoints, n_voxels=n_voxels, sampling_rate=sampling_rate
+        )
+        data = multi_voxel.values
 
         # Filter single voxel.
         single_voxel = xr.DataArray(
@@ -215,11 +206,6 @@ class TestFilterButterworth:
         filtered_single = filter_butterworth(single_voxel, high_cutoff=0.1, order=5)
 
         # Filter multiple voxels.
-        multi_voxel = xr.DataArray(
-            data,
-            dims=["time", "voxels"],
-            coords={"time": np.arange(n_timepoints) / sampling_rate},
-        )
         filtered_multi = filter_butterworth(multi_voxel, high_cutoff=0.1, order=5)
 
         # First column of multi-voxel result should match single voxel result.

@@ -10,23 +10,8 @@ from confusius.signal import standardize
 
 
 @pytest.fixture
-def random_signals():
-    """Random 2D signals (time, voxels)."""
-    rng = np.random.default_rng(42)
-    return xr.DataArray(
-        rng.normal(loc=10, scale=2, size=(100, 50)),
-        dims=["time", "voxels"],
-        coords={
-            "time": np.arange(100) * 0.002,  # 500 Hz.
-            "voxels": np.arange(50),
-        },
-    )
-
-
-@pytest.fixture
-def random_signals_dask():
+def random_signals_dask(rng):
     """Random 2D signals (time, voxels) with Dask backend."""
-    rng = np.random.default_rng(42)
     data = rng.normal(loc=10, scale=2, size=(100, 50))
     return xr.DataArray(
         da.from_array(data, chunks=(50, 25)),
@@ -38,8 +23,9 @@ def random_signals_dask():
     )
 
 
-def test_standardize_zscore(random_signals):
+def test_standardize_zscore(sample_timeseries):
     """Test z-score standardization produces mean=0, std=1."""
+    random_signals = sample_timeseries(n_time=100, n_voxels=50)
     result = standardize(random_signals, method="zscore")
 
     # Check shape and coordinates preserved.
@@ -58,8 +44,9 @@ def test_standardize_zscore(random_signals):
     assert_allclose(std_per_voxel.values, 1.0, rtol=1e-10)
 
 
-def test_standardize_psc(random_signals):
+def test_standardize_psc(sample_timeseries):
     """Test percent signal change standardization."""
+    random_signals = sample_timeseries(n_time=100, n_voxels=50)
     result = standardize(random_signals, method="psc")
 
     # Check shape and coordinates preserved.
@@ -77,10 +64,11 @@ def test_standardize_psc(random_signals):
     assert_allclose(result_mean.values, 0.0, atol=1e-10)
 
 
-def test_standardize_invalid_method(random_signals):
+def test_standardize_invalid_method(sample_timeseries):
     """Test error raised for invalid method."""
+    random_signals = sample_timeseries(n_time=100, n_voxels=50)
     with pytest.raises(ValueError, match="method must be"):
-        standardize(random_signals, method="invalid")
+        standardize(random_signals, method="invalid")  # type: ignore
 
 
 def test_standardize_no_time_dimension():
@@ -145,28 +133,25 @@ def test_standardize_dask_compatibility(random_signals_dask):
     assert_allclose(std_per_voxel.values, 1.0, rtol=1e-10)
 
 
-def test_standardize_default_method(random_signals):
+def test_standardize_default_method(sample_timeseries):
     """Test default method is zscore."""
-    result = standardize(random_signals)
+    signals = sample_timeseries()
+    result = standardize(signals)
 
     # Should be same as explicitly passing method='zscore'.
-    expected = standardize(random_signals, method="zscore")
+    expected = standardize(signals, method="zscore")
     assert_allclose(result.values, expected.values)
 
 
 def test_standardize_single_timepoint():
-    """Test warning and unchanged return for single timepoint."""
+    """Test error raised for single timepoint."""
     signals = xr.DataArray(
         np.array([[1.0, 2.0, 3.0]]),
         dims=["time", "voxels"],
     )
 
-    with pytest.warns(UserWarning, match="only 1 timepoint"):
-        result = standardize(signals, method="zscore")
-
-    # Should return unchanged (but a copy).
-    assert_allclose(result.values, signals.values)
-    assert result is not signals
+    with pytest.raises(ValueError, match="more than 1 timepoint"):
+        standardize(signals, method="zscore")
 
 
 def test_standardize_zscore_zero_variance():
@@ -189,36 +174,25 @@ def test_standardize_zscore_zero_variance():
     assert_allclose(result.values[:, 1], expected_1)
 
 
-def test_standardize_zscore_psc_correlation(random_signals):
+def test_standardize_zscore_psc_correlation(sample_timeseries):
     """Test that zscore and psc are perfectly correlated (from nilearn)."""
-    z = standardize(random_signals, method="zscore")
-    psc = standardize(random_signals, method="psc")
+    signals = sample_timeseries()
+    z = standardize(signals, method="zscore")
+    psc = standardize(signals, method="psc")
 
     # For each voxel, correlation between zscore and psc should be 1.
-    for i in range(random_signals.sizes["voxels"]):
+    for i in range(signals.sizes["voxels"]):
         corr = np.corrcoef(z.values[:, i], psc.values[:, i])[0, 1]
         assert_allclose(corr, 1.0, rtol=1e-10)
 
 
-def test_standardize_4d_imaging_data():
+def test_standardize_4d_imaging_data(sample_4d_volume):
     """Test that standardize works on 4D imaging data (time, z, y, x)."""
-    rng = np.random.default_rng(42)
-    imaging_4d = xr.DataArray(
-        rng.normal(loc=100, scale=10, size=(50, 5, 10, 15)),
-        dims=["time", "z", "y", "x"],
-        coords={
-            "time": np.arange(50) * 0.002,
-            "z": np.arange(5) * 0.4,
-            "y": np.arange(10) * 0.05,
-            "x": np.arange(15) * 0.1,
-        },
-    )
-
-    result = standardize(imaging_4d, method="zscore")
+    result = standardize(sample_4d_volume, method="zscore")
 
     # Check shape and dimensions preserved.
-    assert result.dims == imaging_4d.dims
-    assert result.shape == imaging_4d.shape
+    assert result.dims == sample_4d_volume.dims
+    assert result.shape == sample_4d_volume.shape
 
     # Check that each voxel (z, y, x) has mean≈0, std≈1 across time.
     mean_per_voxel = result.mean(dim="time")
@@ -228,7 +202,9 @@ def test_standardize_4d_imaging_data():
     assert_allclose(std_per_voxel.values, 1.0, rtol=1e-10)
 
     # Check coordinates preserved.
-    assert_allclose(result.coords["time"].values, imaging_4d.coords["time"].values)
-    assert_allclose(result.coords["z"].values, imaging_4d.coords["z"].values)
-    assert_allclose(result.coords["y"].values, imaging_4d.coords["y"].values)
-    assert_allclose(result.coords["x"].values, imaging_4d.coords["x"].values)
+    assert_allclose(
+        result.coords["time"].values, sample_4d_volume.coords["time"].values
+    )
+    assert_allclose(result.coords["z"].values, sample_4d_volume.coords["z"].values)
+    assert_allclose(result.coords["y"].values, sample_4d_volume.coords["y"].values)
+    assert_allclose(result.coords["x"].values, sample_4d_volume.coords["x"].values)
