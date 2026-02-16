@@ -142,7 +142,7 @@ def plot_napari(
         if dim in all_dims:
             order.append(all_dims.index(dim))
 
-    imshow_kwargs.setdefault("axis_labels", data.dims)
+    imshow_kwargs.setdefault("axis_labels", all_dims)
     viewer, image_layer = napari.imshow(
         data,
         scale=scale,
