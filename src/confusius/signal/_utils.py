@@ -1,62 +1,50 @@
 """Utility functions for the signal module."""
 
+import numpy as np
 import xarray as xr
 
 
-def validate_time_series(
+def remove_zero_variance_voxels(
     signals: xr.DataArray,
-    operation_name: str,
-    check_time_chunks: bool = True,
-) -> int:
-    """Validate time series for signal processing operations.
+    variance_tolerance: float = 1e-10,
+) -> xr.DataArray:
+    """Remove voxels with near-zero variance from signals.
 
-    Performs common validation checks:
-
-    1. Signals have a ``time`` dimension.
-    2. Time dimension has more than 1 timepoint.
-    3. Time dimension is not chunked for Dask arrays (optional).
+    Zero-variance voxels can cause numerical issues and bias statistical
+    computations like PCA/SVD. This function identifies and removes them.
 
     Parameters
     ----------
-    signals : xarray.DataArray
-        Input signals to validate. Must have a 'time' dimension.
-    operation_name : str
-        Name of the operation (used in error/warning messages).
-    check_time_chunks : bool, default=True
-        If True, raises an error when time dimension is chunked in a Dask array.
-        Set to False for operations that can handle chunked time (e.g., standardize).
+    signals : (time, voxels) xarray.DataArray
+        Signals with time and voxels dimensions.
+    variance_tolerance : float, default: 1e-10
+        Voxels with standard deviation <= this value are considered zero-variance.
 
     Returns
     -------
-    int
-        Axis number for the 'time' dimension.
+    xarray.DataArray
+        Signals with zero-variance voxels removed. If all voxels have zero
+        variance, raises an error.
 
     Raises
     ------
     ValueError
-        If signals has no 'time' dimension.
-        If time dimension has only 1 timepoint.
-        If time dimension is chunked in a Dask array (when check_time_chunks=True).
-    """
-    if "time" not in signals.dims:
-        raise ValueError("signals must have a 'time' dimension")
+        If all voxels have variance below tolerance.
 
-    if signals.sizes["time"] == 1:
+    Notes
+    -----
+    Uses standard deviation (with Bessel's correction) to identify low-variance
+    voxels. This is simpler than robust SD (used in DVARS) but sufficient for
+    identifying truly constant voxels.
+    """
+    voxel_std = signals.std(dim="time", ddof=1)
+
+    nonzero_mask = voxel_std.values > variance_tolerance
+
+    if not np.any(nonzero_mask):
         raise ValueError(
-            f"{operation_name.capitalize()} requires more than 1 timepoint, "
-            f"got {signals.sizes['time']}"
+            "All voxels have variance below tolerance. Check input data or adjust "
+            "variance_tolerance parameter."
         )
 
-    time_axis = signals.get_axis_num("time")
-
-    if check_time_chunks and hasattr(signals.data, "chunks"):
-        time_chunks = signals.data.chunks[time_axis]
-        if len(time_chunks) > 1:
-            raise ValueError(
-                f"Data is chunked along the 'time' dimension ({len(time_chunks)} "
-                f"chunks), but {operation_name} requires the full time series. "
-                f"Rechunk your data so 'time' is not chunked: "
-                f"data.chunk({{'time': -1}})"
-            )
-
-    return time_axis
+    return signals.isel(voxels=nonzero_mask)

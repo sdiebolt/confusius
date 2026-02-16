@@ -1,7 +1,8 @@
 """Extraction of signals using binary masks."""
 
-import numpy as np
 import xarray as xr
+
+from confusius.validation import validate_mask
 
 
 def with_mask(
@@ -79,40 +80,16 @@ def with_mask(
     >>> pose_signals.dims
     ("time", "pose", "voxels")
     """
+    validate_mask(mask, data, "mask")
+
     spatial_dims = list(mask.dims)
-
-    if len(spatial_dims) < 2:
-        raise ValueError(
-            f"Mask must have at least 2 spatial dimensions, got {len(spatial_dims)}: "
-            f"{spatial_dims}"
-        )
-
-    if mask.dtype != bool:
-        raise TypeError(f"Mask must be boolean dtype, got {mask.dtype}")
-
-    if not set(spatial_dims).issubset(set(data.dims)):
-        missing_dims = set(spatial_dims) - set(data.dims)
-        raise ValueError(
-            f"Data is missing spatial dimensions from mask: {missing_dims}. "
-            f"Data dims: {data.dims}, Mask dims: {spatial_dims}"
-        )
-
     non_spatial_dims = [d for d in data.dims if d not in spatial_dims]
+
     if non_spatial_dims:
         sel_dict = {d: 0 for d in non_spatial_dims}
         template = data.isel(sel_dict)
     else:
         template = data
-
-    for dim in spatial_dims:
-        if dim in mask.coords and dim in template.coords:
-            if not np.array_equal(mask.coords[dim].values, template.coords[dim].values):
-                raise ValueError(
-                    f"Mask coordinates for dimension '{dim}' do not match data coordinates.\n"
-                    f"  Data {dim}: {template.coords[dim].values}\n"
-                    f"  Mask {dim}: {mask.coords[dim].values}\n"
-                    f"Coordinates must be identical for masking to work correctly."
-                )
 
     mask_aligned = mask.reindex_like(template)
 

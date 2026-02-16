@@ -4,7 +4,7 @@ import numpy as np
 import scipy.signal
 import xarray as xr
 
-from confusius.signal._utils import validate_time_series
+from confusius.validation import validate_time_series
 
 
 def _polynomial_detrend_wrapper(data, axis, order):

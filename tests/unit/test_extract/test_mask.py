@@ -21,7 +21,7 @@ class TestWithMask:
             extract.with_mask(sample_4d_volume, mask)
 
     def test_insufficient_spatial_dims(self):
-        """Test that data with < 2 spatial dims raises error."""
+        """Test that mask with dimension not in data raises error."""
         data = xr.DataArray(
             np.random.randn(10),
             dims=["time"],
@@ -29,7 +29,7 @@ class TestWithMask:
 
         mask = xr.DataArray([True, False, True], dims=["x"])
 
-        with pytest.raises(ValueError, match="at least 2 spatial dimensions"):
+        with pytest.raises(ValueError, match="missing spatial dimensions.*'x'"):
             extract.with_mask(data, mask)
 
     def test_values_correctness(self):

@@ -364,11 +364,12 @@ class TestProcessIqToAxialVelocity:
 class TestDataArrayClutterMask:
     """Tests for DataArray clutter mask support in wrapper functions."""
 
-    def test_dataarray_mask_matches_ndarray_mask_power_doppler(
+    def test_dataarray_mask_matches_reference_power_doppler(
         self, sample_iq_dataset, spatial_mask
     ):
-        """DataArray mask produces same result as ndarray mask for power Doppler."""
+        """DataArray mask matches numpy reference for power Doppler."""
         iq = sample_iq_dataset["iq"]
+        n_time = iq.sizes["time"]
 
         # Create DataArray mask with matching coordinates.
         mask_dataarray = xr.DataArray(
@@ -381,27 +382,33 @@ class TestDataArrayClutterMask:
             },
         )
 
-        result_ndarray = process_iq_to_power_doppler(
+        result = process_iq_to_power_doppler(
             iq,
-            clutter_mask=spatial_mask,
-            low_cutoff=2,
-            high_cutoff=8,
-        )
-
-        result_dataarray = process_iq_to_power_doppler(
-            iq,
+            clutter_window_width=n_time,
+            clutter_window_stride=n_time,
+            doppler_window_width=n_time,
+            doppler_window_stride=n_time,
             clutter_mask=mask_dataarray,
             low_cutoff=2,
             high_cutoff=8,
         )
 
-        assert_allclose(result_ndarray.values, result_dataarray.values)
+        expected = compute_power_doppler_volume(
+            iq.values,
+            filter_method="svd_indices",
+            clutter_mask=mask_dataarray.values,
+            low_cutoff=2,
+            high_cutoff=8,
+        )
 
-    def test_dataarray_mask_matches_ndarray_mask_axial_velocity(
+        assert_allclose(result.values[0], expected[0])
+
+    def test_dataarray_mask_matches_reference_axial_velocity(
         self, sample_iq_dataset, spatial_mask
     ):
-        """DataArray mask produces same result as ndarray mask for axial velocity."""
+        """DataArray mask matches numpy reference for axial velocity."""
         iq = sample_iq_dataset["iq"]
+        n_time = iq.sizes["time"]
 
         # Create DataArray mask with matching coordinates.
         mask_dataarray = xr.DataArray(
@@ -414,23 +421,33 @@ class TestDataArrayClutterMask:
             },
         )
 
-        result_ndarray = process_iq_to_axial_velocity(
+        result = process_iq_to_axial_velocity(
             iq,
-            clutter_mask=spatial_mask,
-            low_cutoff=2,
-            high_cutoff=8,
-        )
-
-        result_dataarray = process_iq_to_axial_velocity(
-            iq,
+            clutter_window_width=n_time,
+            clutter_window_stride=n_time,
+            velocity_window_width=n_time,
+            velocity_window_stride=n_time,
             clutter_mask=mask_dataarray,
             low_cutoff=2,
             high_cutoff=8,
         )
 
-        assert_allclose(result_ndarray.values, result_dataarray.values)
+        expected = compute_axial_velocity_volume(
+            iq.values,
+            fs=iq.attrs["compound_sampling_frequency"],
+            filter_method="svd_indices",
+            clutter_mask=mask_dataarray.values,
+            low_cutoff=2,
+            high_cutoff=8,
+            ultrasound_frequency=iq.attrs["transmit_frequency"],
+            sound_velocity=iq.attrs["sound_velocity"],
+        )
 
-    def test_dataarray_mask_coordinate_mismatch_raises(self, sample_iq_dataset, spatial_mask):
+        assert_allclose(result.values[0], expected[0])
+
+    def test_dataarray_mask_coordinate_mismatch_raises(
+        self, sample_iq_dataset, spatial_mask
+    ):
         """DataArray mask with mismatched coordinates raises ValueError."""
         iq = sample_iq_dataset["iq"]
 
@@ -445,7 +462,7 @@ class TestDataArrayClutterMask:
             },
         )
 
-        with pytest.raises(ValueError, match="does not match IQ data coordinates"):
+        with pytest.raises(ValueError, match="do not match data coordinates"):
             process_iq_to_power_doppler(
                 iq,
                 clutter_mask=mask_dataarray,
@@ -453,7 +470,9 @@ class TestDataArrayClutterMask:
                 high_cutoff=8,
             )
 
-    def test_dataarray_mask_missing_coordinate_raises(self, sample_iq_dataset, spatial_mask):
+    def test_dataarray_mask_missing_coordinate_raises(
+        self, sample_iq_dataset, spatial_mask
+    ):
         """DataArray mask missing a coordinate raises ValueError."""
         iq = sample_iq_dataset["iq"]
 
@@ -467,7 +486,7 @@ class TestDataArrayClutterMask:
             },
         )
 
-        with pytest.raises(ValueError, match="missing coordinate 'z'"):
+        with pytest.raises(ValueError, match="missing coordinate"):
             process_iq_to_power_doppler(
                 iq,
                 clutter_mask=mask_dataarray,
@@ -491,7 +510,7 @@ class TestDataArrayClutterMask:
             },
         )
 
-        with pytest.raises(ValueError, match="does not match IQ spatial dimensions"):
+        with pytest.raises(ValueError, match="do not match data coordinates"):
             process_iq_to_power_doppler(
                 iq,
                 clutter_mask=mask_dataarray,

@@ -5,7 +5,7 @@ from typing import Literal
 import numpy as np
 import xarray as xr
 
-from confusius.signal._utils import validate_time_series
+from confusius.validation import validate_time_series
 
 
 def standardize(

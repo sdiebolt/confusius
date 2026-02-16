@@ -2,7 +2,6 @@
 
 from typing import TYPE_CHECKING, Literal
 
-import numpy.typing as npt
 import xarray as xr
 
 from confusius.iq.process import (
@@ -46,7 +45,7 @@ class FUSIIQAccessor:
         filter_method: Literal[
             "svd_indices", "svd_energy", "svd_cumulative_energy", "butterworth"
         ] = "svd_indices",
-        clutter_mask: "npt.NDArray | None" = None,
+        clutter_mask: xr.DataArray | None = None,
         low_cutoff: int | float | None = None,
         high_cutoff: int | float | None = None,
         butterworth_order: int = 4,
@@ -77,10 +76,11 @@ class FUSIIQAccessor:
             - ``"svd_energy"``: Adaptive SVD filter using singular vector energies.
             - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
             - ``"butterworth"``: Butterworth frequency-domain filter.
-        clutter_mask : (z, y, x) numpy.ndarray, optional
+        clutter_mask : (z, y, x) xarray.DataArray, optional
             Boolean mask to define clutter regions. Only used by SVD-based clutter
             filters to compute clutter vectors from masked voxels. If not provided,
-            all voxels are used.
+            all voxels are used. The mask spatial coordinates (z, y, x) must match
+            the IQ data coordinates.
         low_cutoff, high_cutoff : int or float, optional
             Low and high cutoffs for clutter filtering. Interpretation depends on
             `filter_method`. If not provided, uses method-specific defaults.
@@ -133,7 +133,7 @@ class FUSIIQAccessor:
         filter_method: Literal[
             "svd_indices", "svd_energy", "svd_cumulative_energy", "butterworth"
         ] = "svd_indices",
-        clutter_mask: "npt.NDArray | None" = None,
+        clutter_mask: xr.DataArray | None = None,
         low_cutoff: int | float | None = None,
         high_cutoff: int | float | None = None,
         butterworth_order: int = 4,
@@ -168,10 +168,11 @@ class FUSIIQAccessor:
             - ``"svd_energy"``: Adaptive SVD filter using singular vector energies.
             - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
             - ``"butterworth"``: Butterworth frequency-domain filter.
-        clutter_mask : (z, y, x) numpy.ndarray, optional
+        clutter_mask : (z, y, x) xarray.DataArray, optional
             Boolean mask to define clutter regions. Only used by SVD-based clutter
             filters to compute clutter vectors from masked voxels. If not provided,
-            all voxels are used.
+            all voxels are used. The mask spatial coordinates (z, y, x) must match
+            the IQ data coordinates.
         low_cutoff, high_cutoff : int or float, optional
             Low and high cutoffs for clutter filtering. Interpretation depends on
             `filter_method`. If not provided, uses method-specific defaults.

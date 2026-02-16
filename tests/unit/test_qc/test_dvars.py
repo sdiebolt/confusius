@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import xarray as xr
 from numpy.testing import assert_allclose
 from scipy import stats as sp_stats
 
@@ -13,21 +14,26 @@ def generate_ar1_signals(
     n_signals: int = 50,
     ar1_coef: float = 0.5,
     rng_seed: int = 42,
-) -> np.ndarray:
+) -> xr.DataArray:
     """Generate synthetic AR(1) signals for testing."""
     rng = np.random.default_rng(rng_seed)
-    signals = np.zeros((n_samples, n_signals))
-    signals[0] = rng.standard_normal(n_signals)
+    data = np.zeros((n_samples, n_signals))
+    data[0] = rng.standard_normal(n_signals)
 
     for t in range(1, n_samples):
-        signals[t] = ar1_coef * signals[t - 1] + rng.standard_normal(n_signals)
+        data[t] = ar1_coef * data[t - 1] + rng.standard_normal(n_signals)
 
-    return signals
+    return xr.DataArray(
+        data,
+        dims=["time", "voxels"],
+        coords={"time": np.arange(n_samples) * 0.1},
+    )
 
 
-def naive_dvars_nstd(signals: np.ndarray) -> np.ndarray:
+def naive_dvars_nstd(signals: xr.DataArray) -> np.ndarray:
     """Naive reference implementation of non-standardized DVARS."""
-    signals_diff = np.diff(signals, axis=0)
+    signals_np = signals.values
+    signals_diff = np.diff(signals_np, axis=0)
     dvars_nstd = np.sqrt(np.mean(signals_diff**2, axis=1))
     return np.insert(dvars_nstd, 0, dvars_nstd.min())
 
@@ -41,17 +47,19 @@ def naive_ar1_yule_walker(signal: np.ndarray) -> float:
     return r1 / r0 if r0 > 1e-15 else 0.0
 
 
-def naive_standardized_dvars(signals: np.ndarray) -> np.ndarray:
+def naive_standardized_dvars(signals: xr.DataArray) -> np.ndarray:
     """Naive reference implementation of standardized DVARS."""
-    signals_sd = sp_stats.iqr(signals, axis=0, scale=1.0, interpolation="lower")
-    signals_sd = signals_sd / 1.349
+    signals_np = signals.values
+    signals_sd = sp_stats.iqr(signals_np, axis=0, scale="normal", interpolation="lower")
     nonzero_mask = signals_sd > 0
-    signals = signals[:, nonzero_mask]
+    signals_np = signals_np[:, nonzero_mask]
     signals_sd = signals_sd[nonzero_mask]
 
-    dvars_nstd = naive_dvars_nstd(signals)
+    dvars_nstd = naive_dvars_nstd(
+        xr.DataArray(signals_np, dims=["time", "voxels"])
+    )
     ar1 = np.array(
-        [naive_ar1_yule_walker(signals[:, i]) for i in range(signals.shape[1])]
+        [naive_ar1_yule_walker(signals_np[:, i]) for i in range(signals_np.shape[1])]
     )
     diff_sdhat = np.sqrt(2 * (1 - ar1)) * signals_sd
 
@@ -146,8 +154,13 @@ class TestZeroVarianceHandling:
         signals = generate_ar1_signals(n_samples=50, n_signals=30)
 
         # Add zero-variance columns
-        zero_variance_signals = np.concatenate(
-            (signals, np.zeros((signals.shape[0], 10))), axis=1
+        zero_variance_data = np.concatenate(
+            (signals.values, np.zeros((signals.shape[0], 10))), axis=1
+        )
+        zero_variance_signals = xr.DataArray(
+            zero_variance_data,
+            dims=["time", "voxels"],
+            coords={"time": signals.coords["time"]},
         )
 
         # Compute with zero-variance removal
@@ -171,7 +184,12 @@ class TestZeroVarianceHandling:
 
     def test_all_zero_variance_raises(self):
         """All-zero variance signals must raise ValueError."""
-        signals = np.ones((50, 10)) * 1e-15
+        data = np.ones((50, 10)) * 1e-15
+        signals = xr.DataArray(
+            data,
+            dims=["time", "voxels"],
+            coords={"time": np.arange(50) * 0.1},
+        )
 
         with pytest.raises(ValueError, match="All signals have variance"):
             compute_dvars(signals, remove_zero_variance=True, variance_tolerance=1e-10)
@@ -180,12 +198,82 @@ class TestZeroVarianceHandling:
 class TestInputValidation:
     """Tests for input validation."""
 
-    def test_1d_input_raises(self):
-        """1D input array must raise ValueError."""
-        with pytest.raises(ValueError, match="signals must be 2D"):
-            compute_dvars(np.random.standard_normal(50))
+    def test_no_time_dimension_raises(self):
+        """Input without time dimension must raise ValueError."""
+        data = np.random.standard_normal((50, 10))
+        signals = xr.DataArray(data, dims=["samples", "voxels"])
+
+        with pytest.raises(ValueError, match="must have a 'time' dimension"):
+            compute_dvars(signals)
+
+    def test_single_timepoint_raises(self):
+        """Input with single timepoint must raise ValueError."""
+        data = np.random.standard_normal((1, 10))
+        signals = xr.DataArray(
+            data,
+            dims=["time", "voxels"],
+            coords={"time": [0.0]},
+        )
+
+        with pytest.raises(ValueError, match="more than 1 timepoint"):
+            compute_dvars(signals)
 
     def test_3d_input_raises(self):
-        """3D input array must raise ValueError."""
-        with pytest.raises(ValueError, match="signals must be 2D"):
-            compute_dvars(np.random.standard_normal((50, 10, 10)))
+        """3D input (without time dimension) must raise ValueError."""
+        data = np.random.standard_normal((10, 10, 10))
+        signals = xr.DataArray(data, dims=["z", "y", "x"])
+
+        with pytest.raises(ValueError, match="must have a 'time' dimension"):
+            compute_dvars(signals)
+
+    def test_invalid_dimensions_raises(self):
+        """Input with invalid dimensions must raise ValueError."""
+        data = np.random.standard_normal((50, 10, 10))
+        signals = xr.DataArray(
+            data,
+            dims=["time", "x", "y"],
+            coords={"time": np.arange(50) * 0.1},
+        )
+
+        with pytest.raises(ValueError, match="must be 2D.*or 4D"):
+            compute_dvars(signals)
+
+
+class Test4DInput:
+    """Tests for 4D (3D+t) input."""
+
+    def test_4d_input_matches_flattened_2d(self):
+        """4D input must produce same result as flattened 2D input."""
+        # Generate 4D AR(1) signals
+        rng = np.random.default_rng(42)
+        n_time = 50
+        shape = (n_time, 4, 6, 8)
+        data = np.zeros(shape)
+        data[0] = rng.standard_normal(shape[1:])
+
+        ar1_coef = 0.5
+        for t in range(1, n_time):
+            data[t] = ar1_coef * data[t - 1] + rng.standard_normal(shape[1:])
+
+        signals_4d = xr.DataArray(
+            data,
+            dims=["time", "z", "y", "x"],
+            coords={"time": np.arange(n_time) * 0.1},
+        )
+
+        # Flatten to 2D
+        signals_2d = signals_4d.stack(voxels=["z", "y", "x"])
+
+        # Compute DVARS on both
+        dvars_4d = compute_dvars(
+            signals_4d,
+            standardize=True,
+            normalization_factor=None,
+        )
+        dvars_2d = compute_dvars(
+            signals_2d,
+            standardize=True,
+            normalization_factor=None,
+        )
+
+        assert_allclose(dvars_4d, dvars_2d, rtol=1e-10)
