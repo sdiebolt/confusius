@@ -315,7 +315,7 @@ def _extract_compcor_components(
 
         - ``time`` dimension with coordinates from input ``noise_signals``
         - ``component`` dimension (0 to n_components-1)
-        - ``explained_variance`` coordinate on ``component`` dimension
+        - ``explained_variance_ratio`` coordinate on ``component`` dimension
 
     Notes
     -----
@@ -335,20 +335,20 @@ def _extract_compcor_components(
 
     noise_signals = standardize(noise_signals, method="zscore")
 
-    n_samples = noise_signals.shape[0]
-
     if hasattr(noise_signals.data, "chunks"):
         import dask.array as da
 
         U, s, Vt = da.linalg.svd(noise_signals.data)
         components = U[:, :n_components]
-        explained_variance = (s[:n_components] ** 2) / (n_samples - 1)
+        total_variance = (s**2).sum()
+        explained_variance_ratio = (s[:n_components] ** 2) / total_variance
     else:
         U, s, Vt = scipy.linalg.svd(
             noise_signals.values, full_matrices=False, check_finite=False
         )
         components = U[:, :n_components]
-        explained_variance = (s[:n_components] ** 2) / (n_samples - 1)
+        total_variance = (s**2).sum()
+        explained_variance_ratio = (s[:n_components] ** 2) / total_variance
 
     result = xr.DataArray(
         components,
@@ -356,7 +356,7 @@ def _extract_compcor_components(
         coords={
             "time": noise_signals.coords["time"],
             "component": np.arange(n_components),
-            "explained_variance": (["component"], explained_variance),
+            "explained_variance_ratio": (["component"], explained_variance_ratio),
         },
     )
 
@@ -408,10 +408,10 @@ def compute_compcor_confounds(
         Extracted CompCor components. Each column (component) is a principal component
         that can be used as a confound regressor. The DataArray includes:
 
-        - ``time`` dimension with coordinates matching the input signals
-        - ``component`` dimension (0 to ``n_components - 1``)
-        - ``explained_variance`` coordinate on ``component`` dimension, containing the
-          variance explained by each component
+        - ``time`` dimension with coordinates matching the input signals.
+        - ``component`` dimension (0 to ``n_components - 1``).
+        - ``explained_variance_ratio`` coordinate on ``component`` dimension, containing
+          the proportion of total variance explained by each component.
 
     Raises
     ------

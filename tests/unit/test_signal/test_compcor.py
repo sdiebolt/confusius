@@ -431,3 +431,54 @@ def test_compute_compcor_time_chunked():
 
     with pytest.raises(ValueError, match="chunked along the 'time' dimension"):
         compute_compcor_confounds(signals, noise_mask=noise_mask, n_components=5)
+
+
+def test_compute_compcor_explained_variance_ratio(sample_timeseries):
+    """Test that explained variance ratio is correctly computed."""
+    signals = sample_timeseries(n_time=100, n_voxels=50)
+
+    mask_values = np.zeros(50, dtype=bool)
+    mask_values[:20] = True
+    noise_mask = _create_mask_like(signals.isel(time=0), mask_values)
+
+    components = compute_compcor_confounds(
+        signals, noise_mask=noise_mask, n_components=5, detrend=False
+    )
+
+    # Check coordinate exists
+    assert "explained_variance_ratio" in components.coords
+
+    variance_ratio = components.coords["explained_variance_ratio"].values
+
+    # Check properties
+    assert variance_ratio.shape == (5,)
+    assert np.all(variance_ratio >= 0)
+    assert np.all(variance_ratio <= 1)
+    assert variance_ratio.sum() <= 1.0
+
+    # Check descending order (first component explains most variance)
+    assert np.all(np.diff(variance_ratio) <= 0)
+
+
+def test_compute_compcor_variance_ratio_all_components(sample_timeseries):
+    """Test that variance ratio sums to 1.0 when extracting all components."""
+    n_time = 100
+    n_voxels = 20
+    signals = sample_timeseries(n_time=n_time, n_voxels=n_voxels)
+
+    mask_values = np.zeros(n_voxels, dtype=bool)
+    mask_values[:15] = True
+    noise_mask = _create_mask_like(signals.isel(time=0), mask_values)
+
+    # Extract all possible components (min of n_samples, n_voxels_selected)
+    n_selected = 15
+    n_components_max = min(n_time, n_selected)
+
+    components = compute_compcor_confounds(
+        signals, noise_mask=noise_mask, n_components=n_components_max, detrend=False
+    )
+
+    variance_ratio = components.coords["explained_variance_ratio"].values
+
+    # When extracting all components, should explain 100% of variance
+    assert_allclose(variance_ratio.sum(), 1.0, rtol=1e-10)
