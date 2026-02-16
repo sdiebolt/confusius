@@ -78,9 +78,7 @@ def validate_mask(
             )
 
         if mask_has_coord and not data_has_coord:
-            raise ValueError(
-                f"{mask_name} has coordinate '{dim}' but data does not."
-            )
+            raise ValueError(f"{mask_name} has coordinate '{dim}' but data does not.")
 
         if data_has_coord and mask_has_coord:
             mask_coord_vals = mask.coords[dim].values
