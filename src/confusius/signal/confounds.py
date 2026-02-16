@@ -1,4 +1,8 @@
-"""Confound regression functions for signal preprocessing."""
+"""Confound regression functions for signal preprocessing.
+
+Portions of this file are derived from Nilearn, which is licensed under the BSD-3-Clause
+License. See ``NOTICE`` file for details.
+"""
 
 import numpy as np
 import numpy.typing as npt
@@ -195,6 +199,8 @@ def regress_confounds(
     This function performs confound regression by projecting the signals onto the
     orthogonal complement of the confound space. This removes variance in the signals
     that can be explained by the confounds.
+
+    This function was adapted from `nilearn.signal.clean`.
 
     Parameters
     ----------
