@@ -1,10 +1,11 @@
 """Standardization functions for signal preprocessing."""
 
-import warnings
 from typing import Literal
 
 import numpy as np
 import xarray as xr
+
+from confusius.signal._utils import validate_time_series
 
 
 def standardize(
@@ -75,12 +76,7 @@ def standardize(
     if "time" not in signals.dims:
         raise ValueError("signals must have a 'time' dimension")
 
-    if signals.sizes["time"] == 1:
-        warnings.warn(
-            "Standardization of signals with only 1 timepoint would lead to "
-            "zero or undefined values. Returning unchanged signals.",
-        )
-        return signals.copy()
+    validate_time_series(signals, "standardization", check_time_chunks=False)
 
     mean = signals.mean(dim="time")
     result = signals - mean

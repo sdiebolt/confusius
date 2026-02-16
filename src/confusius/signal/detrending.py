@@ -1,10 +1,10 @@
 """Detrending functions for signal preprocessing."""
 
-import warnings
-
 import numpy as np
 import scipy.signal
 import xarray as xr
+
+from confusius.signal._utils import validate_time_series
 
 
 def _polynomial_detrend_wrapper(data, axis, order):
@@ -110,18 +110,6 @@ def detrend(signals: xr.DataArray, order: int = 1) -> xr.DataArray:
     ...     dims=["time", "z", "y", "x"]
     ... )
     >>> detrended_3dt = detrend(imaging_3dt, order=1)
-
-    With Dask arrays (ensure time is not chunked):
-
-    >>> import dask.array as da
-    >>> # Create Dask array - chunk only spatial dimensions, NOT time!
-    >>> dask_data = xr.DataArray(
-    ...     da.from_array(np.random.randn(100, 50), chunks=(100, 25)),
-    ...     dims=["time", "voxels"]
-    ... )
-    >>> detrended_dask = detrend(dask_data, order=1)
-    >>> # If your data is chunked along time, rechunk first:
-    >>> # dask_data = dask_data.chunk({'time': -1})
     """
     if "time" not in signals.dims:
         raise ValueError("signals must have a 'time' dimension")
@@ -129,31 +117,8 @@ def detrend(signals: xr.DataArray, order: int = 1) -> xr.DataArray:
     if order < 0:
         raise ValueError(f"order must be non-negative, got {order}")
 
-    if signals.sizes["time"] == 1:
-        warnings.warn(
-            "Detrending of signals with only 1 timepoint would lead to "
-            "zero or undefined values. Returning unchanged signals.",
-        )
-        return signals.copy()
+    time_axis = validate_time_series(signals, "detrending")
 
-    # Applying a ufunc with dask="parallelized" along a chunked dimension would apply
-    # the detrending separately to each chunk (since we're not declaring time as a core
-    # dimension to avoid transposing the data), which is not correct. Detrending
-    # requires the full time series to fit the trend.
-    if hasattr(signals.data, "chunks"):
-        time_axis = signals.get_axis_num("time")
-        time_chunks = signals.data.chunks[time_axis]
-        if len(time_chunks) > 1:
-            raise ValueError(
-                f"Data is chunked along the 'time' dimension ({len(time_chunks)} "
-                f"chunks), but detrending requires the full time series. "
-                f"Rechunk your data so 'time' is not chunked: "
-                f"data.chunk({{'time': -1}})"
-            )
-
-    time_axis = signals.get_axis_num("time")
-
-    # Use scipy for order 0 (constant) and order 1 (linear).
     if order == 0:
         result = xr.apply_ufunc(
             scipy.signal.detrend,
@@ -169,7 +134,6 @@ def detrend(signals: xr.DataArray, order: int = 1) -> xr.DataArray:
             dask="parallelized",
         )
     else:
-        # Use custom polynomial detrending for order >= 2.
         result = xr.apply_ufunc(
             _polynomial_detrend_wrapper,
             signals,

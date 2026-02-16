@@ -7,6 +7,8 @@ import numpy as np
 import scipy.signal
 import xarray as xr
 
+from confusius.signal._utils import validate_time_series
+
 
 def _compute_sampling_rate_from_time(
     signals: xr.DataArray, time_uniformity_tolerance: float | None
@@ -290,27 +292,13 @@ def filter_butterworth(
     ...     signals, low_cutoff=0.01, high_cutoff=0.1, order=5
     ... )
     """
-    if "time" not in signals.dims:
-        raise ValueError("Signals must have a 'time' dimension.")
+    time_axis = validate_time_series(signals, "filtering")
 
     sampling_rate = _compute_sampling_rate_from_time(signals, time_uniformity_tolerance)
     _validate_cutoff_frequencies(
         low_cutoff=low_cutoff, high_cutoff=high_cutoff, nyquist=sampling_rate / 2.0
     )
     _validate_filter_order(signals.sizes["time"], order)
-
-    if hasattr(signals.data, "chunks"):
-        time_axis = signals.get_axis_num("time")
-        time_chunks = signals.data.chunks[time_axis]
-        if len(time_chunks) > 1:
-            raise ValueError(
-                f"Data is chunked along the 'time' dimension ({len(time_chunks)} "
-                f"chunks), but filtering requires the full time series. "
-                f"Rechunk your data so 'time' is not chunked: "
-                f"data.chunk({{'time': -1}})."
-            )
-
-    time_axis = signals.get_axis_num("time")
 
     result = xr.apply_ufunc(
         _butterworth_filter_wrapper,
