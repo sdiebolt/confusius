@@ -37,6 +37,7 @@ nav = [
         { "Xarray Integration" = "api/xarray.md" },
     ]},
     { "Examples" = "examples/index.md" },
+    { "Roadmap" = "roadmap.md" },
     { "Contributing" = "contributing.md" },
 ]
 
@@ -181,3 +182,6 @@ permalink = true
 
 [project.markdown_extensions.pymdownx.arithmatex]
 generic = true
+
+[project.markdown_extensions.pymdownx.tasklist]
+custom_checkbox = true
