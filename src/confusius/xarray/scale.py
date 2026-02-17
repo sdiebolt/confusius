@@ -20,11 +20,16 @@ def db_scale(data: xr.DataArray, factor: int = 10) -> xr.DataArray:
     Returns
     -------
     xarray.DataArray
-        Data in decibel scale. Values are in range ``[factor * log10(min/max), 0]`` dB.
+        Data in decibel scale. Values are in range ``[factor * log(min/max), 0]`` dB.
 
     Notes
     -----
     Warnings are suppressed for zero/negative values, which are set to ``-inf``.
+
+    If the input data is backed by Dask (lazily loaded), the global maximum is computed
+    eagerly when this function is called. This avoids re-triggering a full array scan on
+    each frame access (e.g. during Napari playback), at the cost of a one-time upfront
+    computation.
 
     Examples
     --------
@@ -34,7 +39,10 @@ def db_scale(data: xr.DataArray, factor: int = 10) -> xr.DataArray:
     >>> db_scale(data, factor=20)
     """
     abs_data = xr.ufuncs.abs(data)
-    max_val = abs_data.max()
+    # We compute the max value non-lazily to avoid re-triggering the entire computation
+    # graph for each chunk when visualizing with Napari or similar tools. See
+    # https://github.com/sdiebolt/confusius/issues/18.
+    max_val = abs_data.max().compute()
 
     with np.errstate(divide="ignore", invalid="ignore"):
         db_data = factor * xr.ufuncs.log10(abs_data / max_val)
@@ -142,7 +150,17 @@ class FUSIScaleAccessor:
         Returns
         -------
         xarray.DataArray
-            Data in decibel scale. Values are in range ``[factor * log10(min/max), 0]`` dB.
+            Data in decibel scale. Values are in range ``[factor * log(min/max), 0]``
+            dB.
+
+        Notes
+        -----
+        Warnings are suppressed for zero/negative values, which are set to ``-inf``.
+
+        If the input data is backed by Dask (lazily loaded), the global maximum is
+        computed eagerly when this method is called. This avoids re-triggering a full
+        array scan on each frame access (e.g. during Napari playback), at the cost of a
+        one-time upfront computation.
 
         Examples
         --------
