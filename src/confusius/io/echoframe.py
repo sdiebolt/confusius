@@ -77,8 +77,8 @@ def load_echoframe_dat(
                 + 1
             )
         else:
-            z = int(recon_spec["nx"][0, 0])
-            x = int(recon_spec["nx"][1, 0])
+            z = int(recon_spec["nz"][0, 0])
+            x = int(recon_spec["nx"][0, 0])
         n_volumes_per_block = np.array(receive_spec["nRepeats"][()]).item(0)
 
     header = np.fromfile(dat_path, dtype=header_dtype, count=n_header_items)

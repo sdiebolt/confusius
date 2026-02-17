@@ -22,3 +22,8 @@ site/
 htmlcov/
 .coverage
 coverage.*
+
+# Local development files
+design/
+eda.py
+*.zarr/
