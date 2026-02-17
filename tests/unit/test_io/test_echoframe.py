@@ -50,7 +50,8 @@ def _create_echoframe_mat_metadata(
         else:
             z = n_z
             x = n_x
-            recon_spec["nx"] = np.array([[z], [x]], dtype=np.int32)
+            recon_spec["nz"] = np.array([[z]], dtype=np.int32)
+            recon_spec["nx"] = np.array([[x]], dtype=np.int32)
 
         receive_spec["nRepeats"] = np.array([n_volumes], dtype=np.int32)
 
