@@ -32,5 +32,9 @@ Alpha release checklist for ConfUSIus.
     - [x] [`register_volumewise`][confusius.registration.register_volumewise].
     - [x] [`compute_framewise_displacement`][confusius.registration.compute_framewise_displacement].
     - [ ] `register_volumes`.
+- [ ] `atlas` module for atlas fetching and resampling.
+    - [ ] [BrainGlobe Atlas
+      API](https://brainglobe.info/documentation/brainglobe-atlasapi/index.html) wrapper
+      using Xarray Datasets?
 - [ ] `connectivity` module: functional connectivity.
 - [ ] `glm` module: general linear models.
