@@ -6,8 +6,6 @@ import numpy as np
 import xarray as xr
 from xarray.core.types import InterpOptions
 
-from confusius.validation import validate_time_series
-
 
 def _validate_sample_mask(
     signals: xr.DataArray, sample_mask: xr.DataArray
@@ -136,13 +134,6 @@ def interpolate_samples(
       (``sample_mask=False``) are replaced with interpolated values.
     - Uses `xarray.DataArray.interp` which handles coordinates and Dask arrays
       automatically.
-
-    References
-    ----------
-    [^1]:
-        Lindquist, Martin A., et al. “Modular Preprocessing Pipelines Can Reintroduce
-        Artifacts into fMRI Data.” Human Brain Mapping, vol. 40, no. 8, June 2019, pp.
-        2358–76. DOI.org (Crossref), <https://doi.org/10.1002/hbm.24528>.
 
     Examples
     --------

@@ -82,7 +82,7 @@ def clean(
     standardize_confounds : bool, default: True
         Whether to standardize confounds by their maximum absolute value before
         regression. This improves numerical stability while preserving constant terms.
-    sample_mask : (time,) xarray.DataArray, optioanl
+    sample_mask : (time,) xarray.DataArray, optional
         Boolean sample mask indicating which timepoints to keep (``True``) vs. remove
         (``False``). Must have a ``time`` dimension matching ``signals``. If both
         `signals` and `sample_mask` have ``time`` coordinates, they must match exactly.
