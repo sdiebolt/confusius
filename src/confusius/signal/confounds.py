@@ -4,8 +4,9 @@ Portions of this file are derived from Nilearn, which is licensed under the BSD-
 License. See ``NOTICE`` file for details.
 """
 
+from typing import Callable, cast
+
 import numpy as np
-import numpy.typing as npt
 import scipy.linalg
 import xarray as xr
 
@@ -15,16 +16,14 @@ from confusius.signal.standardization import standardize
 from confusius.validation import validate_mask, validate_time_series
 
 
-def _validate_confounds(
-    signals: xr.DataArray, confounds: xr.DataArray | npt.NDArray
-) -> np.ndarray:
+def _validate_confounds(signals: xr.DataArray, confounds: xr.DataArray) -> np.ndarray:
     """Validate confounds array matches signals.
 
     Parameters
     ----------
     signals : xarray.DataArray
         Signals with 'time' dimension.
-    confounds : numpy.ndarray
+    confounds : xarray.DataArray
         Confound regressors to validate.
 
     Returns
@@ -37,39 +36,39 @@ def _validate_confounds(
     ValueError
         If confounds have incorrect shape or time dimension mismatch.
     TypeError
-        If confounds have unsupported type.
+        If confounds are not an xarray.DataArray.
     """
-    if isinstance(confounds, xr.DataArray):
-        if "time" not in confounds.dims:
-            raise ValueError("confounds DataArray must have a 'time' dimension")
-        if "time" in signals.coords and "time" in confounds.coords:
-            if not np.array_equal(
-                signals.coords["time"].values, confounds.coords["time"].values
-            ):
-                raise ValueError(
-                    "confounds time coordinates do not match signals time coordinates"
-                )
-        confounds = confounds.values
-
-    if not isinstance(confounds, np.ndarray):
+    if not isinstance(confounds, xr.DataArray):
         raise TypeError(
-            "confounds must be an xarray.DataArray or numpy.ndarray, got "
-            f"{type(confounds).__name__}"
+            f"confounds must be an xarray.DataArray, got {type(confounds).__name__}"
         )
 
-    if confounds.ndim == 1:
-        confounds = np.atleast_2d(confounds).T
-    elif confounds.ndim != 2:
-        raise ValueError(f"confounds must be 1D or 2D, got {confounds.ndim}D")
+    if "time" not in confounds.dims:
+        raise ValueError("confounds DataArray must have a 'time' dimension")
+    if "time" in signals.coords and "time" in confounds.coords:
+        if not np.array_equal(
+            signals.coords["time"].values, confounds.coords["time"].values
+        ):
+            raise ValueError(
+                "confounds time coordinates do not match signals time coordinates"
+            )
+
+    confounds_da = confounds.transpose("time", ...)
+    confounds_values = confounds_da.values
+
+    if confounds_values.ndim == 1:
+        confounds_values = np.atleast_2d(confounds_values).T
+    elif confounds_values.ndim != 2:
+        raise ValueError(f"confounds must be 1D or 2D, got {confounds_values.ndim}D")
 
     n_time = signals.sizes["time"]
-    if confounds.shape[0] != n_time:
+    if confounds_values.shape[0] != n_time:
         raise ValueError(
-            f"confounds time dimension ({confounds.shape[0]}) does not match "
+            f"confounds time dimension ({confounds_values.shape[0]}) does not match "
             f"signals time dimension ({n_time})"
         )
 
-    return confounds
+    return confounds_values
 
 
 def _standardize_confounds(confounds: np.ndarray) -> np.ndarray:
@@ -136,7 +135,8 @@ def _regress_confounds_numpy(
     if standardize_confounds:
         confounds = _standardize_confounds(confounds)
 
-    Q, R, pivot = scipy.linalg.qr(confounds, mode="economic", pivoting=True)
+    qr_result = scipy.linalg.qr(confounds, mode="economic", pivoting=True)
+    Q, R, pivot = cast(tuple[np.ndarray, np.ndarray, np.ndarray], qr_result)
 
     tol = np.finfo(np.float64).eps * 100.0
     rank = np.sum(np.abs(np.diag(R)) > tol)
@@ -191,7 +191,7 @@ def _regress_confounds_wrapper(data, axis, confounds, standardize_confounds):
 
 def regress_confounds(
     signals: xr.DataArray,
-    confounds: npt.NDArray | xr.DataArray,
+    confounds: xr.DataArray,
     standardize_confounds: bool = True,
 ) -> xr.DataArray:
     """Remove confounds from signals via linear regression.
@@ -208,35 +208,38 @@ def regress_confounds(
         Signals to clean. Must have a ``time`` dimension. Can be any shape,
         e.g., extracted signals ``(time, voxels)``, full 3D+t imaging data
         ``(time, z, y, x)``, or regional signals ``(time, regions)``.
-    confounds : (time, n_confounds) numpy.ndarray or xarray.DataArray
+
+        !!! warning "Chunking along time is not supported"
+            The ``time`` dimension must NOT be chunked. Chunk only spatial dimensions:
+            ``data.chunk({'time': -1})``.
+
+    confounds : (time, n_confounds) xarray.DataArray
         Confound regressors to remove. Can have shape ``(time,)`` for a single
-        confound. The time dimension (and coordinates when passing a DataArray) must
-        match the signals exactly.
+        confound. The time dimension and coordinates must match the signals exactly.
     standardize_confounds : bool, default: True
-        If ``True``, standardize confounds by their maximum absolute value before
+        Whether to standardize confounds by their maximum absolute value before
         regression. This improves numerical stability while preserving constant terms.
 
     Returns
     -------
     xarray.DataArray
-        Residuals after confound regression, same shape and coordinates
-        as input signals.
+        Residuals after confound regression, same shape and coordinates as input
+        signals.
 
     Raises
     ------
     ValueError
-        If ``signals`` does not have a ``time`` dimension, or if
-        ``confounds`` have mismatched time dimension or invalid shape.
+        If `signals` does not have a ``time`` dimension, or if `confounds` have
+        mismatched time dimension or invalid shape.
     TypeError
-        If ``confounds`` is not a numpy array or xarray DataArray.
+        If `confounds` is not an xarray DataArray.
 
     Notes
     -----
     - Uses QR decomposition with column pivoting for numerical stability.
-    - Handles rank-deficient confound matrices (e.g., collinear confounds)
-      by removing redundant columns.
+    - Handles rank-deficient confound matrices (e.g., collinear confounds) by removing
+      redundant columns.
     - Based on the projection method from Friston et al. (1994).
-    - Similar to `nilearn.signal.clean` but adapted for xarray DataArrays.
 
     References
     ----------
@@ -259,7 +262,11 @@ def regress_confounds(
     ...     coords={"time": np.arange(100) * 0.1}
     ... )
     >>> # Create motion confounds (6 motion parameters)
-    >>> motion_params = np.random.randn(100, 6)
+    >>> motion_params = xr.DataArray(
+    ...     np.random.randn(100, 6),
+    ...     dims=["time", "confound"],
+    ...     coords={"time": signals.coords["time"]},
+    ... )
     >>> # Remove motion effects
     >>> cleaned = regress_confounds(signals, motion_params)
 
@@ -275,14 +282,14 @@ def regress_confounds(
     """
     time_axis = validate_time_series(signals, "confound regression")
 
-    confounds = _validate_confounds(signals, confounds)
+    confounds_array = _validate_confounds(signals, confounds)
 
     result = xr.apply_ufunc(
         _regress_confounds_wrapper,
         signals,
         kwargs={
             "axis": time_axis,
-            "confounds": confounds,
+            "confounds": confounds_array,
             "standardize_confounds": standardize_confounds,
         },
         dask="parallelized",
@@ -338,7 +345,11 @@ def _extract_compcor_components(
     if hasattr(noise_signals.data, "chunks"):
         import dask.array as da
 
-        U, s, Vt = da.linalg.svd(noise_signals.data)
+        svd = cast(
+            Callable[..., tuple[np.ndarray, np.ndarray, np.ndarray]],
+            getattr(da.linalg, "svd"),
+        )
+        U, s, Vt = svd(noise_signals.data)
         components = U[:, :n_components]
         total_variance = (s**2).sum()
         explained_variance_ratio = (s[:n_components] ** 2) / total_variance
@@ -383,6 +394,11 @@ def compute_compcor_confounds(
         Signals from which to extract components. Must have a ``time`` dimension.
         For extracted signals, shape is typically ``(time, voxels)``. For full
         imaging data, shape is typically ``(time, z, y, x)``.
+
+        !!! warning "Chunking along time is not supported"
+            The ``time`` dimension must NOT be chunked. Chunk only spatial dimensions:
+            ``data.chunk({'time': -1})``.
+
     noise_mask : xarray.DataArray, optional
         Binary mask indicating voxels to consider. Must have the same spatial
         dimensions and coordinates as `signals` (excluding time). Can be combined
@@ -491,7 +507,7 @@ def compute_compcor_confounds(
     Combine different CompCor variants for cleaning:
 
     >>> all_compcor = xr.concat([a_compcor, t_compcor, hybrid_compcor], dim="component")
-    >>> cleaned = regress_confounds(signals, all_compcor.values)
+    >>> cleaned = regress_confounds(signals, all_compcor)
     """
     validate_time_series(signals, "CompCor computation")
 
