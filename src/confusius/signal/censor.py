@@ -90,11 +90,6 @@ def interpolate_samples(
         Array to interpolate. Must have a ``time`` dimension and ``time`` coordinates.
         Can be any shape, e.g., extracted signals ``(time, voxels)``, full 3D+t imaging
         data ``(time, z, y, x)``, or confounds ``(time, n_confounds)``.
-
-        !!! warning "Chunking along time is not supported"
-            The ``time`` dimension must NOT be chunked. Chunk only spatial dimensions:
-            ``data.chunk({'time': -1})``.
-
     sample_mask : (time,) xarray.DataArray
         Boolean sample mask indicating which timepoints to keep (``True``) vs.
         interpolate (``False``). Must have a ``time`` dimension matching `signals`.
@@ -186,7 +181,8 @@ def interpolate_samples(
     >>> # Or fill with NaN outside kept range.
     >>> interpolated_nan = interpolate_samples(signals, sample_mask, fill_value=np.nan)
     """
-    validate_time_series(signals, "interpolation")
+    if "time" not in signals.dims:
+        raise ValueError("signals must have a 'time' dimension.")
 
     if "time" not in signals.coords:
         raise ValueError(
@@ -228,11 +224,6 @@ def censor_samples(
         Array to censor. Must have a ``time`` dimension. Can be any shape, e.g.,
         extracted signals ``(time, voxels)``, full 3D+t imaging data ``(time, z, y,
         x)``, or confounds ``(time, n_confounds)``.
-
-        !!! note "Chunking is supported"
-            This operation supports chunking along the ``time`` dimension. However, note
-            that after censoring, chunk sizes will become irregular.
-
     sample_mask : (time,) xarray.DataArray
         Boolean sample mask indicating which timepoints to keep (``True``) vs. remove
         (``False``). Must have a ``time`` dimension matching ``signals``. If both
