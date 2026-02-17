@@ -181,11 +181,6 @@ If you're new to these tools, check out the [Working with Xarray](xarray.md) sec
 get familiar with the core concepts. You may also want to review the [Input/Output
 Guide](io.md) to understand how ConfUSIus handles data formats.
 
-!!! warning "Pre-Alpha Status"
-    ConfUSIus is currently in pre-alpha and under active development. The API may
-    change, and some features may be incomplete. See the [GitHub
-    repository](https://github.com/sdiebolt/confusius) for the latest status.
-
 ## Next Steps
 
 Ready to get started?
@@ -197,6 +192,44 @@ Ready to get started?
 4. **[API Reference](../api/index.md)**: Explore detailed function documentation.
 
 Still have questions? Check the [GitHub issues](https://github.com/sdiebolt/confusius/issues) or open a new one!
+
+## Useful Python Resources for fUSI
+
+While ConfUSIus offers many features to handle fUSI data, it obviously does not do
+everything. Below are some useful resources to read and packages to use alongside
+ConfUSIus.
+
+- [Xarray](https://docs.xarray.dev/en/stable/getting-started-guide/why-xarray.html):
+  ConfUSIus relies on Xarray for storing volumetric fUSI data. Learning how to use
+  Xarray efficiently will get you a long way.
+- [Dask](https://docs.dask.org/en/stable/): Dask is a Python package for distributed
+  parallel computing. Xarray supports Dask arrays as backend, and ConfUSIus relies on
+  them notably for processing large beamformed IQ datasets. Xarray's user guide on
+  [parallel computing with Dask](https://docs.xarray.dev/en/stable/user-guide/dask.html)
+  might also be a good read.
+- [Zarr](https://zarr.readthedocs.io/en/stable/): Zarr is a chunked, compressed array
+  storage for large N-dimensional datasets. ConfUSIus relies on Zarr for storing
+  beamformed IQ data, and large derived measures. Zarr's user guide on [optimizing
+  performance](https://zarr.readthedocs.io/en/stable/user-guide/performance/) is a
+  useful resource if you intend to work with very large beamformed IQ datasets.
+- [Brain Imaging Data Structure](https://bids-specification.readthedocs.io/en/stable/):
+  ConfUSIus relies on BIDS for storing metadata alongside NIfTI files. Even if you don't
+  use NIfTI as your storage format, following BIDS conventions can help you organize and
+  share your datasets later. You may also want to take a look at the [fUSI-BIDS
+  specification
+  draft](https://docs.google.com/document/d/1W3z01mf1E8cfg_OY7ZGqeUeOKv659jCHQBXavtmT-T8/edit?usp=sharing)
+  and to [PyBIDS](https://bids-standard.github.io/pybids/).
+- [Nilearn](https://nilearn.github.io/stable/index.html): Nilearn is a versatile package
+  for analysis of brain volumes and surfaces. While it is mostly geared toward fMRI,
+  many fUSI users have found it useful for analyzing fUSI data. ConfUSIus itself
+  borrows some of Nilearn's features.
+- [SimpleITK](https://simpleitk.org/): SimpleITK offers a simple wrapper API over ITK,
+  the widely used image segmentation and image registration library. ConfUSIus builds on
+  SimpleITK for image registration.
+- [Matplotlib](https://matplotlib.org/stable/): The obvious choice for creating static
+  figures in Python.
+- [PyVista](https://pyvista.org/): While ConfUSIus uses Napari to allow for 3D
+  rendering, PyVista offers a simple API to make custom 3D visualizations.
 
 [^mace2011]:
     Macé, Emilie, et al. “Functional Ultrasound Imaging of the Brain.” Nature Methods,
