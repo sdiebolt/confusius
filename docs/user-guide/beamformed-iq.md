@@ -279,6 +279,26 @@ pwd.to_zarr("power_doppler.zarr")
     See the [Dask documentation](https://docs.dask.org/en/stable/) for more configuration
     options.
 
+!!! tip "Computing multiple measures in a single pass"
+    Since both `process_to_power_doppler` and `process_to_axial_velocity` return lazy
+    Dask-backed arrays, you can compute them **simultaneously** using
+    [`dask.compute`](https://docs.dask.org/en/stable/base.html#dask.compute):
+
+    ```python
+    import dask
+    import confusius
+
+    pwd = iq.fusi.iq.process_to_power_doppler(...)
+    velocity = iq.fusi.iq.process_to_axial_velocity(...)
+
+    # Compute both with a single pass over the IQ data.
+    pwd, velocity = dask.compute(pwd, velocity)
+    ```
+
+    Calling `pwd.compute()` and `velocity.compute()` separately would scan through the
+    IQ file twice. `dask.compute` merges the two task graphs and reads the data only
+    once, which can significantly cut processing time for large datasets.
+
 ## Clutter Filtering
 
 Clutter filtering is an essential step in fUSI processing to separate weak blood signals
