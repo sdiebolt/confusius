@@ -21,8 +21,8 @@ nav = [
         { "Getting Started" = "user-guide/getting-started.md" },
         { "Installation" = "user-guide/installation.md" },
         { "Input/Output" = "user-guide/io.md" },
+        { "Working with Xarray" = "user-guide/xarray.md" },
         { "Beamformed IQ" = "user-guide/beamformed-iq.md" },
-        { "Xarray Integration" = "user-guide/xarray.md" }
     ]},
     { "API Reference" = [
         { "Overview" = "api/index.md" },

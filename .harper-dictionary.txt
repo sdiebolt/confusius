@@ -10,6 +10,7 @@ FSL
 HDF5
 MINC
 NIfTI
+Napari
 Nilearn
 RF
 SVD
@@ -27,3 +28,4 @@ spatiotemporal
 spatiotemporally
 subspaces
 velocimetry
+volumewise
