@@ -60,7 +60,7 @@ def unmask(
     --------
     >>> import xarray as xr
     >>> import numpy as np
-    >>> from confusius import extract
+    >>> from confusius.extract import extract_with_mask, unmask
     >>> from sklearn.decomposition import PCA
     >>>
     >>> # Load data and mask
@@ -68,14 +68,14 @@ def unmask(
     >>> mask = xr.open_dataarray("brain_mask.nc")
     >>>
     >>> # Extract signals
-    >>> signals = extract.with_mask(data, mask)
+    >>> signals = extract_with_mask(data, mask)
     >>>
     >>> # Apply PCA
     >>> pca = PCA(n_components=5)
     >>> components = pca.fit_transform(signals.values)  # (time, 5)
     >>>
     >>> # Unmask - 2D case
-    >>> spatial_pca = extract.unmask(
+    >>> spatial_pca = unmask(
     ...     components.T,  # (5, n_voxels)
     ...     mask,
     ...     new_dims=["component"],
@@ -85,7 +85,7 @@ def unmask(
     >>>
     >>> # Unmask - 3D case with custom coords
     >>> pose_data = np.random.randn(5, 3, n_voxels)  # (component, pose, voxels)
-    >>> spatial_pose = extract.unmask(
+    >>> spatial_pose = unmask(
     ...     pose_data,
     ...     mask,
     ...     new_dims=["component", "pose"],

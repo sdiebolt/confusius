@@ -5,7 +5,7 @@ import xarray as xr
 from confusius.validation import validate_mask
 
 
-def with_mask(
+def extract_with_mask(
     data: xr.DataArray,
     mask: xr.DataArray,
 ) -> xr.DataArray:
@@ -56,7 +56,7 @@ def with_mask(
     --------
     >>> import xarray as xr
     >>> import numpy as np
-    >>> from confusius import extract
+    >>> from confusius.extract import extract_with_mask
     >>>
     >>> # 3D+t data: (time, z, y, x)
     >>> data = xr.DataArray(
@@ -67,7 +67,7 @@ def with_mask(
     ...     np.random.rand(10, 20, 30) > 0.5,
     ...     dims=["z", "y", "x"],
     ... )
-    >>> signals = extract.with_mask(data, mask)
+    >>> signals = extract_with_mask(data, mask)
     >>> signals.dims
     ("time", "voxels")
     >>>
@@ -76,7 +76,7 @@ def with_mask(
     ...     np.random.randn(100, 5, 10, 20, 30),
     ...     dims=["time", "pose", "z", "y", "x"],
     ... )
-    >>> pose_signals = extract.with_mask(pose_data, mask)
+    >>> pose_signals = extract_with_mask(pose_data, mask)
     >>> pose_signals.dims
     ("time", "pose", "voxels")
     """

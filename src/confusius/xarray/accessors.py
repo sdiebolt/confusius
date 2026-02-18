@@ -142,8 +142,6 @@ class FUSIAccessor:
         >>> mask = xr.open_zarr("brain_mask.zarr")["mask"]
         >>> signals = data.fusi.extract.with_mask(mask)
         >>> # ... process signals ...
-        >>> restored = signals.fusi.extract.unmask(
-        ...     processed, mask=mask, new_dim='component'
-        ... )
+        >>> restored = signals.fusi.extract.unmask(mask)
         """
         return FUSIExtractAccessor(self._obj)

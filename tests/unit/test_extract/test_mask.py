@@ -8,7 +8,7 @@ from confusius import extract
 
 
 class TestWithMask:
-    """Tests for extract.with_mask function."""
+    """Tests for extract.extract_with_mask function."""
 
     def test_mask_validation(self, sample_4d_volume):
         """Test that non-boolean mask raises error."""
@@ -18,7 +18,7 @@ class TestWithMask:
         )
 
         with pytest.raises(TypeError, match="boolean dtype"):
-            extract.with_mask(sample_4d_volume, mask)
+            extract.extract_with_mask(sample_4d_volume, mask)
 
     def test_insufficient_spatial_dims(self):
         """Test that mask with dimension not in data raises error."""
@@ -30,7 +30,7 @@ class TestWithMask:
         mask = xr.DataArray([True, False, True], dims=["x"])
 
         with pytest.raises(ValueError, match="missing spatial dimensions.*'x'"):
-            extract.with_mask(data, mask)
+            extract.extract_with_mask(data, mask)
 
     def test_values_correctness(self):
         """Test that extracted values match original data."""
@@ -46,7 +46,7 @@ class TestWithMask:
 
         mask = xr.DataArray(mask_data, dims=["z", "y", "x"])
 
-        signals = extract.with_mask(data, mask)
+        signals = extract.extract_with_mask(data, mask)
 
         expected_values = [
             data.values[0, 1, 2],
@@ -149,7 +149,7 @@ class TestRoundTrip:
             dims=["z", "y", "x"],
         )
 
-        signals = extract.with_mask(data, mask)
+        signals = extract.extract_with_mask(data, mask)
 
         restored = extract.unmask(signals.values, mask)
 

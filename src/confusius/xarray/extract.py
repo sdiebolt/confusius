@@ -1,19 +1,17 @@
 """Xarray accessor for signal extraction."""
 
-import numpy as np
 import xarray as xr
 
 
 class FUSIExtractAccessor:
     """Xarray accessor for signal extraction operations.
 
-    Provides convenient methods for extracting signals from N-D fUSI data by
-    flattening spatial dimensions, and reconstructing N-D volumes from processed
-    signals.
+    Provides convenient methods for extracting signals from N-D fUSI data by flattening
+    spatial dimensions, and reconstructing N-D volumes from processed signals.
 
     Parameters
     ----------
-    xarray_obj : xr.DataArray
+    xarray_obj : xarray.DataArray
         The DataArray to wrap.
 
     Examples
@@ -36,18 +34,10 @@ class FUSIExtractAccessor:
     >>> signals.dims
     ("time", "voxels")
     >>>
-    >>> # Process with sklearn
-    >>> from sklearn.decomposition import PCA
-    >>> components = PCA(n_components=5).fit_transform(signals.values)
-    >>>
-    >>> # Unmask back to full shape
-    >>> spatial_components = signals.fusi.extract.unmask(
-    ...     components.T,  # (5, n_voxels)
-    ...     mask=mask,
-    ...     new_dims=["component"],
-    ... )
-    >>> spatial_components.dims
-    ("component", "z", "y", "x")
+    >>> # Reconstruct full spatial volume from signals
+    >>> reconstructed = signals.fusi.extract.unmask(mask)
+    >>> reconstructed.dims
+    ("time", "z", "y", "x")
     """
 
     def __init__(self, xarray_obj: xr.DataArray) -> None:
@@ -58,12 +48,12 @@ class FUSIExtractAccessor:
 
         Parameters
         ----------
-        mask : xr.DataArray
+        mask : xarray.DataArray
             Boolean mask with same spatial dimensions and coordinates as data.
 
         Returns
         -------
-        xr.DataArray
+        xarray.DataArray
             Array with spatial dimensions flattened into a ``voxels`` dimension.
             All non-spatial dimensions are preserved. The ``voxels`` dimension has a
             MultiIndex storing spatial coordinates.
@@ -82,70 +72,46 @@ class FUSIExtractAccessor:
         >>> bbox = signals.unstack("voxels")
         >>>
         >>> # Full mask shape reconstruction
-        >>> full = signals.fusi.extract.unmask(signals.values, mask)
+        >>> full = signals.fusi.extract.unmask(mask)
         """
-        from confusius.extract.mask import with_mask
+        from confusius.extract.mask import extract_with_mask
 
-        return with_mask(self._obj, mask)
+        return extract_with_mask(self._obj, mask)
 
     def unmask(
         self,
-        signals: np.ndarray | xr.DataArray,
         mask: xr.DataArray,
-        new_dims: list[str] | None = None,
-        new_dims_coords: dict[str, np.ndarray] | None = None,
-        attrs: dict | None = None,
         fill_value: float = 0.0,
     ) -> xr.DataArray:
-        """Reconstruct N-D volume from signals using a mask.
+        """Reconstruct N-D volume from masked signals.
 
-        This is a convenience wrapper around `confusius.extract.unmask()`.
+        Reconstructs the full spatial volume from a DataArray of signals, which must
+        have a ``voxels`` dimension. This is a convenience wrapper around
+        `confusius.extract.unmask()`.
 
         Parameters
         ----------
-        signals : numpy.ndarray or xarray.DataArray
-            Array with shape ``(..., voxels)`` where ``...`` can be any number of
-            dimensions. The last dimension must correspond to masked voxels.
         mask : xarray.DataArray
             Boolean mask used for the original extraction. Provides spatial dimensions
             and coordinates for reconstruction.
-        new_dims : list of str, optional
-            Names for leading dimensions when `signals` is a Numpy array. Must match the
-            number of leading dimensions ``(ndim - 1)``. If not provided, uses ``["dim_0",
-            "dim_1", ...]``. Ignored if `signals` is a DataArray.
-        new_dims_coords : dict[str, numpy.ndarray], optional
-            Coordinates for leading dimensions when `signals` is a Numpy array. Keys must
-            match dimension names in `new_dims`. If not provided, uses integer indices for
-            all dimensions. Ignored if `signals` is a DataArray.
-        attrs : dict, optional
-            Attributes to attach to the output DataArray.
         fill_value : float, default: 0.0
             Value to fill in non-masked voxels.
 
         Returns
         -------
-        xr.DataArray
+        xarray.DataArray
             Reconstructed DataArray with shape ``(..., z, y, x)`` where spatial
             coordinates come from the mask.
 
         Examples
         --------
         >>> signals = data.fusi.extract.with_mask(mask)
-        >>> # Process signals with sklearn
-        >>> from sklearn.decomposition import PCA
-        >>> pca = PCA(n_components=5)
-        >>> components = pca.fit_transform(signals.values)
-        >>>
-        >>> # Unmask spatial components
-        >>> spatial_pca = signals.fusi.extract.unmask(
-        ...     components.T,  # (5, n_voxels)
-        ...     mask=mask,
-        ...     new_dims=["component"],
-        ...     attrs=data.attrs,
-        ... )
-        >>> spatial_pca.dims
-        ("component", "z", "y", "x")
+        >>> signals.dims
+        ("time", "voxels")
+        >>> reconstructed = signals.fusi.extract.unmask(mask)
+        >>> reconstructed.dims
+        ("time", "z", "y", "x")
         """
         from confusius.extract.reconstruction import unmask
 
-        return unmask(signals, mask, new_dims, new_dims_coords, attrs, fill_value)
+        return unmask(self._obj, mask=mask, fill_value=fill_value)
