@@ -32,17 +32,15 @@ def register_volumewise(
     reference_time : int, default: 0
         Index of the time point to use as registration target.
     n_jobs : int, default: -1
-        Number of parallel jobs. -1 uses all available CPUs.
-        Use 1 for serial processing.
+        Number of parallel jobs. -1 uses all available CPUs. Use 1 for serial
+        processing.
     allow_rotation : bool, default: True
         Whether to allow rotation in addition to translation.
         Uses conservative optimizer settings to prevent spurious rotations.
     rotation_penalty : float, default: 100.0
         Penalty factor for rotation relative to translation (only used if
         allow_rotation=True). Higher values more strongly penalize rotation.
-        The optimizer updates rotation 'rotation_penalty' times slower than
-        translation. Values: 1.0=no penalty, 50.0=moderate, 100.0=strong,
-        200.0=very strong.
+        The optimizer updates rotation `rotation_penalty` times slower than translation.
 
     Returns
     -------
