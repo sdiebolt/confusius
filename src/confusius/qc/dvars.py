@@ -129,22 +129,22 @@ def compute_dvars(
         Smyser, Christopher D., et al. "Functional Connectivity MRI in Infants:
         Exploration of the Functional Organization of the Developing Brain." NeuroImage,
         vol. 56, no. 3, June 2011, pp. 1437–52. DOI.org (Crossref),
-        https://doi.org/10.1016/j.neuroimage.2011.02.073.
+        <https://doi.org/10.1016/j.neuroimage.2011.02.073>.
 
     [^2]:
         Power, Jonathan D., et al. "Spurious but Systematic Correlations in Functional
         Connectivity MRI Networks Arise from Subject Motion." NeuroImage, vol. 59, no.
         3, Feb. 2012, pp. 2142–54. DOI.org (Crossref),
-        https://doi.org/10.1016/j.neuroimage.2011.10.018.
+        <https://doi.org/10.1016/j.neuroimage.2011.10.018>.
 
     [^3]:
         Nichols, Thomas E. "Notes on Creating a Standardized Version of DVARS." arXiv,
-        2017. DOI.org (Datacite), https://doi.org/10.48550/ARXIV.1704.01469.
+        2017. DOI.org (Datacite), <https://doi.org/10.48550/ARXIV.1704.01469>.
 
     [^4]:
         Afyouni, Soroosh, and Thomas E. Nichols. "Insight and Inference for DVARS."
         NeuroImage, vol. 172, May 2018, pp. 291–312. DOI.org (Crossref),
-        https://doi.org/10.1016/j.neuroimage.2017.12.098.
+        <https://doi.org/10.1016/j.neuroimage.2017.12.098>.
 
     Examples
     --------

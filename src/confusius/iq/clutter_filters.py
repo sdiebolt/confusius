@@ -234,17 +234,18 @@ def clutter_filter_svd_from_indices(
         Demene, Charlie, et al. “Spatiotemporal Clutter Filtering of Ultrafast
         Ultrasound Data Highly Increases Doppler and fUltrasound Sensitivity.” IEEE
         Transactions on Medical Imaging, vol. 34, no. 11, Nov. 2015, pp. 2271–85.
-        DOI.org (Crossref), https://doi.org/10.1109/TMI.2015.2428634.
+        DOI.org (Crossref), <https://doi.org/10.1109/TMI.2015.2428634>.
 
     [^2]:
-        Baranger, J., et al. "Adaptive Spatiotemporal SVD Clutter Filtering for
-        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors." IEEE
-        transactions on medical imaging 37.7 (2018): 1574-1586.
+        Baranger, Jerome, et al. “Adaptive Spatiotemporal SVD Clutter Filtering for
+        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors.” IEEE
+        Transactions on Medical Imaging, vol. 37, no. 7, July 2018, pp. 1574–86. DOI.org
+        (Crossref), <https://doi.org/10.1109/TMI.2018.2789499>.
 
     [^3]:
         Le Meur-Diebolt, Samuel, et al. “Robust Functional Ultrasound Imaging in the
         Awake and Behaving Brain: A Systematic Framework for Motion Artifact Removal.”
-        17 June 2025. Neuroscience, https://doi.org/10.1101/2025.06.16.659882.
+        17 June 2025. Neuroscience, <https://doi.org/10.1101/2025.06.16.659882>.
     """
     signals, masked_signals = _validate_block_and_clutter_mask(block, mask)
 
@@ -389,17 +390,18 @@ def clutter_filter_svd_from_energy(
         Demene, Charlie, et al. “Spatiotemporal Clutter Filtering of Ultrafast
         Ultrasound Data Highly Increases Doppler and fUltrasound Sensitivity.” IEEE
         Transactions on Medical Imaging, vol. 34, no. 11, Nov. 2015, pp. 2271–85.
-        DOI.org (Crossref), https://doi.org/10.1109/TMI.2015.2428634.
+        DOI.org (Crossref), <https://doi.org/10.1109/TMI.2015.2428634>.
 
     [^2]:
-        Baranger, J., et al. "Adaptive Spatiotemporal SVD Clutter Filtering for
-        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors." IEEE
-        transactions on medical imaging 37.7 (2018): 1574-1586.
+        Baranger, Jerome, et al. “Adaptive Spatiotemporal SVD Clutter Filtering for
+        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors.” IEEE
+        Transactions on Medical Imaging, vol. 37, no. 7, July 2018, pp. 1574–86. DOI.org
+        (Crossref), <https://doi.org/10.1109/TMI.2018.2789499>.
 
     [^3]:
         Le Meur-Diebolt, Samuel, et al. “Robust Functional Ultrasound Imaging in the
         Awake and Behaving Brain: A Systematic Framework for Motion Artifact Removal.”
-        17 June 2025. Neuroscience, https://doi.org/10.1101/2025.06.16.659882.
+        17 June 2025. Neuroscience, <https://doi.org/10.1101/2025.06.16.659882>.
     """
     signals, masked_signals = _validate_block_and_clutter_mask(block, mask)
 
@@ -492,17 +494,18 @@ def clutter_filter_svd_from_cumulative_energy(
         Demene, Charlie, et al. “Spatiotemporal Clutter Filtering of Ultrafast
         Ultrasound Data Highly Increases Doppler and fUltrasound Sensitivity.” IEEE
         Transactions on Medical Imaging, vol. 34, no. 11, Nov. 2015, pp. 2271–85.
-        DOI.org (Crossref), https://doi.org/10.1109/TMI.2015.2428634.
+        DOI.org (Crossref), <https://doi.org/10.1109/TMI.2015.2428634>.
 
     [^2]:
-        Baranger, J., et al. "Adaptive Spatiotemporal SVD Clutter Filtering for
-        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors." IEEE
-        transactions on medical imaging 37.7 (2018): 1574-1586.
+        Baranger, Jerome, et al. “Adaptive Spatiotemporal SVD Clutter Filtering for
+        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors.” IEEE
+        Transactions on Medical Imaging, vol. 37, no. 7, July 2018, pp. 1574–86. DOI.org
+        (Crossref), <https://doi.org/10.1109/TMI.2018.2789499>.
 
     [^3]:
         Le Meur-Diebolt, Samuel, et al. “Robust Functional Ultrasound Imaging in the
         Awake and Behaving Brain: A Systematic Framework for Motion Artifact Removal.”
-        17 June 2025. Neuroscience, https://doi.org/10.1101/2025.06.16.659882.
+        17 June 2025. Neuroscience, <https://doi.org/10.1101/2025.06.16.659882>.
     """
     signals, masked_signals = _validate_block_and_clutter_mask(block, mask)
 

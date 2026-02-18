@@ -218,7 +218,7 @@ ConfUSIus.
   share your datasets later. You may also want to take a look at the [fUSI-BIDS
   specification
   draft](https://docs.google.com/document/d/1W3z01mf1E8cfg_OY7ZGqeUeOKv659jCHQBXavtmT-T8/edit?usp=sharing)
-  and to [PyBIDS](https://bids-standard.github.io/pybids/).
+  and at [PyBIDS](https://bids-standard.github.io/pybids/).
 - [Nilearn](https://nilearn.github.io/stable/index.html): Nilearn is a versatile package
   for analysis of brain volumes and surfaces. While it is mostly geared toward fMRI,
   many fUSI users have found it useful for analyzing fUSI data. ConfUSIus itself
@@ -228,8 +228,8 @@ ConfUSIus.
   SimpleITK for image registration.
 - [Matplotlib](https://matplotlib.org/stable/): The obvious choice for creating static
   figures in Python.
-- [PyVista](https://pyvista.org/): While ConfUSIus uses Napari to allow for 3D
-  rendering, PyVista offers a simple API to make custom 3D visualizations.
+- [PyVista](https://pyvista.org/): While ConfUSIus uses Napari for 3D rendering, PyVista
+  also offers a simple API to make custom 3D visualizations.
 
 [^mace2011]:
     Macé, Emilie, et al. “Functional Ultrasound Imaging of the Brain.” Nature Methods,
