@@ -46,28 +46,31 @@ class FUSIPlotAccessor:
 
     def napari(
         self,
-        scale_method: Literal["db", "log", "power"] | None = "db",
+        scale_method: Literal["db", "log", "power"] | None = None,
         scale_kwargs: dict[str, Any] | None = None,
         show_colorbar: bool = True,
         show_scale_bar: bool = True,
+        dim_order: tuple[str, ...] | None = None,
         **imshow_kwargs,
     ) -> "tuple[Viewer, list[Image]]":
         """Display data in napari viewer.
 
         Parameters
         ----------
-        scale_method : {"db", "log", "power", None}, default: "db"
+        scale_method : {"db", "log", "power"}, optional
             Scaling method to apply before display. Use ``"db"`` for decibel scaling,
-            ``"log"`` for natural log, ``"power"`` for power scaling, or ``None`` to
-            display without scaling.
+            ``"log"`` for natural log, ``"power"`` for power scaling. If not provided,
+            no scaling is applied.
         scale_kwargs : dict, optional
-            Keyword arguments to pass to the scaling method. For example,
-            ``{"factor": 20}`` for db scaling or ``{"exponent": 0.5}`` for power
-            scaling.
+            Keyword arguments to pass to the scaling method. For example, ``{"factor":
+            20}`` for db scaling or ``{"exponent": 0.5}`` for power scaling.
         show_colorbar : bool, default: True
             Whether to show the colorbar.
         show_scale_bar : bool, default: True
             Whether to show the scale bar.
+        dim_order : tuple[str, ...], optional
+            Dimension ordering for the spatial axes (last three dimensions). If not
+            provided, the ordering of the last three dimensions in `data` is used.
         **imshow_kwargs
             Additional keyword arguments passed to `napari.imshow`, such as
             ``contrast_limits``, ``colormap``, etc.
@@ -75,26 +78,43 @@ class FUSIPlotAccessor:
         Returns
         -------
         viewer : napari.Viewer
-            The napari viewer instance.
+            The Napari viewer instance.
         layer : napari.layers.Image
             The image layer added to the viewer.
 
+        Notes
+        -----
+        If all spatial dimensions have coordinates, their spacing is used as the scale
+        parameter for Napari to ensure correct physical scaling. If any spatial dimension
+        is missing coordinates, no scaling is applied. The spacing is computed as the
+        median difference between consecutive coordinate values.
+
+        For unitary dimensions (e.g., a single-slice elevation axis in 2D+t data), the
+        spacing cannot be inferred from coordinates. In that case, the function looks for
+        a ``voxdim`` attribute on the coordinate variable
+        (``data.coords[dim].attrs["voxdim"]``) and uses it as the spacing. If no such
+        attribute is found, unit spacing is assumed and a warning is emitted.
+
         Examples
         --------
-        >>> # Default: decibel scaling
+        >>> import xarray as xr
+        >>> import confusius  # Register accessor.
         >>> data = xr.open_zarr("output.zarr")["iq"]
         >>> viewer, layer = data.fusi.plot.napari()
 
         >>> # Custom contrast limits
-        >>> viewer, layer = data.fusi.plot.napari(contrast_limits=(-15, 0))
+        >>> viewer, layer = data.fusi.plot.napari(contrast_limits=(0, 100))
 
         >>> # Amplitude scaling (factor=20)
         >>> viewer, layer = data.fusi.plot.napari(
         ...     scale_method="db", scale_kwargs={"factor": 20}
         ... )
 
-        >>> # No scaling
-        >>> viewer, layer = data.fusi.plot.napari(scale_method=None)
+        >>> # Decibel scaling
+        >>> viewer, layer = data.fusi.plot.napari(scale_method="db")
+
+        >>> # Different dimension ordering (e.g., depth, elevation, lateral)
+        >>> viewer, layer = data.fusi.plot.napari(dim_order=("y", "z", "x"))
         """
         return plot_napari(
             self._obj,
@@ -102,6 +122,7 @@ class FUSIPlotAccessor:
             scale_kwargs=scale_kwargs,
             show_colorbar=show_colorbar,
             show_scale_bar=show_scale_bar,
+            dim_order=dim_order,
             **imshow_kwargs,
         )
 

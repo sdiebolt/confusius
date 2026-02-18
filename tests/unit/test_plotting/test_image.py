@@ -28,7 +28,6 @@ class TestPlotNapari:
                 "y": np.linspace(0, 20, 64),  # depth
                 "x": np.linspace(0, 10, 128),  # lateral
             },
-            attrs={"voxdim": [0.2, 0.3175, 0.0787]},  # [z, y, x] spacing
         )
 
     @pytest.fixture
@@ -46,7 +45,6 @@ class TestPlotNapari:
                 "y": np.linspace(0, 20, 64),  # depth
                 "x": np.linspace(0, 10, 128),  # lateral
             },
-            attrs={"voxdim": [0.2, 0.3175, 0.0787]},  # [z, y, x] spacing
         )
 
     @patch("confusius.plotting.image.napari")
@@ -62,8 +60,16 @@ class TestPlotNapari:
         assert mock_napari.imshow.called
         call_args = mock_napari.imshow.call_args
 
-        # Check scale parameter matches voxdim [z, y, x] by default.
-        assert call_args[1]["scale"] == [0.2, 0.3175, 0.0787]
+        # Check scale parameter is derived from coordinate spacing.
+        z = np.linspace(0, 4, 20)
+        y = np.linspace(0, 20, 64)
+        x = np.linspace(0, 10, 128)
+        expected_scale = [
+            float(np.median(np.diff(z))),
+            float(np.median(np.diff(y))),
+            float(np.median(np.diff(x))),
+        ]
+        assert call_args[1]["scale"] == pytest.approx(expected_scale)
 
         assert viewer is mock_viewer
         assert layer is mock_layer
@@ -81,10 +87,8 @@ class TestPlotNapari:
         assert mock_napari.imshow.called
 
     @patch("confusius.plotting.image.napari")
-    def test_plot_napari_applies_db_scaling_by_default(
-        self, mock_napari, sample_data_4d
-    ):
-        """plot_napari applies db scaling by default."""
+    def test_plot_napari_no_scaling_by_default(self, mock_napari, sample_data_4d):
+        """plot_napari applies no scaling by default."""
         mock_viewer = MagicMock()
         mock_layer = MagicMock()
         mock_napari.imshow.return_value = (mock_viewer, mock_layer)
@@ -95,8 +99,9 @@ class TestPlotNapari:
         call_args = mock_napari.imshow.call_args
         passed_data = call_args[0][0]
 
-        # Check that scaling was applied (should have dB units attribute).
-        assert passed_data.attrs.get("units") == "dB"
+        # Check that no scaling attributes were added.
+        assert "units" not in passed_data.attrs
+        assert "scaling" not in passed_data.attrs
 
     @patch("confusius.plotting.image.napari")
     def test_plot_napari_with_custom_scale_method(self, mock_napari, sample_data_4d):
@@ -187,8 +192,16 @@ class TestPlotNapari:
         plot_napari(sample_data_4d, dim_order=("y", "z", "x"))
 
         call_args = mock_napari.imshow.call_args
-        # voxdim stays in data dimension order [z, y, x], not reordered.
-        assert call_args[1]["scale"] == [0.2, 0.3175, 0.0787]
+        # Scale stays in data dimension order [z, y, x], not reordered.
+        z = np.linspace(0, 4, 20)
+        y = np.linspace(0, 20, 64)
+        x = np.linspace(0, 10, 128)
+        expected_scale = [
+            float(np.median(np.diff(z))),
+            float(np.median(np.diff(y))),
+            float(np.median(np.diff(x))),
+        ]
+        assert call_args[1]["scale"] == pytest.approx(expected_scale)
         # Order should be (time, y, z, x) = (0, 2, 1, 3)
         assert call_args[1]["order"] == [0, 2, 1, 3]
 

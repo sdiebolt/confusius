@@ -1,5 +1,6 @@
 """Image visualization utilities for fUSI data."""
 
+import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
@@ -21,11 +22,11 @@ import napari  # noqa: F401
 
 def plot_napari(
     data: xr.DataArray,
-    scale_method: Literal["db", "log", "power"] | None = "db",
+    scale_method: Literal["db", "log", "power"] | None = None,
     scale_kwargs: dict[str, Any] | None = None,
     show_colorbar: bool = True,
     show_scale_bar: bool = True,
-    dim_order: tuple[str, ...] = ("z", "y", "x"),
+    dim_order: tuple[str, ...] | None = None,
     **imshow_kwargs,
 ) -> tuple["Viewer", list["Image"]]:
     """Display fUSI data using the Napari viewer.
@@ -36,22 +37,20 @@ def plot_napari(
         Input data array to visualize. Expected dimensions are (time, z, y, x) where
         z is the elevation/stacking axis, y is depth, and x is lateral. Use
         ``dim_order`` to specify a different dimension ordering.
-    scale_method : {"db", "log", "power", None}, default: "db"
+    scale_method : {"db", "log", "power"}, optional
         Scaling method to apply before display. Use ``"db"`` for decibel scaling,
-        ``"log"`` for natural log, ``"power"`` for power scaling, or ``None`` to display
-        without scaling.
+        ``"log"`` for natural log, ``"power"`` for power scaling. If not provided,
+        no scaling is applied.
     scale_kwargs : dict, optional
-        Keyword arguments to pass to the scaling method. For example,
-        ``{"factor": 20}`` for db scaling or ``{"exponent": 0.5}`` for power
-        scaling.
+        Keyword arguments to pass to the scaling method. For example, ``{"factor": 20}``
+        for db scaling or ``{"exponent": 0.5}`` for power scaling.
     show_colorbar : bool, default: True
         Whether to show the colorbar.
     show_scale_bar : bool, default: True
         Whether to show the scale bar.
-    dim_order : tuple of str, default: ("z", "y", "x")
-        Dimension ordering for spatial axes. Default is ``("z", "y", "x")``
-        (elevation, depth, lateral). Use this to override for data with
-        different conventions, e.g., ``("y", "z", "x")`` or ``("x", "y", "z")``.
+    dim_order : tuple[str, ...], optional
+        Dimension ordering for the spatial axes (last three dimensions). If not
+        provided, the ordering of the last three dimensions in `data` is used.
     **imshow_kwargs
         Additional keyword arguments passed to `napari.imshow`, such as
         ``contrast_limits``, ``colormap``, etc.
@@ -59,17 +58,22 @@ def plot_napari(
     Returns
     -------
     viewer : napari.Viewer
-        The napari viewer instance.
+        The Napari viewer instance.
     layer : napari.layers.Image
         The image layer added to the viewer.
 
     Notes
     -----
-    - If the data has a ``voxdim`` attribute, it will be used as the scale parameter
-      for napari to ensure correct spatial scaling. The voxdim should be ordered as
-      ``[z, y, x]`` (elevation, depth, lateral) by default.
-    - Future versions may support an ``orientation`` attribute (like BrainGlobe's
-      "asl" convention) to automatically determine dimension ordering.
+    If all spatial dimensions have coordinates, their spacing is used as the scale
+    parameter for Napari to ensure correct physical scaling. If any spatial dimension is
+    missing coordinates, no scaling is applied. The spacing is computed as the median
+    difference between consecutive coordinate values.
+
+    For unitary dimensions (e.g., a single-slice elevation axis in 2D+t data), the
+    spacing cannot be inferred from coordinates. In that case, the function looks for a
+    ``voxdim`` attribute on the coordinate variable (``data.coords[dim].attrs["voxdim"]``)
+    and uses it as the spacing. If no such attribute is found, unit spacing is assumed
+    and a warning is emitted.
 
     Examples
     --------
@@ -79,15 +83,15 @@ def plot_napari(
     >>> viewer, layer = plot_napari(data)
 
     >>> # Custom contrast limits
-    >>> viewer, layer = plot_napari(data, contrast_limits=(-15, 0))
+    >>> viewer, layer = plot_napari(data, contrast_limits=(0, 100))
 
     >>> # Amplitude scaling (factor=20)
     >>> viewer, layer = plot_napari(
     ...     data, scale_method="db", scale_kwargs={"factor": 20}
     ... )
 
-    >>> # No scaling
-    >>> viewer, layer = plot_napari(data, scale_method=None)
+    >>> # Decibel scaling
+    >>> viewer, layer = plot_napari(data, scale_method="db")
 
     >>> # Different dimension ordering (e.g., depth, elevation, lateral)
     >>> viewer, layer = plot_napari(data, dim_order=("y", "z", "x"))
@@ -108,41 +112,48 @@ def plot_napari(
                 "Use 'db', 'log', 'power', or None."
             )
 
-    # Determine dimension ordering for napari display.
-    # Default is (time, z, y, x) where z=elevation, y=depth, x=lateral.
-    # Napari displays spatial dimensions, so we map accordingly.
-
-    # Get current dimension names
     all_dims = list(data.dims)
     time_dim = "time" if "time" in all_dims else None
     spatial_dims = [d for d in all_dims if d != time_dim]
 
-    # Validate dim_order matches spatial dimensions
-    if set(dim_order) != set(spatial_dims):
+    if dim_order is not None and set(dim_order) != set(spatial_dims):
         raise ValueError(
             f"dim_order {dim_order} does not match spatial dimensions {spatial_dims}. "
-            "Ensure dim_order contains all spatial dimension names."
+            "Ensure 'dim_order' contains all spatial dimension names."
         )
 
-    # Build scale parameter: voxdim corresponds to spatial dimensions in data order.
-    # Scale should be in the order dimensions appear in the data array.
+    # We can only set the scale parameter for Napari if all spatial dimensions have
+    # coordinates.
     scale = None
-    if "voxdim" in data.attrs:
-        voxdim = data.attrs["voxdim"]
-        if len(voxdim) == len(spatial_dims):
-            # voxdim is in the order of spatial_dims as they appear in the data.
-            # Scale must match the data dimension order.
-            scale = list(voxdim)
+    coord_scales = []
+    for dim in spatial_dims:
+        if dim in data.coords:
+            if len(data.coords[dim]) > 1:
+                coord = data.coords[dim].values
+                coord_scales.append(float(np.median(np.diff(coord))))
+            elif "voxdim" in data.coords[dim].attrs:
+                coord_scales.append(float(data.coords[dim].attrs["voxdim"]))
+            else:
+                warnings.warn(
+                    f"Dimension '{dim}' has a single coordinate and no 'voxdim' "
+                    "attribute. Assuming unit spacing for the Napari scale bar.",
+                )
+                coord_scales.append(1.0)
+        else:
+            coord_scales = []
+            break
+    if coord_scales:
+        scale = coord_scales
 
-    # Build order parameter for napari.imshow.
-    # This specifies which dimensions are displayed and in what order.
     # The last 2 (2D) or 3 (3D) dimensions are the displayed spatial axes.
-    order = []
-    if time_dim in all_dims:
-        order.append(all_dims.index(time_dim))
-    for dim in dim_order:
-        if dim in all_dims:
-            order.append(all_dims.index(dim))
+    order = None
+    if dim_order is not None:
+        order = []
+        if time_dim:
+            order.append(all_dims.index(time_dim))
+        for dim in dim_order:
+            if dim in all_dims:
+                order.append(all_dims.index(dim))
 
     imshow_kwargs.setdefault("axis_labels", all_dims)
     viewer, image_layer = napari.imshow(
