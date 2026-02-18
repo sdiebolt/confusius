@@ -208,3 +208,14 @@ def test_standardize_4d_imaging_data(sample_4d_volume):
     assert_allclose(result.coords["z"].values, sample_4d_volume.coords["z"].values)
     assert_allclose(result.coords["y"].values, sample_4d_volume.coords["y"].values)
     assert_allclose(result.coords["x"].values, sample_4d_volume.coords["x"].values)
+
+
+def test_standardize_sets_units(sample_timeseries):
+    """Test that standardize sets the units attribute on the result."""
+    signals = sample_timeseries()
+
+    result_zscore = standardize(signals, method="zscore")
+    assert result_zscore.attrs["units"] == "z-score"
+
+    result_psc = standardize(signals, method="psc")
+    assert result_psc.attrs["units"] == "%"

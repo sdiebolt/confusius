@@ -91,11 +91,13 @@ def standardize(
 
         # Xarray doesn't print warnings for division by zero.
         result = result / std
+        result.attrs["units"] = "z-score"
     elif method == "psc":
         invalid_mask = np.abs(mean) < eps
 
         # Xarray doesn't print warnings for division by zero.
         result = result / np.abs(mean) * 100
+        result.attrs["units"] = "%"
 
     result = result.where(~invalid_mask, np.nan)
 
