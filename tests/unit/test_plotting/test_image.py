@@ -237,15 +237,13 @@ class TestPlotCarpet:
         mask = xr.DataArray(
             np.ones((20, 1, 30), dtype=bool),
             dims=["z", "y", "x"],
+            coords={
+                "z": np.linspace(0, 5, 20),
+                "y": [0.0],
+                "x": np.linspace(0, 10, 30),
+            },
         )
         mask[:5, :, :] = False  # Exclude first 5 z slices.
-        return mask
-
-    @pytest.fixture
-    def sample_mask_numpy(self):
-        """Create sample numpy mask."""
-        mask = np.ones((20, 1, 30), dtype=bool)
-        mask[:10, :, :] = False  # Exclude first 10 z slices.
         return mask
 
     @patch("matplotlib.pyplot.subplots")
@@ -285,52 +283,35 @@ class TestPlotCarpet:
         assert fig is mock_fig
         assert ax is mock_ax
 
-    @patch("matplotlib.pyplot.subplots")
-    def test_plot_carpet_with_numpy_mask(
-        self, mock_subplots, sample_data, sample_mask_numpy
-    ):
-        """plot_carpet works with numpy mask."""
-        mock_fig = MagicMock()
-        mock_ax = MagicMock()
-        mock_subplots.return_value = (mock_fig, mock_ax)
-
-        fig, ax = plot_carpet(sample_data, mask=sample_mask_numpy)
-
-        assert fig is mock_fig
-        assert ax is mock_ax
-
-    @patch("matplotlib.pyplot.subplots")
-    def test_plot_carpet_mask_wrong_dimensions(self, mock_subplots, sample_data):
+    def test_plot_carpet_mask_wrong_dimensions(self, sample_data):
         """plot_carpet raises error when mask dimensions don't match."""
-        mock_fig = MagicMock()
-        mock_ax = MagicMock()
-        mock_subplots.return_value = (mock_fig, mock_ax)
-
-        # Create mask with wrong dimensions.
-        wrong_mask = np.ones((10, 10), dtype=bool)
+        wrong_mask = xr.DataArray(
+            np.ones((10, 10), dtype=bool),
+            dims=["a", "b"],
+        )
 
         with pytest.raises(ValueError, match="dimensions"):
             plot_carpet(sample_data, mask=wrong_mask)
 
     @patch("matplotlib.pyplot.subplots")
     def test_plot_carpet_with_detrend(self, mock_subplots, sample_data):
-        """plot_carpet works with detrend enabled."""
+        """plot_carpet works with detrend_order enabled."""
         mock_fig = MagicMock()
         mock_ax = MagicMock()
         mock_subplots.return_value = (mock_fig, mock_ax)
 
-        fig, ax = plot_carpet(sample_data, detrend=True)
+        fig, ax = plot_carpet(sample_data, detrend_order=1)
 
         assert fig is mock_fig
 
     @patch("matplotlib.pyplot.subplots")
     def test_plot_carpet_without_detrend(self, mock_subplots, sample_data):
-        """plot_carpet works with detrend disabled."""
+        """plot_carpet works with detrend_order disabled."""
         mock_fig = MagicMock()
         mock_ax = MagicMock()
         mock_subplots.return_value = (mock_fig, mock_ax)
 
-        fig, ax = plot_carpet(sample_data, detrend=False)
+        fig, ax = plot_carpet(sample_data, detrend_order=None)
 
         assert fig is mock_fig
 

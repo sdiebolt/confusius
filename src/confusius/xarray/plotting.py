@@ -3,7 +3,6 @@
 from typing import TYPE_CHECKING, Any, Literal
 
 import xarray as xr
-from numpy.typing import ArrayLike
 
 from confusius.plotting import plot_carpet, plot_napari
 
@@ -108,11 +107,9 @@ class FUSIPlotAccessor:
 
     def carpet(
         self,
-        mask: xr.DataArray | ArrayLike | None = None,
-        detrend: bool = True,
+        mask: xr.DataArray | None = None,
+        detrend_order: int | None = None,
         standardize: bool = True,
-        scale_method: Literal["db", "log", "power"] | None = None,
-        scale_kwargs: dict[str, Any] | None = None,
         cmap: str = "gray",
         vmin: float | None = None,
         vmax: float | None = None,
@@ -124,29 +121,26 @@ class FUSIPlotAccessor:
         """Plot voxel intensities across time as a raster image.
 
         A carpet plot (also known as "grayplot" or "Power plot") displays voxel
-        intensities as a 2D raster image with time on the x-axis and voxels on
-        the y-axis. Each row represents one voxel's time series, typically
-        standardized to z-scores.
+        intensities as a 2D raster image with time on the x-axis and voxels on the
+        y-axis. Each row represents one voxel's time series, typically standardized to
+        z-scores.
 
         Parameters
         ----------
-        mask : array_like, optional
-            Mask with same spatial dimensions as data ``(z, y, x)``. Non-zero values
-            in `mask` indicate voxels to include. If not provided, all non-zero voxels
-            from the data are included.
-        detrend : bool, default: True
-            Whether to remove linear trend from each voxel's time series.
+        mask : xarray.DataArray, optional
+            Boolean mask with same spatial dimensions and coordinates as `data`.
+            ``True`` values indicate voxels to include. If not provided, all non-zero
+            voxels from the data are included.
+        detrend_order : int, optional
+            Polynomial order for detrending:
+
+            - ``0``: Remove mean (constant detrending).
+            - ``1``: Remove linear trend using least squares regression (default).
+            - ``2+``: Remove polynomial trend of specified order.
+
+            If not provided, no detrending is applied.
         standardize : bool, default: True
-            Whether to standardize each voxel's time series to z-scores
-            (zero mean, unit variance).
-        scale_method : {"db", "log", "power"}, optional
-            Scaling method to apply before processing. Use ``"db"`` for decibel
-            scaling, ``"log"`` for natural log, ``"power"`` for power scaling.
-            If not provided, no scaling is applied.
-        scale_kwargs : dict, optional
-            Keyword arguments to pass to the scaling method. For example,
-            ``{"factor": 20}`` for db scaling or ``{"exponent": 0.5}`` for power
-            scaling.
+            Whether to standardize each voxel's time series to z-scores.
         cmap : str, default: "gray"
             Matplotlib colormap name.
         vmin : float, optional
@@ -173,9 +167,16 @@ class FUSIPlotAccessor:
 
         Notes
         -----
-        Carpet plots were originally introduced by :cite:t:`Smyser2011` and
-        popularized by :cite:t:`Power2012`. This function was inspired by Nilearn's
-        `nilearn.plotting.plot_carpet`.
+        Complex-valued data is converted to magnitude before processing.
+
+        This function was inspired by Nilearn's `nilearn.plotting.plot_carpet`.
+
+        References
+        ----------
+        [^1]:
+            Power, Jonathan D. “A Simple but Useful Way to Assess fMRI Scan Qualities.”
+            NeuroImage, vol. 154, July 2017, pp. 150–58. DOI.org (Crossref),
+            <https://doi.org/10.1016/j.neuroimage.2016.08.009>.
 
         Examples
         --------
@@ -183,26 +184,18 @@ class FUSIPlotAccessor:
         >>> data = xr.open_zarr("output.zarr")["iq"]
         >>> fig, ax = data.fusi.plot.carpet()
 
-        >>> # Without detrending
-        >>> fig, ax = data.fusi.plot.carpet(detrend=False)
+        >>> # With linear detrending.
+        >>> fig, ax = data.fusi.plot.carpet(detrend_order=1)
 
-        >>> # With mask (xarray)
-        >>> mask = data.isel(time=0).pipe(np.abs) > threshold
+        >>> # With mask.
+        >>> mask = np.abs(data.isel(time=0)) > threshold
         >>> fig, ax = data.fusi.plot.carpet(mask=mask)
-
-        >>> # With mask (numpy array)
-        >>> import numpy as np
-        >>> mask_array = np.ones(data.shape[1:], dtype=bool)  # (z, y, x)
-        >>> mask_array[:10, :, :] = False  # Exclude first 10 z slices
-        >>> fig, ax = data.fusi.plot.carpet(mask=mask_array)
         """
         return plot_carpet(
             self._obj,
             mask=mask,
-            detrend=detrend,
+            detrend_order=detrend_order,
             standardize=standardize,
-            scale_method=scale_method,
-            scale_kwargs=scale_kwargs,
             cmap=cmap,
             vmin=vmin,
             vmax=vmax,

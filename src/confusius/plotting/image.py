@@ -4,7 +4,9 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import xarray as xr
-from numpy.typing import ArrayLike
+
+from confusius.extract import extract_with_mask
+from confusius.signal import clean
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes
@@ -163,11 +165,9 @@ def plot_napari(
 
 def plot_carpet(
     data: xr.DataArray,
-    mask: xr.DataArray | ArrayLike | None = None,
-    detrend: bool = True,
+    mask: xr.DataArray | None = None,
+    detrend_order: int | None = None,
     standardize: bool = True,
-    scale_method: Literal["db", "log", "power"] | None = None,
-    scale_kwargs: dict[str, Any] | None = None,
     cmap: str = "gray",
     vmin: float | None = None,
     vmax: float | None = None,
@@ -187,23 +187,20 @@ def plot_carpet(
     ----------
     data : xarray.DataArray
         Input data array with a 'time' dimension.
-    mask : array_like, optional
-        Mask with same spatial dimensions as data ``(z, y, x)``. Non-zero values
-        in `mask` indicate voxels to include. If not provided, all non-zero voxels
+    mask : xarray.DataArray, optional
+        Boolean mask with same spatial dimensions and coordinates as `data`. True
+        values indicate voxels to include. If not provided, all non-zero voxels
         from the data are included.
-    detrend : bool, default: True
-        Whether to remove linear trend from each voxel's time series.
+    detrend_order : int, optional
+        Polynomial order for detrending:
+
+        - ``0``: Remove mean (constant detrending).
+        - ``1``: Remove linear trend using least squares regression.
+        - ``2+``: Remove polynomial trend of specified order.
+
+        If not provided, no detrending is applied.
     standardize : bool, default: True
-        Whether to standardize each voxel's time series to z-scores
-        (zero mean, unit variance).
-    scale_method : {"db", "log", "power"}, optional
-        Scaling method to apply before processing. Use ``"db"`` for decibel scaling,
-        ``"log"`` for natural log, ``"power"`` for power scaling. If not provided, no
-        scaling is applied.
-    scale_kwargs : dict, optional
-        Keyword arguments to pass to the scaling method. For example,
-        ``{"factor": 20}`` for db scaling or ``{"exponent": 0.5}`` for power
-        scaling.
+        Whether to standardize each voxel's time series to z-scores.
     cmap : str, default: "gray"
         Matplotlib colormap name.
     vmin : float, optional
@@ -230,12 +227,16 @@ def plot_carpet(
 
     Notes
     -----
-    Complex-valued data is converted to magnitude before processing, and time axis
-    labels are derived from the 'time' coordinate.
+    Complex-valued data is converted to magnitude before processing.
 
-    Carpet plots were originally introduced by :cite:t:`Smyser2011` and
-    popularized by :cite:t:`Power2012`. This function was inspired by Nilearn's
-    `nilearn.plotting.plot_carpet`.
+    This function was inspired by Nilearn's `nilearn.plotting.plot_carpet`.
+
+    References
+    ----------
+    [^1]:
+        Power, Jonathan D. “A Simple but Useful Way to Assess fMRI Scan Qualities.”
+        NeuroImage, vol. 154, July 2017, pp. 150–58. DOI.org (Crossref),
+        <https://doi.org/10.1016/j.neuroimage.2016.08.009>.
 
     Examples
     --------
@@ -244,23 +245,20 @@ def plot_carpet(
     >>> data = xr.open_zarr("output.zarr")["iq"]
     >>> fig, ax = plot_carpet(data)
 
-    >>> # Without detrending
-    >>> fig, ax = plot_carpet(data, detrend=False)
+    >>> # With linear detrending
+    >>> fig, ax = plot_carpet(data, detrend_order=1)
 
-    >>> # With mask (xarray)
-    >>> mask = data.isel(time=0).pipe(np.abs) > threshold
-    >>> fig, ax = plot_carpet(data, mask=mask)
-
-    >>> # With mask (numpy array)
+    >>> # With mask
     >>> import numpy as np
-    >>> mask_array = np.ones(data.shape[1:], dtype=bool)  # (z, y, x)
-    >>> mask_array[:10, :, :] = False  # Exclude first 10 z slices
-    >>> fig, ax = plot_carpet(data, mask=mask_array)
+    >>> mask = xr.DataArray(
+    ...     np.abs(data.isel(time=0)) > threshold,
+    ...     dims=["z", "y", "x"],
+    ... )
+    >>> fig, ax = plot_carpet(data, mask=mask)
     """
     import matplotlib.pyplot as plt
-    from scipy import signal
 
-    if np.iscomplexobj(data.values):
+    if np.iscomplexobj(data):
         data = xr.ufuncs.abs(data)
 
     if "time" not in data.dims or "time" not in data.coords:
@@ -268,53 +266,23 @@ def plot_carpet(
 
     n_timepoints = data.sizes["time"]
 
-    spatial_dims = [d for d in data.dims if d != "time"]
-    # Creating a multi-index of spatial dimensions would make Xarray's plotting
-    # functions fail.
-    signals = data.stack(voxels=spatial_dims, create_index=False)
-
-    if mask is not None:
-        if not isinstance(mask, xr.DataArray):
-            mask = xr.DataArray(
-                np.asarray(mask),
-                dims=spatial_dims,
-            )
-
-        mask_spatial_dims = list(mask.dims)
-        if set(mask_spatial_dims) != set(spatial_dims):
-            msg = (
-                f"Mask dimensions {mask_spatial_dims} do not match "
-                f"data spatial dimensions {spatial_dims}."
-            )
-            raise ValueError(msg)
-
-        mask_1d = mask.stack(voxels=spatial_dims)
-
-        mask_1d = mask_1d.reindex_like(signals.isel(time=0))
-
-        mask_bool = mask_1d.values != 0
-
-        signals = signals.isel(voxels=mask_bool)
+    non_zero_voxels = (data != 0).any(dim="time")
+    if mask is None:
+        mask = non_zero_voxels
     else:
-        non_zero_voxels = (signals != 0).any(dim="time")
-        signals = signals.isel(voxels=non_zero_voxels.values)
+        mask = mask & non_zero_voxels
 
-    if detrend:
-        signals = xr.apply_ufunc(
-            signal.detrend,
-            signals,
-            input_core_dims=[["time"]],
-            output_core_dims=[["time"]],
-            dask="parallelized",
-        )
+    # extract_with_mask creates a MultiIndex on voxels that makes xarray plotting
+    # fail; we need to drop the spatial coordinates.
+    spatial_dims = [d for d in data.dims if d != "time"]
+    signals = extract_with_mask(data, mask)
+    signals = signals.drop_vars(spatial_dims + ["voxels"])
 
-    if standardize:
-        mean = signals.mean(dim="time")
-        std = signals.std(dim="time")
-        # Avoid division by zero.
-        std = std.where(std != 0, other=1)
-        signals = (signals - mean) / std
-        signals.attrs["units"] = "z-score"
+    signals = clean(
+        signals,
+        detrend_order=detrend_order,
+        standardize_method="zscore" if standardize else None,
+    )
 
     if vmin is None or vmax is None:
         std_val = float(signals.std(axis=0).mean().values)
@@ -337,7 +305,7 @@ def plot_carpet(
     else:
         figure = ax.figure
 
-    signals.plot(cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, yincrease=False)
+    signals.T.plot(cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, yincrease=False)  # type: ignore[call-arg]
 
     ax.grid(False)
     ax.set_yticks([])
