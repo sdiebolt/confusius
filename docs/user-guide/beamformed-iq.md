@@ -120,7 +120,6 @@ Coordinates:
   * y        (y) float64 944B 4.656 4.705 4.753 ... 10.231 10.279 10.328
   * x        (x) float64 416B -2.671 -2.57 -2.469 ... 2.268 2.369 2.469
 Attributes:
-    voxdim:                       [0.4, 0.0485, 0.1008]
     transmit_frequency:           15625000.0
     compound_sampling_frequency:  500.0
     pulse_repetition_frequency:   15000.0
@@ -521,8 +520,7 @@ Coordinates:
   * z        (z) float64 8B 0.0
   * y        (y) float64 1kB 5.664 5.713 5.762 5.811 ... 11.72 11.77 11.82 11.87
   * x        (x) float64 688B -3.583 -3.492 -3.402 -3.311 ... 3.946 4.037 4.127
-Attributes: (12/17)
-    voxdim:                       [0.4, 0.04883074509803921, 0.09070866141732...
+Attributes: (11/16)
     transmit_frequency:           15625000.0
     compound_sampling_frequency:  500.0
     pulse_repetition_frequency:   15000.0

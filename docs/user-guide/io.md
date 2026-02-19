@@ -137,7 +137,8 @@ ConfUSIus currently provides built-in conversion utilities for **AUTC** and
 
     - `iq`: Beamformed IQ data with dimensions `(time, z, y, x)`.
     - `time`, `z`, `y`, `x`: Coordinate arrays.
-    - Metadata attributes (e.g., `voxdim`, `transmit_frequency`, `plane_wave_angles`) as
+    - Voxel sizes (`voxdim`) as per-coordinate attributes on `z`, `y`, and `x`.
+    - Metadata attributes (e.g., `transmit_frequency`, `plane_wave_angles`) as
       provided via keyword arguments.
 
 === "EchoFrame DAT"
@@ -166,7 +167,8 @@ ConfUSIus currently provides built-in conversion utilities for **AUTC** and
 
     - `iq`: Beamformed IQ data with dimensions `(time, z, y, x)`.
     - `time`, `z`, `y`, `x`: Coordinate arrays.
-    - Metadata attributes (e.g., `voxdim`, `transmit_frequency`, `plane_wave_angles`) as
+    - Voxel sizes (`voxdim`) as per-coordinate attributes on `z`, `y`, and `x`.
+    - Metadata attributes (e.g., `transmit_frequency`, `plane_wave_angles`) as
       extracted from the metadata file.
 
 ## Converting Derived Acquisitions
@@ -219,7 +221,6 @@ Coordinates:
   * y        (y) float64 944B 4.656 4.705 4.753 4.802 ... 10.23 10.28 10.33
   * x        (x) float64 416B -2.671 -2.57 -2.469 -2.369 ... 2.268 2.369 2.469
 Attributes:
-    voxdim:                       [0.4, 0.04850949019607844, 0.10078740157480...
     transmit_frequency:           15625000.0
     probe_n_elements:             128
     probe_pitch:                  0.0001

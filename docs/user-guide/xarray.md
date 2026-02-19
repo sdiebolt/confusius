@@ -85,8 +85,7 @@ Coordinates:
   * z        (z) float64 8B 0.0
   * y        (y) float64 1kB 5.664 5.713 5.762 5.811 ... 11.72 11.77 11.82 11.87
   * x        (x) float64 688B -3.583 -3.492 -3.402 -3.311 ... 3.946 4.037 4.127
-Attributes: (12/17)
-    voxdim:                       [0.4, 0.04883074509803921, 0.09070866141732...
+Attributes: (11/16)
     transmit_frequency:           15625000.0
     probe_n_elements:             128
     probe_pitch:                  8.999999999999999e-05
