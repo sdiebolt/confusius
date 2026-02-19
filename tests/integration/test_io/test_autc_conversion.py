@@ -203,6 +203,8 @@ class TestAUTCConversion:
         convert_autc_dats_to_zarr(
             synthetic_autc_session,
             output_path,
+            lateral_coords=np.linspace(-10, 10, 4),
+            axial_coords=np.linspace(0, 20, 6),
             frames_per_chunk=3,
             frames_per_shard=6,
             show_progress=False,
@@ -260,6 +262,8 @@ class TestAUTCConversion:
                 convert_autc_dats_to_zarr(
                     synthetic_autc_session,
                     output_path,
+                    lateral_coords=np.linspace(-10, 10, 4),
+                    axial_coords=np.linspace(0, 20, 6),
                     show_progress=False,
                 )
 
@@ -276,6 +280,8 @@ class TestAUTCConversion:
         convert_autc_dats_to_zarr(
             synthetic_autc_session,
             output_path,
+            lateral_coords=np.linspace(-10, 10, 4),
+            axial_coords=np.linspace(0, 20, 6),
             compound_sampling_frequency=1000.0,
             show_progress=False,
         )
@@ -299,6 +305,8 @@ class TestAUTCConversion:
         convert_autc_dats_to_zarr(
             synthetic_autc_session,
             output_path,
+            lateral_coords=np.linspace(-10, 10, 4),
+            axial_coords=np.linspace(0, 20, 6),
             compound_sampling_frequency=500.0,
             skip_first_blocks=1,
             show_progress=False,
@@ -330,6 +338,8 @@ class TestAUTCConversion:
         convert_autc_dats_to_zarr(
             synthetic_autc_session,
             output_path,
+            lateral_coords=np.linspace(-10, 10, 4),
+            axial_coords=np.linspace(0, 20, 6),
             compound_sampling_frequency=500.0,
             skip_last_blocks=1,
             show_progress=False,
@@ -360,6 +370,8 @@ class TestAUTCConversion:
         convert_autc_dats_to_zarr(
             synthetic_autc_session,
             output_path,
+            lateral_coords=np.linspace(-10, 10, 4),
+            axial_coords=np.linspace(0, 20, 6),
             compound_sampling_frequency=500.0,
             block_times=block_times,
             skip_first_blocks=1,
