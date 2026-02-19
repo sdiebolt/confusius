@@ -115,22 +115,24 @@ class TestAUTCConversion:
         """Test overwriting existing Zarr output."""
         output_path = tmp_path / "output.zarr"
 
-        convert_autc_dats_to_zarr(
-            synthetic_autc_session,
-            output_path,
-            show_progress=False,
-        )
+        with pytest.warns(UserWarning, match="coords not provided"):
+            convert_autc_dats_to_zarr(
+                synthetic_autc_session,
+                output_path,
+                show_progress=False,
+            )
 
         first_shape = cast(
             zarr.Array, zarr.open_group(output_path, mode="r")["iq"]
         ).shape
 
-        convert_autc_dats_to_zarr(
-            synthetic_autc_session,
-            output_path,
-            overwrite=True,
-            show_progress=False,
-        )
+        with pytest.warns(UserWarning, match="coords not provided"):
+            convert_autc_dats_to_zarr(
+                synthetic_autc_session,
+                output_path,
+                overwrite=True,
+                show_progress=False,
+            )
 
         second_shape = cast(
             zarr.Array, zarr.open_group(output_path, mode="r")["iq"]

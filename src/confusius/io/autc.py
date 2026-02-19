@@ -532,9 +532,14 @@ def convert_autc_dats_to_zarr(
         Additional keyword arguments to pass to `zarr.create_array` for the main data
         array.
     lateral_coords : array_like, optional
-        Lateral coordinates in millimeters. These define the x-axis positions.
+        Lateral coordinates in millimeters in the probe-relative coordinate system, with
+        the origin at the center of the probe face. These define the x-axis positions.
+        If not provided, voxel indices are stored instead and a warning is emitted.
     axial_coords : array_like, optional
-        Axial (depth) coordinates in millimeters. These define the y-axis positions.
+        Axial (depth) coordinates in millimeters in the probe-relative coordinate
+        system, with the origin at the center of the probe face. These define the y-axis
+        positions. If not provided, voxel indices are stored instead and a warning is
+        emitted.
     transmit_frequency : float, optional
         Central frequency of the ultrasound probe in hertz.
     probe_n_elements : int, optional
@@ -598,9 +603,16 @@ def convert_autc_dats_to_zarr(
 
     - ``iq``: The main data array with dimensions ``(time, z, y, x)``.
     - ``time``: Time coordinate array.
-    - ``z``: Elevation coordinate array (always ``[0]`` for 2D data).
-    - ``y``: Axial (depth) coordinate array (if ``axial_coords`` is provided, otherwise indices).
-    - ``x``: Lateral coordinate array (if ``lateral_coords`` is provided, otherwise indices).
+    - ``z``: Elevation coordinate array (always ``[0.0]`` mm for 2D data).
+    - ``y``: Axial (depth) coordinate array in probe-relative mm.
+    - ``x``: Lateral coordinate array in probe-relative mm.
+
+    Spatial coordinates (``z``, ``y``, ``x``) follow the ConfUSIus probe-relative
+    coordinate system: physical distances in millimeters along each voxel axis, with the
+    origin at the center of the probe face. Unlike EchoFrame data (where coordinates are
+    embedded in the metadata file), AUTC data carries no spatial calibration, so
+    ``lateral_coords`` and ``axial_coords`` must be supplied by the caller. Omitting
+    them produces physically meaningless voxel-index coordinates.
     """
     from rich.progress import track
 
@@ -702,18 +714,37 @@ def convert_autc_dats_to_zarr(
     zarr_group["z"].attrs["units"] = "mm"
     zarr_group["z"].attrs["long_name"] = "Elevation"
 
-    if axial_coords is not None:
-        y_values = np.asarray(axial_coords)
-    else:
-        y_values = np.arange(n_z, dtype=np.float64)
+    if axial_coords is None:
+        warnings.warn(
+            "axial_coords not provided: storing voxel indices as y coordinates. "
+            "Provide axial_coords in probe-relative mm for physically meaningful "
+            "coordinates.",
+            UserWarning,
+            stacklevel=2,
+        )
+    if lateral_coords is None:
+        warnings.warn(
+            "lateral_coords not provided: storing voxel indices as x coordinates. "
+            "Provide lateral_coords in probe-relative mm for physically meaningful "
+            "coordinates.",
+            UserWarning,
+            stacklevel=2,
+        )
+
+    y_values = (
+        np.asarray(axial_coords)
+        if axial_coords is not None
+        else np.arange(n_z, dtype=np.float64)
+    )
     zarr_group.create_array("y", data=y_values, dimension_names=["y"])
     zarr_group["y"].attrs["units"] = "mm"
     zarr_group["y"].attrs["long_name"] = "Depth"
 
-    if lateral_coords is not None:
-        x_values = np.asarray(lateral_coords)
-    else:
-        x_values = np.arange(n_x, dtype=np.float64)
+    x_values = (
+        np.asarray(lateral_coords)
+        if lateral_coords is not None
+        else np.arange(n_x, dtype=np.float64)
+    )
     zarr_group.create_array("x", data=x_values, dimension_names=["x"])
     zarr_group["x"].attrs["units"] = "mm"
     zarr_group["x"].attrs["long_name"] = "Lateral"
