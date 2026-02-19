@@ -67,11 +67,10 @@ class TestEchoFrameConversion:
             assert ds["y"].attrs["units"] == "mm"
             assert ds["y"].attrs["long_name"] == "Depth"
 
-            # Verify attributes are available on the iq DataArray, consistent with
-            # how reduction functions return DataArrays with attributes.
-            np.testing.assert_allclose(
-                ds["iq"].attrs["voxdim"], [0.4, 0.06, 0.13333333333333333]
-            )
+            # Verify voxdim is stored as per-coordinate attribute.
+            assert ds["z"].attrs["voxdim"] == pytest.approx(0.4)
+            assert ds["y"].attrs["voxdim"] == pytest.approx(0.06)
+            assert ds["x"].attrs["voxdim"] == pytest.approx(0.13333333333333333)
             assert ds["iq"].attrs["transmit_frequency"] == 5000000.0
             assert ds["iq"].attrs["probe_n_elements"] == 128
             assert ds["iq"].attrs["probe_pitch"] == 0.0003

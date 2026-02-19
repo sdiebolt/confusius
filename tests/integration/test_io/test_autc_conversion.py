@@ -100,9 +100,10 @@ class TestAUTCConversion:
             assert ds["x"].attrs["units"] == "mm"
             assert ds["x"].attrs["long_name"] == "Lateral"
 
-            # Verify attributes are available on the iq DataArray, consistent with
-            # how reduction functions return DataArrays with attributes.
-            np.testing.assert_allclose(ds["iq"].attrs["voxdim"], [0.4, 4.0, 20.0 / 3.0])
+            # Verify voxdim is stored as per-coordinate attribute.
+            assert ds["z"].attrs["voxdim"] == pytest.approx(0.4)
+            assert ds["y"].attrs["voxdim"] == pytest.approx(4.0)
+            assert ds["x"].attrs["voxdim"] == pytest.approx(20.0 / 3.0)
             assert ds["iq"].attrs["transmit_frequency"] == 3000000.0
             assert ds["iq"].attrs["probe_n_elements"] == 64
             assert ds["iq"].attrs["probe_pitch"] == 0.00025

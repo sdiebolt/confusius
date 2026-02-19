@@ -367,15 +367,12 @@ def convert_echoframe_dat_to_zarr(
     zarr_group["x"].attrs["units"] = "mm"
     zarr_group["x"].attrs["long_name"] = "Lateral"
 
-    # voxdim is ordered as [z, y, x].
     # TODO: we should compute the actual z-axis voxdim from the elevation beam width,
     # but we're currently missing some information for that, such as the elevation
     # aperture and elevation focus.
-    zarr_iq.attrs["voxdim"] = [
-        0.4,
-        float(np.diff(axial_coords).mean()),
-        float(np.diff(lateral_coords).mean()),
-    ]
+    zarr_group["z"].attrs["voxdim"] = 0.4
+    zarr_group["y"].attrs["voxdim"] = float(np.diff(axial_coords).mean())
+    zarr_group["x"].attrs["voxdim"] = float(np.diff(lateral_coords).mean())
     zarr_iq.attrs["transmit_frequency"] = transmit_frequency
     zarr_iq.attrs["probe_n_elements"] = probe_n_elements
     zarr_iq.attrs["probe_pitch"] = probe_pitch
