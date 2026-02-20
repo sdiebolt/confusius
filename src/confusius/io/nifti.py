@@ -14,9 +14,9 @@ import dask.array as da
 import numpy as np
 import numpy.typing as npt
 import xarray as xr
-import zarr
 
 from confusius.io.utils import check_path
+from confusius.registration.affines import decompose_affine
 
 if TYPE_CHECKING:
     import nibabel as nib
@@ -26,6 +26,24 @@ NiftiVersion: TypeAlias = Literal[1, 2]
 
 # ConfUSIus and NIfTI dimension mapping.
 _NIFTI_DIM_ORDER = ("x", "y", "z", "time", "dim4", "dim5", "dim6")
+
+# Unit string mappings between NiBabel and ConfUSIus conventions.
+_NIFTI_TO_CONFUSIUS_SPACE_UNITS: dict[str, str] = {
+    "meter": "m",
+    "mm": "mm",
+    "micron": "um",
+}
+_NIFTI_TO_CONFUSIUS_TIME_UNITS: dict[str, str] = {
+    "sec": "s",
+    "msec": "ms",
+    "usec": "us",
+}
+_CONFUSIUS_TO_NIFTI_SPACE_UNITS: dict[str, str] = {
+    v: k for k, v in _NIFTI_TO_CONFUSIUS_SPACE_UNITS.items()
+}
+_CONFUSIUS_TO_NIFTI_TIME_UNITS: dict[str, str] = {
+    v: k for k, v in _NIFTI_TO_CONFUSIUS_TIME_UNITS.items()
+}
 
 
 class _NiftiHeaderExtractor:
@@ -37,72 +55,117 @@ class _NiftiHeaderExtractor:
     ) -> None:
         self.header = header
 
-    def get_voxel_dimensions(self) -> tuple[float, ...]:
-        """Get voxel dimensions (pixdim) in millimeters.
+    def get_voxel_dimensions(self) -> dict[str, float]:
+        """Get voxel dimensions (pixdim) in their native header units.
 
         Returns
         -------
-        tuple[float, ...]
-            Voxel dimensions for each spatial dimension.
+        dict[str, float]
+            Voxel dimensions keyed by ConfUSIus dimension name (``"x"``, ``"y"``,
+            ``"z"``), in the units declared by the NIfTI header (see
+            `get_unit_strings`).
         """
         zooms = self.header.get_zooms()
-        space_units, _ = self.header.get_xyzt_units()
-
-        unit_scaler = {"meter": 1000.0, "mm": 1.0, "micron": 0.001}.get(
-            space_units, 1.0
-        )
-        return tuple(z * unit_scaler for z in zooms[:3])
+        nifti_spatial = [("x", 0), ("y", 1), ("z", 2)]
+        return {name: float(zooms[i]) for name, i in nifti_spatial if i < len(zooms)}
 
     def get_repetition_time(self) -> float | None:
-        """Get repetition time (TR) in seconds from header.
+        """Get repetition time (TR) in its native header units.
 
         Returns
         -------
         float or None
-            Repetition time in seconds, or ``None`` if not available.
+            Repetition time in the units declared by the NIfTI header (see
+            `get_unit_strings`), or ``None`` if not available.
         """
         zooms = self.header.get_zooms()
         if len(zooms) < 4:
             return None
+        return float(zooms[3])
 
-        time_zoom = zooms[3]
-        _, time_units = self.header.get_xyzt_units()
+    def get_unit_strings(self) -> tuple[str | None, str | None]:
+        """Get spatial and temporal unit strings in ConfUSIus conventions.
 
-        time_scaler = {"sec": 1.0, "msec": 0.001, "usec": 1e-6}.get(time_units, 1.0)
-        return time_zoom * time_scaler
+        Returns
+        -------
+        space_unit : str or None
+            Spatial unit string (``"m"``, ``"mm"``, or ``"um"``), or ``None``
+            if the header declares unknown units.
+        time_unit : str or None
+            Temporal unit string (``"s"``, ``"ms"``, or ``"us"``), or ``None``
+            if the header declares unknown units.
+        """
+        space_nib, time_nib = self.header.get_xyzt_units()
+        return (
+            _NIFTI_TO_CONFUSIUS_SPACE_UNITS.get(space_nib),
+            _NIFTI_TO_CONFUSIUS_TIME_UNITS.get(time_nib),
+        )
 
     def to_attrs(self) -> dict[str, Any]:
         """Convert header information to attributes dictionary."""
-        header_module = type(self.header).__module__
-        nifti_version = 2 if "nifti2" in header_module else 1
+        _, sform_code = self.header.get_sform(coded=True)
+        _, qform_code = self.header.get_qform(coded=True)
 
-        # Get both qform and sform matrices (nibabel returns None if not set)
-        sform_matrix, sform_code = self.header.get_sform(coded=True)
-        qform_matrix, qform_code = self.header.get_qform(coded=True)
+        attrs: dict[str, Any] = {}
 
-        attrs: dict[str, Any] = {
-            "nifti_version": nifti_version,
-            "voxdim": list(self.get_voxel_dimensions()),
-        }
-
-        # Code > 0 indicates a valid sform/qform; code 0 means unknown.
-        if sform_code > 0 and sform_matrix is not None:
-            attrs["sform"] = sform_matrix.tolist()
+        # Code > 0 indicates a valid affine; code 0 means unknown.
+        if sform_code > 0:
             attrs["sform_code"] = int(sform_code)
-        if qform_code > 0 and qform_matrix is not None:
-            attrs["qform"] = qform_matrix.tolist()
+        if qform_code > 0:
             attrs["qform_code"] = int(qform_code)
-
-        tr = self.get_repetition_time()
-        if tr is not None:
-            attrs["repetition_time"] = tr
 
         return attrs
 
 
+def _select_affines(
+    header: "nib.nifti1.Nifti1Header | nib.nifti2.Nifti2Header",
+) -> tuple[npt.NDArray[np.float64], npt.NDArray[np.float64] | None]:
+    """Select primary and secondary affine matrices from a NiBabel header.
+
+    Sform is preferred over qform when both codes are positive. When both are
+    valid, the qform is returned as the secondary affine so that scanner-space
+    coordinates can be stored alongside the template-space primary coordinates.
+
+    Parameters
+    ----------
+    header : nibabel.nifti1.Nifti1Header or nibabel.nifti2.Nifti2Header
+        NiBabel NIfTI header.
+
+    Returns
+    -------
+    primary_affine : (4, 4) numpy.ndarray
+        Primary affine for computing spatial coordinates.
+    secondary_affine : (4, 4) numpy.ndarray None
+        Qform affine when both sform and qform codes are positive; ``None`` otherwise.
+    """
+    sform, sform_code = header.get_sform(coded=True)
+    qform, qform_code = header.get_qform(coded=True)
+    sform_valid = sform_code > 0 and sform is not None
+    qform_valid = qform_code > 0 and qform is not None
+
+    if sform_valid:
+        return sform, (qform if qform_valid else None)
+    elif qform_valid:
+        return qform, None
+    else:
+        warnings.warn(
+            "Both sform_code and qform_code are 0 in the NIfTI header. Coordinates "
+            "will be computed from the voxel dimensions (pixdim) only, which may not "
+            "reflect the true spatial orientation of the data.",
+        )
+        return header.get_base_affine(), None
+
+
 def _load_nifti_with_nibabel(
     path: Path,
-) -> tuple[Union["nib.nifti1.Nifti1Image", "nib.nifti2.Nifti2Image"], dict[str, Any]]:
+) -> tuple[
+    Union["nib.nifti1.Nifti1Image", "nib.nifti2.Nifti2Image"],
+    dict[str, Any],
+    dict[str, float],
+    float | None,
+    str | None,
+    str | None,
+]:
     """Load NIfTI file using NiBabel, extracting header metadata.
 
     Parameters
@@ -112,9 +175,19 @@ def _load_nifti_with_nibabel(
 
     Returns
     -------
-    tuple[nib.nifti1.Nifti1Image or nib.nifti2.Nifti2Image, dict]
-        - NiBabel NIfTI image object (with proxy data array).
-        - Dictionary of attributes extracted from header.
+    img : nib.nifti1.Nifti1Image or nib.nifti2.Nifti2Image
+        NiBabel NIfTI image object with proxy data array.
+    attrs : dict
+        Dictionary of attributes extracted from the NIfTI header.
+    voxel_sizes : dict[str, float]
+        Voxel dimensions keyed by dimension name (``"x"``, ``"y"``, ``"z"``),
+        in native header units.
+    tr : float or None
+        Repetition time in native header units, or ``None`` if not available.
+    space_unit : str or None
+        Spatial unit string in ConfUSIus conventions, or ``None`` if unknown.
+    time_unit : str or None
+        Temporal unit string in ConfUSIus conventions, or ``None`` if unknown.
     """
     import nibabel as nib
 
@@ -127,67 +200,168 @@ def _load_nifti_with_nibabel(
 
     extractor = _NiftiHeaderExtractor(img.header)
     attrs = extractor.to_attrs()
+    voxel_sizes = extractor.get_voxel_dimensions()
+    tr = extractor.get_repetition_time()
+    space_unit, time_unit = extractor.get_unit_strings()
 
-    return img, attrs
+    return img, attrs, voxel_sizes, tr, space_unit, time_unit
 
 
 def _create_coords_from_nifti(
     shape: tuple[int, ...],
     dims: tuple[str, ...],
-    affine: npt.NDArray[np.float64],
+    primary_affine: npt.NDArray[np.float64],
     tr: float | None = None,
-) -> dict[str, xr.DataArray]:
-    """Create coordinate arrays from NIfTI affine matrix and repetition time."""
+    voxel_sizes: dict[str, float] | None = None,
+    space_unit: str | None = None,
+    time_unit: str | None = None,
+    secondary_affine: npt.NDArray[np.float64] | None = None,
+    primary_prefix: str = "sform",
+    secondary_prefix: str = "qform",
+) -> tuple[dict[str, xr.DataArray], dict[str, Any]]:
+    """Create coordinate arrays and affine attributes from NIfTI affine matrices.
+
+    Spatial coordinates encode translation and zoom from the affine: each axis
+    starts at ``affine[col, 3]`` (origin) and is stepped by the true voxel
+    size along that axis (from ``_decompose44``). The rotation and shear — the
+    parts that cannot be encoded in 1D coordinates — are captured in a constant
+    4×4 affine ``A_physical`` that maps probe-space coordinates (mm) to
+    sform/qform world-space coordinates (mm).
+
+    Parameters
+    ----------
+    shape : tuple[int, ...]
+        Array shape in NIfTI order ``(x, y, z[, time])``.
+    dims : tuple[str, ...]
+        Dimension names in NIfTI order ``(x, y, z[, time])``.
+    primary_affine : (4, 4) numpy.ndarray
+        Primary affine matrix mapping voxel indices to world-space coordinates.
+    tr : float, optional
+        Repetition time for the time coordinate, in the units given by
+        ``time_unit``.
+    voxel_sizes : dict[str, float] or None, optional
+        Voxel dimensions keyed by dimension name (``"x"``, ``"y"``, ``"z"``),
+        used to set the ``voxdim`` attribute on each spatial coordinate.
+    space_unit : str, optional
+        Spatial unit string (e.g. ``"mm"``, ``"m"``, ``"um"``) set as the
+        ``units`` attribute on each spatial coordinate. Omitted when not
+        provided.
+    time_unit : str, optional
+        Temporal unit string (e.g. ``"s"``, ``"ms"``) set as the ``units``
+        attribute on the time coordinate. Omitted when not provided.
+    secondary_affine : (4, 4) numpy.ndarray, optional
+        Optional secondary affine. Its physical transform is stored as an extra
+        attribute keyed by ``secondary_prefix``.
+    primary_prefix : str, default: "sform"
+        Attribute name prefix for the primary affine (``"sform"`` or
+        ``"qform"``).
+    secondary_prefix : str, default: "qform"
+        Attribute name prefix for the secondary affine.
+
+    Returns
+    -------
+    coords : dict[str, xarray.DataArray]
+        Coordinate DataArrays keyed by name. Spatial coordinates (``"x"``,
+        ``"y"``, ``"z"``) start at ``affine[col, 3]`` and are stepped by the
+        true voxel spacing. A time coordinate is created if ``"time"`` is in
+        ``dims`` and ``tr`` is provided.
+    extra_attrs : dict[str, Any]
+        Affine-derived DataArray attributes. Contains ``"affines"``: a dict
+        keyed by space name (``primary_prefix`` and optionally
+        ``secondary_prefix``) mapping to a 4×4 probe→world affine in ConfUSIus
+        (z, y, x) convention. Apply as ``A @ [pz, py, px, 1]`` to get
+        ``[wz, wy, wx, 1]``. Both transforms share the same probe-space origin
+        and spacing (NIfTI sform/qform describe the same voxel grid), so
+        ``da.coords["z/y/x"]`` can be used with either transform.
+    """
     coords: dict[str, xr.DataArray] = {}
+    extra_attrs: dict[str, Any] = {}
+    affines_dict: dict[str, npt.NDArray[np.float64]] = {}
 
-    spatial_dims = [d for d in dims if d in ("x", "y", "z")]
-    spatial_indices = {d: dims.index(d) for d in spatial_dims}
-    nifti_to_confusius_idx = {"x": 0, "y": 1, "z": 2}
+    nifti_affines: list[tuple[npt.NDArray[np.float64], str]] = [
+        (primary_affine, primary_prefix),
+    ]
+    if secondary_affine is not None:
+        nifti_affines.append((secondary_affine, secondary_prefix))
 
-    for dim in spatial_dims:
-        idx_in_shape = spatial_indices[dim]
-        dim_size = shape[idx_in_shape]
-        nifti_col = nifti_to_confusius_idx[dim]
-        voxel_vector = affine[:3, nifti_col]
-        origin = affine[:3, 3]
-        indices = np.arange(dim_size)
-        coord_values = np.array([origin + voxel_vector * i for i in indices])
-        coord_idx = nifti_col
-        coords[dim] = xr.DataArray(
-            coord_values[:, coord_idx],
-            dims=[dim],
-            attrs={"units": "mm"},
-        )
+    for affine, prefix in nifti_affines:
+        T, _, Z, _ = decompose_affine(affine)
+
+        # Direction matrix D satisfies D @ diag(Z) = RZS and captures rotation and
+        # shear.
+        D = affine[:3, :3] / Z
+
+        # Build A_physical: the 4×4 affine mapping probe-space coordinates (mm) to
+        # sform/qform world-space coordinates (mm). In NIfTI (x, y, z) convention:
+        #   A_nifti[:3, :3] = D,  A_nifti[:3, 3] = T − D @ T
+        # so that A_nifti @ [px, py, pz, 1] → [wx, wy, wz, 1].
+        # A_physical is invariant to all slicing and downsampling because it maps
+        # physical positions (mm), not voxel indices.
+        A_nifti = np.eye(4)
+        A_nifti[:3, :3] = D
+        A_nifti[:3, 3] = T - D @ T
+
+        # Permute to ConfUSIus (z, y, x) convention by swapping rows and columns
+        # 0 ↔ 2 (equivalent to P @ A_nifti @ P where P is the flip permutation).
+        # Result: A_physical @ [pz, py, px, 1] → [wz, wy, wx, 1].
+        A_physical = A_nifti[[2, 1, 0, 3]][:, [2, 1, 0, 3]]
+        affines_dict[f"probe_to_{prefix}"] = A_physical
+
+        # Only the primary affine contributes dimension coordinates.
+        if not prefix == primary_prefix:
+            continue
+
+        for col, dim in enumerate(("x", "y", "z")):
+            if dim not in dims:
+                continue
+            coord_attrs: dict[str, Any] = {}
+            if space_unit is not None:
+                coord_attrs["units"] = space_unit
+            if voxel_sizes is not None and dim in voxel_sizes:
+                coord_attrs["voxdim"] = voxel_sizes[dim]
+
+            # Coordinates encode translation (T[col]) plus zoom (Z[col] from
+            # decompose_affine, the true voxel spacing along this axis).
+            coords[dim] = xr.DataArray(
+                T[col] + Z[col] * np.arange(shape[col]),
+                dims=[dim],
+                attrs=coord_attrs,
+            )
 
     if "time" in dims:
-        time_idx = dims.index("time")
-        n_time = shape[time_idx]
+        n_time = shape[dims.index("time")]
         time_values = np.arange(n_time) * tr if tr is not None else np.arange(n_time)
+        time_attrs: dict[str, Any] = {}
+        if time_unit is not None:
+            time_attrs["units"] = time_unit
         coords["time"] = xr.DataArray(
             time_values,
             dims=["time"],
-            attrs={"units": "s" if tr is not None else "frame"},
+            attrs=time_attrs,
         )
 
-    return coords
+    if affines_dict:
+        extra_attrs["affines"] = affines_dict
+
+    return coords, extra_attrs
 
 
 def load_nifti(
-    path: str | Path,
-    chunks: int | tuple[int, ...] | str | None = "auto",
-    load_sidecar: bool = True,
+    path: str | Path, chunks: int | tuple[int, ...] | str | None = "auto"
 ) -> xr.DataArray:
     """Load a NIfTI file as a lazy Xarray DataArray.
 
-    Loads NIfTI files using nibabel's proxy arrays for memory-efficient access,
-    wrapping the data in Dask arrays for chunked, parallel processing. The data
-    is transposed to ConfUSIus conventions with dimensions ``(time, z, y, x)``.
+    Loads NIfTI files using nibabel's proxy arrays for memory-efficient access, wrapping
+    the data in Dask arrays for chunked, parallel processing. The data is transposed to
+    ConfUSIus conventions with dimensions ``(time, z, y, x)``.
+
+    A BIDS-style JSON sidecar file (same name, ``.json`` extension) is loaded
+    automatically when present.
 
     Parameters
     ----------
     path : str or pathlib.Path
-        Path to the NIfTI file (.nii or .nii.gz). If ``load_sidecar`` is
-        ``True``, a corresponding JSON sidecar file will be loaded if present.
+        Path to the NIfTI file (``.nii`` or ``.nii.gz``).
     chunks : int or tuple[int, ...] or str or None, default: "auto"
         How to chunk the array. Must be one of the following forms:
 
@@ -203,44 +377,51 @@ def load_nifti(
         - ``-1`` or ``None`` as a blocksize indicate the size of the corresponding
           dimension.
 
-    load_sidecar : bool, default: True
-        Whether to load a BIDS-style JSON sidecar file (same name with ``.json``
-        extension) for additional metadata.
-
     Returns
     -------
     xarray.DataArray
-        Lazy DataArray with dimensions in ConfUSIus order. Data is wrapped in
-        a Dask array for out-of-core computation.
+        Lazy DataArray with dimensions in ConfUSIus order. Data is wrapped in a Dask
+        array for out-of-core computation.
 
     Examples
     --------
-    >>> import confusius as fusi
-    >>> da = fusi.io.load_nifti("brain.nii.gz")
+    >>> import confusius as cf
+    >>> da = cf.io.load_nifti("brain.nii.gz")
     >>> print(da.dims)
     ("time", "z", "y", "x")
 
     Notes
     -----
-    - The data is not loaded into memory until computation is triggered.
-    - Coordinate arrays are extracted from the NIfTI affine matrix when possible.
-    - Complex data types are not natively supported by NIfTI and will raise an
-      error.
+    Probe-to-world affines are stored in ``da.attrs["affines"]``, a dict keyed
+    by space name (``"sform"`` and/or ``"qform"``). Each value is a 4×4
+    probe→world affine in ConfUSIus ``(z, y, x)`` convention. Apply as
+    ``da.attrs["affines"]["sform"] @ np.array([pz, py, px, 1.0])`` to get
+    ``[wz, wy, wx, 1]``, where ``pz``, ``py``, ``px`` come from
+    ``da.coords["z"]``, ``da.coords["y"]``, ``da.coords["x"]`` respectively.
+
+    Affine selection follows NIfTI conventions:
+
+    - If ``sform_code > 0``: sform is used as the primary affine.
+    - Else, if only ``qform_code > 0``: qform is used as the primary affine.
+    - If both codes are zero: the base affine (pixdim only) is used and a
+      warning is emitted.
+
+    Voxel dimensions are stored in their native header units as a ``voxdim``
+    attribute on each spatial coordinate array, consistent with the ``units``
+    attribute of that coordinate.
     """
     path = check_path(path, type="file")
 
-    img, attrs = _load_nifti_with_nibabel(path)
+    img, attrs, voxel_sizes, tr, space_unit, time_unit = _load_nifti_with_nibabel(path)
 
-    if load_sidecar:
-        if path.suffix == ".gz" and path.stem.endswith(".nii"):
-            sidecar_path = path.with_suffix("").with_suffix(".json")
-        else:
-            sidecar_path = path.with_suffix(".json")
+    if path.suffix == ".gz" and path.stem.endswith(".nii"):
+        sidecar_path = path.with_suffix("").with_suffix(".json")
+    else:
+        sidecar_path = path.with_suffix(".json")
 
-        if sidecar_path.exists():
-            with open(sidecar_path) as f:
-                sidecar_attrs = json.load(f)
-                attrs.update(sidecar_attrs)
+    if sidecar_path.exists():
+        with open(sidecar_path) as f:
+            attrs.update(json.load(f))
 
     # We use np.asanyarray to get the memory-mapped array behind Nibabel's proxy. This
     # will allow Dask to create a lazy array without loading the entire dataset into
@@ -256,22 +437,56 @@ def load_nifti(
     dask_arr = da.from_array(data_obj, chunks=chunks, asarray=False)
 
     ndim = dask_arr.ndim
-    confusius_dims = _NIFTI_DIM_ORDER[:ndim][::-1]
-    confusius_shape = dask_arr.shape
+    # NIfTI dim order is (x, y, z, time, ...); ConfUSIus order is the reverse.
+    nifti_dims = _NIFTI_DIM_ORDER[:ndim]
 
-    # Reverse voxdim to match ConfUSIus order (z, y, x) instead of NIfTI (x, y, z)
-    attrs["voxdim"] = attrs["voxdim"][::-1][:ndim]
+    primary_affine, secondary_affine = _select_affines(img.header)
 
-    # Extract coordinates from affine matrix using ConfUSIus shape/dims
-    # nibabel's img.affine returns the best available affine (sform if valid, else
-    # qform).
-    affine = img.affine if img.affine is not None else np.eye(4)
-    tr = attrs.get("repetition_time")
-    coords = _create_coords_from_nifti(confusius_shape, confusius_dims, affine, tr)
+    # The primary affine is the sform when sform_code > 0, otherwise qform.
+    # Both codes being 0 is the degenerate case handled by _select_affines.
+    primary_prefix = "sform" if attrs.get("sform_code", 0) > 0 else "qform"
+
+    coords, affine_attrs = _create_coords_from_nifti(
+        shape=img.shape,
+        dims=nifti_dims,
+        primary_affine=primary_affine,
+        tr=tr,
+        voxel_sizes=voxel_sizes,
+        space_unit=space_unit,
+        time_unit=time_unit,
+        secondary_affine=secondary_affine,
+        primary_prefix=primary_prefix,
+    )
+    attrs.update(affine_attrs)
+
+    # Override the pixdim-based time coordinate with sidecar timing fields when
+    # present. Priority: VolumeTiming > RepetitionTime/DelayAfterTrigger > pixdim.
+    if "time" in coords:
+        time_attrs = coords["time"].attrs
+        n_time = len(coords["time"])
+        if "VolumeTiming" in attrs:
+            coords["time"] = xr.DataArray(
+                np.asarray(attrs.pop("VolumeTiming")),
+                dims=["time"],
+                attrs=time_attrs,
+            )
+        elif "RepetitionTime" in attrs:
+            rep_time = float(attrs.pop("RepetitionTime"))
+            delay = float(attrs.pop("DelayAfterTrigger", 0.0))
+            if tr is not None and tr > 0 and not np.isclose(rep_time, tr, rtol=1e-3):
+                warnings.warn(
+                    f"Sidecar RepetitionTime ({rep_time}) does not match pixdim[4] "
+                    f"({tr}) in the NIfTI header. Using sidecar value.",
+                )
+            coords["time"] = xr.DataArray(
+                delay + rep_time * np.arange(n_time),
+                dims=["time"],
+                attrs=time_attrs,
+            )
 
     data_array = xr.DataArray(
         dask_arr,
-        dims=confusius_dims,
+        dims=nifti_dims[::-1],
         coords=coords,
         attrs=attrs,
         name="nifti_data",
@@ -280,16 +495,83 @@ def load_nifti(
     return data_array
 
 
+def _infer_repetition_time(
+    times: npt.NDArray[np.float64],
+) -> tuple[float | None, float]:
+    """Infer the repetition time and onset delay from a time coordinate.
+
+    Parameters
+    ----------
+    times : ndarray
+        Time values, at least one element.
+
+    Returns
+    -------
+    tr : float or None
+        Uniform repetition time (spacing between volumes) when sampling is regular
+        within ``rtol=1e-5``, or ``None`` for a single volume or irregular sampling.
+    delay : float
+        Onset time of the first volume (``times[0]``).
+    """
+    delay = float(times[0])
+    if len(times) < 2:
+        return None, delay
+    diffs = np.diff(times)
+    if np.allclose(diffs, diffs[0], rtol=1e-5):
+        return float(diffs[0]), delay
+    return None, delay
+
+
+def _build_nifti_affine(
+    transform: npt.NDArray[np.float64] | None,
+    T: npt.NDArray[np.float64],
+    Z: npt.NDArray[np.float64],
+) -> npt.NDArray[np.float64]:
+    """Reconstruct a NIfTI affine from a stored ConfUSIus probe-to-world transform.
+
+    Reverses the ConfUSIus ``(z, y, x)`` permutation to recover the direction matrix
+    ``D``, then combines it with the probe-coord origin ``T`` and spacing ``Z`` to
+    rebuild the full NIfTI affine. Falls back to a diagonal affine when no transform is
+    given.
+
+    Parameters
+    ----------
+    transform : (4, 4) numpy.ndarray or None
+        Probe-to-world affine in ConfUSIus ``(z, y, x)`` convention, or ``None`` to use
+        a fallback diagonal affine.
+    T : (3,) numpy.ndarray
+        Origin of the probe coordinates for each NIfTI axis ``(x, y, z)``, in mm.
+    Z : (3,) numpy.ndarray
+        Voxel spacing for each NIfTI axis ``(x, y, z)``, in mm.
+
+    Returns
+    -------
+    numpy.ndarray of shape (4, 4)
+        Full NIfTI affine mapping voxel indices to world-space coordinates.
+    """
+    if transform is not None:
+        A_nifti = np.asarray(transform)[[2, 1, 0, 3]][:, [2, 1, 0, 3]]
+        D = A_nifti[:3, :3]
+        out = np.eye(4)
+        out[:3, :3] = D @ np.diag(Z)
+        out[:3, 3] = T
+    else:
+        out = np.eye(4)
+        out[:3, :3] = np.diag(Z)
+        out[:3, 3] = T
+
+    return out
+
+
 def save_nifti(
     data_array: xr.DataArray,
     path: str | Path,
     nifti_version: NiftiVersion = 1,
-    save_sidecar: bool = True,
 ) -> None:
     """Save an Xarray DataArray to NIfTI format.
 
-    Saves the DataArray to a NIfTI file, with optional JSON sidecar for additional
-    metadata. The data is transposed to NIfTI convention ``(x, y, z, time)`` before
+    Saves the DataArray to a NIfTI file and always writes a BIDS-style JSON sidecar
+    alongside it. The data is transposed to NIfTI convention ``(x, y, z, time)`` before
     saving.
 
     Parameters
@@ -302,17 +584,15 @@ def save_nifti(
     nifti_version : {1, 2}, default: 1
         NIfTI format version to use. Version 2 is a simple extension to support
         larger files and arrays with dimension sizes greater than 32,767.
-    save_sidecar : bool, default: True
-        Whether to save additional metadata as a BIDS-style JSON sidecar file.
 
     Examples
     --------
-    >>> import confusius as fusi
+    >>> import confusius as cf
     >>> import xarray as xr
     >>> import numpy as np
     >>> da = xr.DataArray(np.random.rand(10, 32, 1, 64),
     ...                   dims=["time", "z", "y", "x"])
-    >>> fusi.io.save_nifti(da, "output.nii.gz")
+    >>> cf.io.save_nifti(da, "output.nii.gz")
     PosixPath("output.nii.gz")
     """
     import nibabel as nib
@@ -337,169 +617,137 @@ def save_nifti(
     if len(target_order) == len(current_dims):
         data = np.transpose(data, target_order)
 
-    voxel_dims = data_array.attrs.get("voxdim", [1.0, 1.0, 1.0])
-    if len(voxel_dims) < 3:
-        voxel_dims = list(voxel_dims) + [1.0] * (3 - len(voxel_dims))
+    # Insert singleton axes for any missing spatial dimensions so that the NIfTI axis
+    # order (dim 0 = x, dim 1 = y, dim 2 = z) is always respected. Without this, a (z,
+    # x) array would be saved as a 2D (x, z) NIfTI and reloaded as (x, y), corrupting
+    # the coordinate labels.
+    for insert_pos, dim in enumerate(("x", "y", "z")):
+        if dim not in current_dims:
+            data = np.expand_dims(data, axis=insert_pos)
 
-    tr = data_array.attrs.get("repetition_time")
-    if tr is None and "time" in data_array.coords:
-        time_coord = data_array.coords["time"]
-        if len(time_coord) > 1:
-            tr = float(time_coord[1] - time_coord[0])
-
-    zooms = list(voxel_dims[:3])
-    if "time" in current_dims:
-        zooms.append(tr if tr is not None else 1.0)
-
-    affine = np.eye(4)
-    for i, dim in enumerate(("x", "y", "z")):
+    spatial_zooms = []
+    for dim in ("x", "y", "z"):
         if dim in data_array.coords:
             coord = data_array.coords[dim]
             if len(coord) > 1:
-                spacing = float(coord[1] - coord[0])
-                affine[i, i] = spacing
-                affine[i, 3] = float(coord[0])
+                diffs = np.diff(coord.values)
+                if not np.allclose(diffs, diffs[0], rtol=1e-5):
+                    warnings.warn(
+                        f"Coordinate '{dim}' has non-uniform spacing. NIfTI requires "
+                        "a uniform grid; the median spacing will be used, which may "
+                        "not accurately represent the data geometry.",
+                    )
+                spatial_zooms.append(float(abs(np.median(diffs))))
+            elif "voxdim" in coord.attrs:
+                spatial_zooms.append(float(coord.attrs["voxdim"]))
+            else:
+                spatial_zooms.append(1.0)
+        else:
+            spatial_zooms.append(1.0)
 
-    if "affine" in data_array.attrs:
-        stored_affine = np.array(data_array.attrs["affine"])
-        if stored_affine.shape == (4, 4):
-            affine = stored_affine
+    tr_pixdim: float | None = None
+    time_sidecar: dict[str, Any] = {}
+    if "time" in data_array.coords:
+        time_values = data_array.coords["time"].values
+        tr_spacing, delay = _infer_repetition_time(time_values)
+        if tr_spacing is not None:
+            tr_pixdim = tr_spacing
+            time_sidecar["RepetitionTime"] = tr_spacing
+            if not np.isclose(delay, 0.0):
+                time_sidecar["DelayAfterTrigger"] = delay
+        else:
+            tr_pixdim = 0.0
+            time_sidecar["VolumeTiming"] = time_values.tolist()
+
+    zooms = spatial_zooms
+    if "time" in current_dims:
+        zooms.append(tr_pixdim if tr_pixdim is not None else 1.0)
+
+    T = np.array(
+        [
+            float(data_array.coords[dim][0]) if dim in data_array.coords else 0.0
+            for dim in ("x", "y", "z")
+        ]
+    )
+    Z = np.array(spatial_zooms[:3])
+
+    stored_affines: dict[str, Any] = data_array.attrs.get("affines", {})
+    sform_code = int(data_array.attrs.get("sform_code", 0))
+    qform_code = int(data_array.attrs.get("qform_code", 1))
+
+    qform_affine = _build_nifti_affine(stored_affines.get("probe_to_qform"), T, Z)
+    sform_affine = (
+        _build_nifti_affine(stored_affines.get("probe_to_sform"), T, Z)
+        if sform_code > 0
+        else None
+    )
 
     if nifti_version == 1:
         img_class = nib.Nifti1Image
     else:
         img_class = nib.Nifti2Image
 
-    nifti_img = img_class(data, affine)
+    constructor_affine = sform_affine if sform_affine is not None else qform_affine
+    nifti_img = img_class(data, constructor_affine)
 
     nifti_img.header.set_zooms(zooms)
-    nifti_img.header.set_sform(affine)
-    nifti_img.header.set_qform(affine)
+
+    # qform is always written; it is the primary affine when no sform is stored.
+    nifti_img.header.set_qform(qform_affine, code=qform_code)
+
+    if sform_affine is not None:
+        nifti_img.header.set_sform(sform_affine, code=sform_code)
+    else:
+        nifti_img.header.set_sform(None, code=0)
+
+    space_unit_nib = None
+    for dim in ("x", "y", "z"):
+        if dim in data_array.coords and "units" in data_array.coords[dim].attrs:
+            confusius_unit = data_array.coords[dim].attrs["units"]
+            space_unit_nib = _CONFUSIUS_TO_NIFTI_SPACE_UNITS.get(confusius_unit)
+            break
+
+    time_unit_nib = None
+    if "time" in data_array.coords and "units" in data_array.coords["time"].attrs:
+        confusius_unit = data_array.coords["time"].attrs["units"]
+        time_unit_nib = _CONFUSIUS_TO_NIFTI_TIME_UNITS.get(confusius_unit)
+
+    if space_unit_nib is not None or time_unit_nib is not None:
+        nifti_img.header.set_xyzt_units(
+            xyz=space_unit_nib or "unknown",
+            t=time_unit_nib or "unknown",
+        )
 
     nifti_img.to_filename(path)
 
-    if save_sidecar:
-        sidecar_attrs = {
-            k: v
-            for k, v in data_array.attrs.items()
-            if k not in ("affine",)  # Exclude fields stored in NIfTI header
-        }
+    sidecar_attrs = {
+        k: v
+        for k, v in data_array.attrs.items()
+        # Exclude fields stored directly in the NIfTI header or derived from it.
+        # "affines" is handled separately below.
+        if k not in ("sform_code", "qform_code", "affines")
+    }
 
-        for dim in ("x", "y", "z", "time"):
-            if dim in data_array.coords:
-                coord = data_array.coords[dim]
-                sidecar_attrs[f"{dim}_coordinates"] = coord.values.tolist()
-                if "units" in coord.attrs:
-                    sidecar_attrs[f"{dim}_units"] = coord.attrs["units"]
+    # Serialise affines that are not reconstructable from the NIfTI header (i.e.
+    # everything except "sform" and "qform") as lists of lists.
+    extra_affines = {
+        k: np.asarray(v).tolist()
+        for k, v in stored_affines.items()
+        if k not in ("probe_to_sform", "probe_to_qform")
+    }
+    if extra_affines:
+        sidecar_attrs["affines"] = extra_affines
 
-        if path.suffix == ".gz":
-            sidecar_path = path.with_suffix("").with_suffix(".json")
-        else:
-            sidecar_path = path.with_suffix(".json")
+    # Spatial coordinates and units are fully encoded in the NIfTI header (affine +
+    # xyzt_units) and are not duplicated here. Time is stored as
+    # RepetitionTime/DelayAfterTrigger (BIDS fields) for regular sampling, or as
+    # VolumeTiming for irregular onset times.
+    sidecar_attrs.update(time_sidecar)
 
-        with open(sidecar_path, "w") as f:
-            json.dump(sidecar_attrs, f, indent=2, default=str)
+    if path.suffix == ".gz":
+        sidecar_path = path.with_suffix("").with_suffix(".json")
+    else:
+        sidecar_path = path.with_suffix(".json")
 
-
-def convert_nifti_to_zarr(
-    input_path: str | Path,
-    output_path: str | Path,
-    chunks: tuple[int, ...] | Literal["auto"] = "auto",
-    load_sidecar: bool = True,
-    overwrite: bool = False,
-) -> zarr.Group:
-    """Convert a NIfTI file to Zarr format compatible with Xarray.
-
-    Converts NIfTI files to a Zarr group following ConfUSIus conventions,
-    with dimensions ``(time, z, y, x)`` and coordinates stored as separate
-    arrays.
-
-    Parameters
-    ----------
-    input_path : str or pathlib.Path
-        Path to the input NIfTI file (.nii or .nii.gz).
-    output_path : str or pathlib.Path
-        Path where the Zarr group will be saved.
-    chunks : tuple[int, ...] or "auto", default: "auto"
-        Chunk sizes for the Zarr array. If not provided, default are guessed based on
-        the shape and dtype.
-    load_sidecar : bool, default: True
-        Whether to load a BIDS-style JSON sidecar file for additional metadata.
-    overwrite : bool, default: False
-        Whether to overwrite an existing Zarr store at ``output_path``.
-
-    Returns
-    -------
-    zarr.Group
-        The created Zarr group containing the data array and coordinate arrays.
-        Can be opened directly with ``xarray.open_zarr()``.
-
-    Examples
-    --------
-    >>> import confusius as fusi
-    >>> zarr_group = fusi.io.convert_nifti_to_zarr(
-    ...     "brain.nii.gz", "brain.zarr"
-    ... )
-    >>> import xarray as xr
-    >>> ds = xr.open_zarr("brain.zarr")
-    >>> print(ds)
-    <xarray.Dataset>
-    Dimensions:  (time: 100, z: 1, y: 64, x: 64)
-    ...
-    """
-    input_path = check_path(input_path, type="file")
-    output_path = Path(output_path)
-
-    data_array = load_nifti(input_path, load_sidecar=load_sidecar)
-
-    shape = data_array.shape
-    dims = data_array.dims
-
-    mode = "w" if overwrite else "w-"
-    zarr_group = zarr.open_group(output_path, mode=mode)
-
-    zarr_array = zarr_group.create_array(
-        "data",
-        shape=shape,
-        chunks=chunks,
-        dtype=data_array.dtype,
-        dimension_names=[str(d) for d in dims],
-    )
-
-    # This will trigger Dask computation if lazy.
-    zarr_array[:] = np.asarray(data_array)
-
-    for dim in dims:
-        if dim in data_array.coords:
-            coord = data_array.coords[dim]
-            coord_array = zarr_group.create_array(
-                str(dim),
-                shape=coord.shape,
-                chunks=coord.shape,
-                dtype=coord.dtype,
-                dimension_names=[str(dim)],
-            )
-            coord_array[:] = coord.values
-
-            for attr_key, attr_val in coord.attrs.items():
-                coord_array.attrs[attr_key] = attr_val
-
-    for attr_key, attr_val in data_array.attrs.items():
-        if isinstance(attr_val, np.ndarray):
-            zarr_group.attrs[attr_key] = attr_val.tolist()
-        elif isinstance(attr_val, list):
-            zarr_group.attrs[attr_key] = [
-                item.item() if isinstance(item, np.generic) else item
-                for item in attr_val
-            ]
-        elif isinstance(attr_val, np.generic):
-            zarr_group.attrs[attr_key] = attr_val.item()
-        else:
-            zarr_group.attrs[attr_key] = attr_val
-
-    # Consolidate metadata for faster opening with Xarray.
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", message="Consolidated metadata")
-        zarr.consolidate_metadata(output_path)
-
-    return zarr_group
+    with open(sidecar_path, "w") as f:
+        json.dump(sidecar_attrs, f, indent=2, default=str)

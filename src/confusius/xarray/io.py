@@ -24,10 +24,11 @@ class FUSIIOAccessor:
 
     Examples
     --------
+    >>> import numpy as np
     >>> import xarray as xr
     >>> data = xr.DataArray(np.random.rand(10, 32, 1, 64),
     ...                       dims=["time", "z", "y", "x"])
-    >>> data.fusi.io.to_nii("output.nii.gz")
+    >>> data.fusi.io.to_nifti("output.nii.gz")
     """
 
     def __init__(self, xarray_obj: xr.DataArray) -> None:
@@ -37,13 +38,12 @@ class FUSIIOAccessor:
         self,
         path: str | Path,
         nifti_version: "NiftiVersion" = 1,
-        save_sidecar: bool = True,
     ) -> None:
         """Save DataArray to NIfTI format.
 
-        Saves the DataArray to a NIfTI file with optional JSON sidecar for additional
-        metadata. The data is transposed to NIfTI convention ``(x, y, z, time)`` before
-        saving.
+        Saves the DataArray to a NIfTI file and always writes a BIDS-style JSON sidecar
+        alongside it. The data is transposed to NIfTI convention ``(x, y, z, time)``
+        before saving.
 
         Parameters
         ----------
@@ -53,13 +53,6 @@ class FUSIIOAccessor:
         nifti_version : {1, 2}, default: 1
             NIfTI format version to use. Version 2 is a simple extension to support
             larger files and arrays with dimension sizes greater than 32,767.
-        save_sidecar : bool, default: True
-            Whether to save additional metadata as a BIDS-style JSON sidecar file.
-
-        Returns
-        -------
-        pathlib.Path
-            Path to the saved NIfTI file.
 
         Examples
         --------
@@ -71,6 +64,4 @@ class FUSIIOAccessor:
         """
         from confusius.io.nifti import save_nifti
 
-        save_nifti(
-            self._obj, path=path, nifti_version=nifti_version, save_sidecar=save_sidecar
-        )
+        save_nifti(self._obj, path=path, nifti_version=nifti_version)
