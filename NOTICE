@@ -12,3 +12,8 @@ Nilearn
 Copyright (c) The nilearn developers. All rights reserved.
 Licensed under the BSD-3-Clause License
 Source: https://github.com/nilearn/nilearn
+
+transforms3d
+Copyright (c) 2009-2024, Matthew Brett and transforms3d contributors
+Licensed under the BSD-2-Clause License
+Source: https://github.com/matthew-brett/transforms3d
