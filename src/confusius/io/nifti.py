@@ -628,26 +628,13 @@ def save_nifti(
         if dim not in current_dims:
             data = np.expand_dims(data, axis=insert_pos)
 
-    spatial_zooms = []
-    for dim in ("x", "y", "z"):
-        if dim in data_array.coords:
-            coord = data_array.coords[dim]
-            if len(coord) > 1:
-                diffs = np.diff(coord.values)
-                if not np.allclose(diffs, diffs[0], rtol=1e-5):
-                    warnings.warn(
-                        f"Coordinate '{dim}' has non-uniform spacing. NIfTI requires "
-                        "a uniform grid; the median spacing will be used, which may "
-                        "not accurately represent the data geometry.",
-                        stacklevel=find_stack_level(),
-                    )
-                spatial_zooms.append(float(abs(np.median(diffs))))
-            elif "voxdim" in coord.attrs:
-                spatial_zooms.append(float(coord.attrs["voxdim"]))
-            else:
-                spatial_zooms.append(1.0)
-        else:
-            spatial_zooms.append(1.0)
+    # .fusi.spacing handles voxdim fallback and warns on non-uniform/undefined dims.
+    # NIfTI requires a concrete float; fall back to 1.0 for undefined spacing.
+    spacing = data_array.fusi.spacing
+    spatial_zooms = [
+        abs(s) if (s := spacing.get(dim)) is not None else 1.0
+        for dim in ("x", "y", "z")
+    ]
 
     tr_pixdim: float | None = None
     time_sidecar: dict[str, Any] = {}

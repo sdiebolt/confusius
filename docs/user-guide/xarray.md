@@ -129,7 +129,8 @@ import xarray as xr
 import confusius as cf  # Registers the .fusi accessor automatically.
 ```
 
-The accessor is organized into six focused sub-accessors:
+The accessor is organized into six focused sub-accessors, plus a set of global helper
+properties:
 
 | Accessor | Description |
 |---|---|
@@ -145,6 +146,23 @@ intuitive syntax that allows quick operations directly on `DataArray` objects. T
 designed to be used for easy exploration and quick analyses, while the module-level
 functions are available for more complex workflows where you might prefer explicit
 function calls for readability.
+
+### Global Helpers
+
+Currently, a single global helper is available,
+[`.fusi.spacing`][confusius.xarray.FUSIAccessor.spacing], which returns the step size
+along each dimension as a dictionary:
+
+```python
+pwd.fusi.spacing
+# {'time': 0.6, 'z': 0.4, 'y': 0.049, 'x': 0.091}
+```
+
+This is particularly useful for sanity-checking voxel sizes or sampling periods before
+passing data to functions that require regular spacing (e.g., temporal filters, affine
+registration). `None` is returned with a warning for any dimension where spacing cannot
+be determined: non-uniform coordinates, a single coordinate point without a `voxdim`
+attribute, or no coordinate at all.
 
 ### IQ Processing ([`.fusi.iq`][confusius.xarray.FUSIIQAccessor])
 

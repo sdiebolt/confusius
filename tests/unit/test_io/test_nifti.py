@@ -304,7 +304,8 @@ class TestSaveNifti:
         da = xr.DataArray(data, dims=["z", "y", "x"])
 
         output_path = tmp_path / "output_3d.nii"
-        save_nifti(da, output_path)
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            save_nifti(da, output_path)
 
         assert output_path.exists()
         loaded = nib.nifti1.Nifti1Image.from_filename(output_path)
@@ -319,7 +320,8 @@ class TestSaveNifti:
         da = xr.DataArray(data, dims=["time", "z", "y", "x"])
 
         output_path = tmp_path / "output_4d.nii.gz"
-        save_nifti(da, output_path)
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            save_nifti(da, output_path)
 
         assert output_path.exists()
         assert output_path.suffixes == [".nii", ".gz"]
@@ -335,7 +337,7 @@ class TestSaveNifti:
             coords={"z": [0.0, 1.0, 3.0, 6.0], "x": [0.0, 1.0, 2.0]},
         )
 
-        with pytest.warns(UserWarning, match="non-uniform spacing"):
+        with pytest.warns(UserWarning, match="non-uniform"):
             save_nifti(da, tmp_path / "nonuniform.nii.gz")
 
     def test_save_creates_sidecar(self, tmp_path):
@@ -401,7 +403,8 @@ class TestRoundtrip:
         )
 
         nifti_path = tmp_path / "roundtrip_3d.nii.gz"
-        save_nifti(original, nifti_path)
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            save_nifti(original, nifti_path)
 
         loaded = load_nifti(nifti_path)
 
@@ -419,7 +422,8 @@ class TestRoundtrip:
         )
 
         nifti_path = tmp_path / "regular_timing.nii.gz"
-        save_nifti(original, nifti_path)
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            save_nifti(original, nifti_path)
 
         sidecar_path = tmp_path / "regular_timing.json"
         with open(sidecar_path) as f:
@@ -443,7 +447,8 @@ class TestRoundtrip:
         )
 
         nifti_path = tmp_path / "no_delay.nii.gz"
-        save_nifti(original, nifti_path)
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            save_nifti(original, nifti_path)
 
         sidecar_path = tmp_path / "no_delay.json"
         with open(sidecar_path) as f:
@@ -463,7 +468,8 @@ class TestRoundtrip:
         )
 
         nifti_path = tmp_path / "volume_timing.nii.gz"
-        save_nifti(original, nifti_path)
+        with pytest.warns(UserWarning):
+            save_nifti(original, nifti_path)
 
         sidecar_path = tmp_path / "volume_timing.json"
         with open(sidecar_path) as f:
@@ -501,7 +507,8 @@ class TestRoundtrip:
         original = xr.DataArray(original_data, dims=["time", "z", "y", "x"])
 
         nifti_path = tmp_path / "roundtrip_4d.nii.gz"
-        save_nifti(original, nifti_path)
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            save_nifti(original, nifti_path)
 
         loaded = load_nifti(nifti_path)
 

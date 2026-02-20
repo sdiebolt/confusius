@@ -1,12 +1,10 @@
 """Image visualization utilities for fUSI data."""
 
-import warnings
 from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 import xarray as xr
 
-from confusius._utils import find_stack_level
 from confusius.extract import extract_with_mask
 from confusius.signal import clean
 
@@ -123,27 +121,13 @@ def plot_napari(
             "Ensure 'dim_order' contains all spatial dimension names."
         )
 
-    # We can only set the scale parameter for Napari if all spatial dimensions have
-    # coordinates.
+    # Build the Napari scale from coordinate spacing. Warnings for undefined dims
+    # are emitted by .fusi.spacing; fall back to 1.0 so the scale bar still works.
     scale = None
-    coord_scales = []
-    for dim in spatial_dims:
-        if dim in data.coords:
-            if len(data.coords[dim]) > 1:
-                coord = data.coords[dim].values
-                coord_scales.append(float(np.median(np.diff(coord))))
-            elif "voxdim" in data.coords[dim].attrs:
-                coord_scales.append(float(data.coords[dim].attrs["voxdim"]))
-            else:
-                warnings.warn(
-                    f"Dimension '{dim}' has a single coordinate and no 'voxdim' "
-                    "attribute. Assuming unit spacing for the Napari scale bar.",
-                    stacklevel=find_stack_level(),
-                )
-                coord_scales.append(1.0)
-        else:
-            coord_scales = []
-            break
+    spacing = data.fusi.spacing
+    coord_scales = [
+        s if (s := spacing[dim]) is not None else 1.0 for dim in spatial_dims
+    ]
     if coord_scales:
         scale = coord_scales
 

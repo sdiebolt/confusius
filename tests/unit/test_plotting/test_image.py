@@ -175,11 +175,12 @@ class TestPlotNapari:
         mock_layer = MagicMock()
         mock_napari.imshow.return_value = (mock_viewer, mock_layer)
 
-        viewer, layer = plot_napari(data)
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            viewer, layer = plot_napari(data)
 
-        # Should work, scale should be None.
+        # No coordinates means spacing defaults to 1.0 for each spatial dim.
         call_args = mock_napari.imshow.call_args
-        assert call_args[1]["scale"] is None
+        assert call_args[1]["scale"] == [1.0, 1.0, 1.0]
 
     @patch("confusius.plotting.image.napari")
     def test_plot_napari_with_custom_dim_order(self, mock_napari, sample_data_4d):
