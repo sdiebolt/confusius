@@ -6,6 +6,8 @@ import numpy as np
 import xarray as xr
 from xarray.core.types import InterpOptions
 
+from confusius._utils import find_stack_level
+
 
 def _validate_sample_mask(
     signals: xr.DataArray, sample_mask: xr.DataArray
@@ -188,6 +190,7 @@ def interpolate_samples(
     if np.all(boolean_mask):
         warnings.warn(
             "All samples are marked as good, so no interpolation was performed.",
+            stacklevel=find_stack_level(),
         )
         return signals
 
@@ -288,6 +291,7 @@ def censor_samples(
     if np.all(boolean_mask):
         warnings.warn(
             "All samples are marked as good, so no censoring was performed.",
+            stacklevel=find_stack_level(),
         )
         return signals
 

@@ -13,6 +13,7 @@ import zarr
 if TYPE_CHECKING:
     from rich.progress import Progress
 
+from confusius._utils import find_stack_level
 from confusius.io.utils import check_path
 
 
@@ -315,7 +316,7 @@ def convert_echoframe_dat_to_zarr(
         warnings.warn(
             f"zarr_kwargs contains keys that are handled by function parameters and "
             f"will be overridden: {overridden_keys}.",
-            stacklevel=2,
+            stacklevel=find_stack_level(),
         )
     create_array_kwargs["shape"] = output_shape
     create_array_kwargs["chunks"] = chunks

@@ -7,6 +7,7 @@ import numpy as np
 import scipy.signal
 import xarray as xr
 
+from confusius._utils import find_stack_level
 from confusius.validation import validate_time_series
 
 
@@ -61,7 +62,7 @@ def _compute_sampling_rate_from_time(
                 f"({min_diff:.6f} to {max_diff:.6f}) has relative spread of "
                 f"{relative_range:.4f}, exceeding tolerance {time_uniformity_tolerance}. "
                 f"This may indicate dropped volumes or irregular sampling.",
-                stacklevel=3,
+                stacklevel=find_stack_level(),
             )
 
     return 1.0 / np.mean(time_diffs)

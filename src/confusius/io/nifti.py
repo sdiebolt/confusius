@@ -15,6 +15,7 @@ import numpy as np
 import numpy.typing as npt
 import xarray as xr
 
+from confusius._utils import find_stack_level
 from confusius.io.utils import check_path
 from confusius.registration.affines import decompose_affine
 
@@ -152,6 +153,7 @@ def _select_affines(
             "Both sform_code and qform_code are 0 in the NIfTI header. Coordinates "
             "will be computed from the voxel dimensions (pixdim) only, which may not "
             "reflect the true spatial orientation of the data.",
+            stacklevel=find_stack_level(),
         )
         return header.get_base_affine(), None
 
@@ -477,6 +479,7 @@ def load_nifti(
                 warnings.warn(
                     f"Sidecar RepetitionTime ({rep_time}) does not match pixdim[4] "
                     f"({tr}) in the NIfTI header. Using sidecar value.",
+                    stacklevel=find_stack_level(),
                 )
             coords["time"] = xr.DataArray(
                 delay + rep_time * np.arange(n_time),
@@ -636,6 +639,7 @@ def save_nifti(
                         f"Coordinate '{dim}' has non-uniform spacing. NIfTI requires "
                         "a uniform grid; the median spacing will be used, which may "
                         "not accurately represent the data geometry.",
+                        stacklevel=find_stack_level(),
                     )
                 spatial_zooms.append(float(abs(np.median(diffs))))
             elif "voxdim" in coord.attrs:

@@ -9,6 +9,7 @@ import numpy as np
 import numpy.typing as npt
 import xarray as xr
 
+from confusius._utils import find_stack_level
 from confusius.iq.clutter_filters import (
     clutter_filter_butterworth,
     clutter_filter_svd_from_cumulative_energy,
@@ -633,7 +634,7 @@ def process_iq_blocks(
             f"{remaining_frames} input volumes will be dropped because they do not fit "
             "into a complete window. Adjust `window_width` and `window_stride` to avoid "
             "this.",
-            stacklevel=2,
+            stacklevel=find_stack_level(),
         )
         iq = iq[:total_frames_in_windows]
 

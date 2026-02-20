@@ -12,6 +12,7 @@ import zarr
 if TYPE_CHECKING:
     from rich.progress import Progress
 
+from confusius._utils import find_stack_level
 from confusius.io.utils import check_path
 
 
@@ -352,7 +353,10 @@ class AUTCDATsLoader:
             if dat_path not in self.dats:
                 n_total_bytes = dat_path.stat().st_size
                 if n_total_bytes == 0:
-                    warnings.warn(f"Skipping empty AUTC DAT file: {dat_path}")
+                    warnings.warn(
+                        f"Skipping empty AUTC DAT file: {dat_path}",
+                        stacklevel=find_stack_level(),
+                    )
                     continue
 
                 dat = AUTCDAT(dat_path)
@@ -665,7 +669,7 @@ def convert_autc_dats_to_zarr(
         warnings.warn(
             f"zarr_kwargs contains keys that are handled by function parameters and "
             f"will be overridden: {overridden_keys}.",
-            stacklevel=2,
+            stacklevel=find_stack_level(),
         )
     create_array_kwargs["shape"] = output_shape
     create_array_kwargs["chunks"] = chunks
@@ -720,7 +724,7 @@ def convert_autc_dats_to_zarr(
             "Provide axial_coords in probe-relative mm for physically meaningful "
             "coordinates.",
             UserWarning,
-            stacklevel=2,
+            stacklevel=find_stack_level(),
         )
     if lateral_coords is None:
         warnings.warn(
@@ -728,7 +732,7 @@ def convert_autc_dats_to_zarr(
             "Provide lateral_coords in probe-relative mm for physically meaningful "
             "coordinates.",
             UserWarning,
-            stacklevel=2,
+            stacklevel=find_stack_level(),
         )
 
     y_values = (

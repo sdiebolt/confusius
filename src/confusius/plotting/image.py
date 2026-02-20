@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 import xarray as xr
 
+from confusius._utils import find_stack_level
 from confusius.extract import extract_with_mask
 from confusius.signal import clean
 
@@ -137,6 +138,7 @@ def plot_napari(
                 warnings.warn(
                     f"Dimension '{dim}' has a single coordinate and no 'voxdim' "
                     "attribute. Assuming unit spacing for the Napari scale bar.",
+                    stacklevel=find_stack_level(),
                 )
                 coord_scales.append(1.0)
         else:
