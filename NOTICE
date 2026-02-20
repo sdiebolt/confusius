@@ -3,7 +3,7 @@ Copyright 2025-2026 Samuel Le Meur-Diebolt
 
 This product includes software developed by:
 
-Nipype (nipype.algorithms.confounds.compute_dvars)
+Nipype
 Copyright (c) 2009-2016, Nipype developers
 Licensed under the Apache License 2.0
 Source: https://github.com/nipy/nipype

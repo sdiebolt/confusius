@@ -68,7 +68,7 @@ def compose_affine(
 
     Returns
     -------
-    A : (N+1, N+1) numpy.ndarray
+    (N+1, N+1) numpy.ndarray
         Homogeneous affine transformation matrix.
 
     Notes
