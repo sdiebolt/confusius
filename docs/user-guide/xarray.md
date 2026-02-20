@@ -278,8 +278,8 @@ fig, ax = registered.fusi.plot.carpet(mask=mask)
 
 ### Saving to Files ([`.fusi.io`][confusius.xarray.FUSIIOAccessor])
 
-Save to NIfTI with an accompanying JSON sidecar that stores coordinates and
-attributes:
+Save to NIfTI with an accompanying JSON sidecar that stores custom attributes and
+BIDS timing fields:
 
 ```python
 registered.fusi.io.to_nifti("sub-01_task-awake_pwd.nii.gz")

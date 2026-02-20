@@ -181,17 +181,14 @@ For large derived acquisitions or workflows requiring repeated access to subsets
 data, converting NIfTI to Zarr provides better performance:
 
 ```python
-from confusius.io import convert_nifti_to_zarr
+import confusius as cf
 
 # Convert NIfTI to Zarr for efficient chunked access.
-convert_nifti_to_zarr(
-    input_path="sub-01_task-awake_pwd.nii.gz",
-    output_path="sub-01_task-awake_pwd.zarr",
-)
+cf.io.load_nifti("sub-01_task-awake_pwd.nii.gz").to_zarr("sub-01_task-awake_pwd.zarr")
 ```
 
-ConfUSIus automatically preserves BIDS sidecar metadata during conversion, ensuring
-acquisition parameters remain accessible.
+BIDS sidecar metadata will be retained during conversion, ensuring acquisition
+parameters remain accessible.
 
 ## Loading Data
 
@@ -288,14 +285,14 @@ DataArrays:
 from confusius.io import load_nifti
 
 # Load with automatic BIDS sidecar metadata.
-da = load_nifti("sub-01_task-awake_pwd.nii.gz", load_sidecar=True)
+da = load_nifti("sub-01_task-awake_pwd.nii.gz")
 print(da.dims)
 # Output: ('time', 'z', 'y', 'x')
 ```
 
-By default, ConfUSIus automatically loads a JSON sidecar file with the same basename
-(e.g., `sub-01_task-awake_pwd.json`) if present, following the BIDS specification for
-fUSI metadata.
+ConfUSIus automatically loads a JSON sidecar file with the same basename (e.g.,
+`sub-01_task-awake_pwd.json`) if present, following the BIDS specification for fUSI
+metadata.
 
 ## Saving Data
 
@@ -309,7 +306,7 @@ You can save DataArrays to NIfTI using either the module function
     ```python
     from confusius.io import save_nifti
 
-    save_nifti(data_array, "output.nii.gz", save_sidecar=True)
+    save_nifti(data_array, "output.nii.gz")
     ```
 
 === "Xarray accessor"
@@ -320,8 +317,10 @@ You can save DataArrays to NIfTI using either the module function
     data_array.fusi.io.to_nifti("output.nii.gz")
     ```
 
-Both methods create a JSON sidecar file containing additional metadata (coordinates,
-units, custom attributes) alongside the NIfTI file, ensuring BIDS compatibility.
+Both methods always create a JSON sidecar file alongside the NIfTI file. Spatial
+coordinates and units are encoded in the NIfTI header itself; the sidecar stores
+custom attributes and BIDS timing fields (e.g., `RepetitionTime`, `DelayAfterTrigger`, 
+`VolumeTiming`).
 
 ### Saving to Zarr
 
@@ -340,6 +339,6 @@ Quick reference for converting between formats:
 |------|-----|----------|
 | AUTC DATs | Zarr | [`convert_autc_dats_to_zarr`][confusius.io.convert_autc_dats_to_zarr] |
 | EchoFrame DAT | Zarr | [`convert_echoframe_dat_to_zarr`][confusius.io.convert_echoframe_dat_to_zarr] |
-| NIfTI | Zarr | [`convert_nifti_to_zarr`][confusius.io.convert_nifti_to_zarr] |
+| NIfTI | Xarray DataArray | [`load_nifti`][confusius.io.load_nifti] |
 | Xarray DataArray | NIfTI | [`save_nifti`][confusius.io.save_nifti] or [`.fusi.io.to_nifti`][confusius.xarray.FUSIIOAccessor.to_nifti] |
 
