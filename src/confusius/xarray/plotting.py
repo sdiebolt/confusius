@@ -51,6 +51,7 @@ class FUSIPlotAccessor:
         show_colorbar: bool = True,
         show_scale_bar: bool = True,
         dim_order: tuple[str, ...] | None = None,
+        viewer: "Viewer | None" = None,
         **imshow_kwargs,
     ) -> "tuple[Viewer, list[Image]]":
         """Display data in napari viewer.
@@ -71,6 +72,9 @@ class FUSIPlotAccessor:
         dim_order : tuple[str, ...], optional
             Dimension ordering for the spatial axes (last three dimensions). If not
             provided, the ordering of the last three dimensions in `data` is used.
+        viewer : napari.Viewer, optional
+            Existing Napari viewer to add the image layer to. If not provided, a new
+            viewer is created.
         **imshow_kwargs
             Additional keyword arguments passed to `napari.imshow`, such as
             ``contrast_limits``, ``colormap``, etc.
@@ -115,6 +119,10 @@ class FUSIPlotAccessor:
 
         >>> # Different dimension ordering (e.g., depth, elevation, lateral)
         >>> viewer, layer = data.fusi.plot.napari(dim_order=("y", "z", "x"))
+
+        >>> # Add a second dataset as a new layer in an existing viewer
+        >>> viewer, layer1 = data1.fusi.plot.napari()
+        >>> viewer, layer2 = data2.fusi.plot.napari(viewer=viewer)
         """
         return plot_napari(
             self._obj,
@@ -123,6 +131,7 @@ class FUSIPlotAccessor:
             show_colorbar=show_colorbar,
             show_scale_bar=show_scale_bar,
             dim_order=dim_order,
+            viewer=viewer,
             **imshow_kwargs,
         )
 

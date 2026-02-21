@@ -204,7 +204,7 @@ class TestPlotNapari:
         ]
         assert call_args[1]["scale"] == pytest.approx(expected_scale)
         # Order should be (time, y, z, x) = (0, 2, 1, 3)
-        assert call_args[1]["order"] == [0, 2, 1, 3]
+        assert call_args[1]["order"] == (0, 2, 1, 3)
 
     @patch("confusius.plotting.image.napari")
     def test_plot_napari_invalid_dim_order(self, mock_napari, sample_data_4d):
@@ -215,6 +215,45 @@ class TestPlotNapari:
 
         with pytest.raises(ValueError, match="dim_order"):
             plot_napari(sample_data_4d, dim_order=("a", "b", "c"))
+
+    @patch("confusius.plotting.image.napari")
+    def test_plot_napari_with_existing_viewer(self, mock_napari, sample_data_4d):
+        """plot_napari passes an existing viewer to napari.imshow."""
+        mock_viewer = MagicMock()
+        mock_layer = MagicMock()
+        mock_napari.imshow.return_value = (mock_viewer, mock_layer)
+
+        viewer, layer = plot_napari(sample_data_4d, viewer=mock_viewer)
+
+        call_args = mock_napari.imshow.call_args
+        assert call_args[1]["viewer"] is mock_viewer
+        assert viewer is mock_viewer
+
+    @patch("confusius.plotting.image.napari")
+    def test_plot_napari_uses_data_name(self, mock_napari, sample_data_4d):
+        """plot_napari uses DataArray name as default layer name."""
+        mock_viewer = MagicMock()
+        mock_layer = MagicMock()
+        mock_napari.imshow.return_value = (mock_viewer, mock_layer)
+
+        named_data = sample_data_4d.rename("power")
+        plot_napari(named_data)
+
+        call_args = mock_napari.imshow.call_args
+        assert call_args[1]["name"] == "power"
+
+    @patch("confusius.plotting.image.napari")
+    def test_plot_napari_explicit_name_takes_precedence(self, mock_napari, sample_data_4d):
+        """plot_napari respects explicitly passed name over DataArray name."""
+        mock_viewer = MagicMock()
+        mock_layer = MagicMock()
+        mock_napari.imshow.return_value = (mock_viewer, mock_layer)
+
+        named_data = sample_data_4d.rename("power")
+        plot_napari(named_data, name="custom")
+
+        call_args = mock_napari.imshow.call_args
+        assert call_args[1]["name"] == "custom"
 
     @patch("confusius.plotting.image.napari")
     def test_plot_napari_invalid_scale_method(self, mock_napari, sample_data_4d):
