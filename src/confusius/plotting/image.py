@@ -52,8 +52,8 @@ def plot_napari(
         Dimension ordering for the spatial axes (last three dimensions). If not
         provided, the ordering of the last three dimensions in `data` is used.
     viewer : napari.Viewer, optional
-        Existing Napari viewer to add the image layer to. If not provided, a new
-        viewer is created.
+        Existing Napari viewer to add the image layer to. If not provided, a new viewer
+        is created.
     **imshow_kwargs
         Additional keyword arguments passed to `napari.imshow`, such as
         ``contrast_limits``, ``colormap``, etc.
@@ -77,6 +77,12 @@ def plot_napari(
     ``voxdim`` attribute on the coordinate variable (``data.coords[dim].attrs["voxdim"]``)
     and uses it as the spacing. If no such attribute is found, unit spacing is assumed
     and a warning is emitted.
+
+    The first coordinate value of each spatial dimension is used as the ``translate``
+    parameter so that the image is positioned at its correct physical origin. For
+    dimensions without coordinates, a translate of ``0.0`` is used. This ensures that
+    multiple datasets with different fields of view overlay correctly when added to the
+    same viewer.
 
     Examples
     --------
@@ -129,8 +135,8 @@ def plot_napari(
             "Ensure 'dim_order' contains all spatial dimension names."
         )
 
-    # Build the Napari scale from coordinate spacing. Warnings for undefined dims
-    # are emitted by .fusi.spacing; fall back to 1.0 so the scale bar still works.
+    # Build the Napari scale from coordinate spacing. Warnings for undefined dims are
+    # emitted by .fusi.spacing; fall back to 1.0 so the scale bar still works.
     scale = None
     spacing = data.fusi.spacing
     coord_scales = [
@@ -138,6 +144,13 @@ def plot_napari(
     ]
     if coord_scales:
         scale = coord_scales
+
+    # Build translate from the first coordinate value per spatial dim (physical origin).
+    # Falls back to 0.0 for dimensions without coordinates.
+    coord_translates = [
+        float(data.coords[dim].values[0]) if dim in data.coords else 0.0
+        for dim in spatial_dims
+    ]
 
     # The last 2 (2D) or 3 (3D) dimensions are the displayed spatial axes.
     if dim_order is not None:
@@ -151,6 +164,7 @@ def plot_napari(
 
     imshow_kwargs.setdefault("axis_labels", all_dims)
     imshow_kwargs.setdefault("name", data.name)
+    imshow_kwargs.setdefault("translate", coord_translates)
     viewer, image_layer = napari.imshow(
         data,
         scale=scale,

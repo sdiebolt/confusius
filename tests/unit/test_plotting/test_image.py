@@ -217,6 +217,36 @@ class TestPlotNapari:
             plot_napari(sample_data_4d, dim_order=("a", "b", "c"))
 
     @patch("confusius.plotting.image.napari")
+    def test_plot_napari_translate_from_coords(self, mock_napari, sample_data_4d):
+        """plot_napari sets translate from the first coordinate value of each spatial dim."""
+        mock_viewer = MagicMock()
+        mock_layer = MagicMock()
+        mock_napari.imshow.return_value = (mock_viewer, mock_layer)
+
+        plot_napari(sample_data_4d)
+
+        call_args = mock_napari.imshow.call_args
+        z = np.linspace(0, 4, 20)
+        y = np.linspace(0, 20, 64)
+        x = np.linspace(0, 10, 128)
+        expected_translate = [float(z[0]), float(y[0]), float(x[0])]
+        assert call_args[1]["translate"] == pytest.approx(expected_translate)
+
+    @patch("confusius.plotting.image.napari")
+    def test_plot_napari_translate_fallback_without_coords(self, mock_napari):
+        """plot_napari uses 0.0 translate for dimensions without coordinates."""
+        data = xr.DataArray(np.random.rand(10, 20, 64, 128), dims=["time", "z", "y", "x"])
+        mock_viewer = MagicMock()
+        mock_layer = MagicMock()
+        mock_napari.imshow.return_value = (mock_viewer, mock_layer)
+
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            plot_napari(data)
+
+        call_args = mock_napari.imshow.call_args
+        assert call_args[1]["translate"] == pytest.approx([0.0, 0.0, 0.0])
+
+    @patch("confusius.plotting.image.napari")
     def test_plot_napari_with_existing_viewer(self, mock_napari, sample_data_4d):
         """plot_napari passes an existing viewer to napari.imshow."""
         mock_viewer = MagicMock()
