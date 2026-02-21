@@ -132,7 +132,6 @@ def plot_napari(
         scale = coord_scales
 
     # The last 2 (2D) or 3 (3D) dimensions are the displayed spatial axes.
-    order = None
     if dim_order is not None:
         order = []
         if time_dim:
@@ -140,12 +139,12 @@ def plot_napari(
         for dim in dim_order:
             if dim in all_dims:
                 order.append(all_dims.index(dim))
+        imshow_kwargs["order"] = tuple(order)
 
     imshow_kwargs.setdefault("axis_labels", all_dims)
     viewer, image_layer = napari.imshow(
         data,
         scale=scale,
-        order=order,
         **imshow_kwargs,
     )
 
