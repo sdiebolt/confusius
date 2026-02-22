@@ -97,21 +97,14 @@ class TestFilterButterworth:
             order=order,
         )
 
-        # Apply scipy filter directly.
+        # Compute expected using the same sampling rate our code derives (median of
+        # diffs), so that tiny float64 rounding differences don't break the comparison.
+        computed_fs = 1.0 / float(np.median(np.diff(signals.coords["time"].values)))
         sos = scipy.signal.butter(
             order,
             [low_cutoff, high_cutoff],
             btype="bandpass",
-            fs=sampling_rate,
-            output="sos",
-        )
-
-        # Apply scipy filter directly.
-        sos = scipy.signal.butter(
-            order,
-            [low_cutoff, high_cutoff],
-            btype="bandpass",
-            fs=sampling_rate,
+            fs=computed_fs,
             output="sos",
         )
         expected = scipy.signal.sosfiltfilt(sos, data, axis=0)
@@ -342,6 +335,18 @@ class TestFilterButterworth:
         )
         with pytest.raises(ValueError, match="requires at least .* timepoints"):
             filter_butterworth(signals, high_cutoff=0.1, order=5)
+
+    def test_raises_when_nonuniform_time(self):
+        """Should raise ValueError if time coordinates are not uniformly sampled."""
+        # Introduce a gap at the midpoint (simulating a dropped volume).
+        time = np.concatenate([np.arange(50), np.arange(51, 101)]) / 100.0
+        signals = xr.DataArray(
+            np.random.randn(100, 10),
+            dims=["time", "voxels"],
+            coords={"time": time},
+        )
+        with pytest.raises(ValueError, match="Non-uniform 'time' coordinates"):
+            filter_butterworth(signals, high_cutoff=0.1)
 
     def test_raises_when_time_is_chunked(self):
         """Should raise ValueError if time dimension is chunked."""

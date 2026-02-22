@@ -151,6 +151,10 @@ class FUSIAccessor:
     def spacing(self) -> dict[str, float | None]:
         """Coordinate spacing for all dimensions.
 
+        Spacing is computed as the median of consecutive coordinate differences.
+        A coordinate is considered uniform if its relative interval range
+        ``(max_diff - min_diff) / median_diff`` is below 1%.
+
         Returns
         -------
         dict[str, float | None]

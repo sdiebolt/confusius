@@ -41,7 +41,10 @@ def find_stack_level() -> int:
     return n
 
 
-def _compute_spacing(data: xr.DataArray) -> dict[str, float | None]:
+def _compute_spacing(
+    data: xr.DataArray,
+    uniformity_tolerance: float = 1e-2,
+) -> dict[str, float | None]:
     """Compute coordinate spacing for all dimensions of a DataArray.
 
     For each dimension:
@@ -53,10 +56,17 @@ def _compute_spacing(data: xr.DataArray) -> dict[str, float | None]:
     - If the coordinate is missing or has non-uniform spacing, returns ``None`` with a
       warning.
 
+    Uniformity is assessed as ``(max_diff - min_diff) / median_diff``, i.e. the
+    relative range of consecutive differences.
+
     Parameters
     ----------
     data : xarray.DataArray
         DataArray whose coordinate spacing to compute.
+    uniformity_tolerance : float, default: 1e-2
+        Maximum allowed relative range of consecutive differences, defined as
+        ``(max_diff - min_diff) / median_diff``. Coordinates whose relative range
+        exceeds this threshold are considered non-uniform.
 
     Returns
     -------
@@ -88,7 +98,8 @@ def _compute_spacing(data: xr.DataArray) -> dict[str, float | None]:
                 result[dim] = None
             continue
         diffs = np.diff(coord.values)
-        if not np.allclose(diffs, diffs[0], rtol=1e-5):
+        median_diff = np.median(diffs)
+        if (np.max(diffs) - np.min(diffs)) / median_diff > uniformity_tolerance:
             warnings.warn(
                 f"Coordinate '{dim}' has non-uniform sampling; spacing is undefined.",
                 UserWarning,
@@ -96,7 +107,39 @@ def _compute_spacing(data: xr.DataArray) -> dict[str, float | None]:
             )
             result[dim] = None
         else:
-            result[dim] = float(np.median(diffs))
+            result[dim] = float(median_diff)
+    return result
+
+
+def _compute_origin(
+    data: xr.DataArray,
+) -> dict[str, float]:
+    """Compute the physical origin (first coordinate value) for each dimension.
+
+    For each dimension, returns the first coordinate value. If a coordinate is missing,
+    warns and falls back to ``0.0``.
+
+    Parameters
+    ----------
+    data : xarray.DataArray
+        DataArray whose coordinate origins to compute.
+
+    Returns
+    -------
+    dict[str, float]
+        Origin per dimension in DataArray dimension order.
+    """
+    result: dict[str, float] = {}
+    for dim in (str(d) for d in data.dims):
+        if dim not in data.coords:
+            warnings.warn(
+                f"Dimension '{dim}' has no coordinate; origin defaults to 0.0.",
+                UserWarning,
+                stacklevel=find_stack_level(),
+            )
+            result[dim] = 0.0
+        else:
+            result[dim] = float(data.coords[dim].values.flat[0])
     return result
 
 

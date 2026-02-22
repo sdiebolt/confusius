@@ -7,65 +7,8 @@ import numpy as np
 import scipy.signal
 import xarray as xr
 
-from confusius._utils import find_stack_level
+from confusius._utils import _compute_spacing
 from confusius.validation import validate_time_series
-
-
-def _compute_sampling_rate_from_time(
-    signals: xr.DataArray, time_uniformity_tolerance: float | None
-) -> float:
-    """Compute sampling rate from time coordinates and check uniformity.
-
-    Parameters
-    ----------
-    signals : xarray.DataArray
-        Signals with time dimension and coordinates.
-    time_uniformity_tolerance : float or None
-        Maximum allowed relative range in sampling intervals.
-
-    Returns
-    -------
-    float
-        Computed sampling rate in Hz.
-
-    Raises
-    ------
-    ValueError
-        If time coordinates missing or insufficient timepoints.
-
-    Warns
-    -----
-    UserWarning
-        If time sampling is non-uniform beyond threshold.
-    """
-    if "time" not in signals.coords:
-        raise ValueError(
-            "Signals must have 'time' coordinates to compute sampling rate."
-        )
-
-    time_coords = signals.coords["time"].values
-    time_diffs = np.diff(time_coords)
-
-    if len(time_diffs) == 0:
-        raise ValueError("Need at least 2 time points to compute sampling rate.")
-
-    if time_uniformity_tolerance is not None:
-        min_diff = np.min(time_diffs)
-        max_diff = np.max(time_diffs)
-        median_diff = np.median(time_diffs)
-
-        relative_range = (max_diff - min_diff) / median_diff
-
-        if relative_range > time_uniformity_tolerance:
-            warnings.warn(
-                f"Non-uniform time sampling detected: interval range "
-                f"({min_diff:.6f} to {max_diff:.6f}) has relative spread of "
-                f"{relative_range:.4f}, exceeding tolerance {time_uniformity_tolerance}. "
-                f"This may indicate dropped volumes or irregular sampling.",
-                stacklevel=find_stack_level(),
-            )
-
-    return 1.0 / np.mean(time_diffs)
 
 
 def _validate_cutoff_frequencies(
@@ -201,7 +144,7 @@ def filter_butterworth(
     order: int = 5,
     padtype: str = "odd",
     padlen: int | None = None,
-    time_uniformity_tolerance: float | None = 0.01,
+    uniformity_tolerance: float = 1e-2,
 ) -> xr.DataArray:
     """Apply a low-pass, high-pass, or band-pass Butterworth digital filter to signals.
 
@@ -235,11 +178,11 @@ def filter_butterworth(
     padlen : int, optional
         Number of elements to pad at each end. If not provided, uses scipy's default:
         ``3 * (2 * n_sections + 1 - compensation)`` where ``n_sections = ceil(order/2)``.
-    time_uniformity_tolerance : float or None, default: 0.01
-        Maximum allowed relative range in sampling intervals, defined as
-        ``(max_interval - min_interval) / median_interval``. Used to detect dropped
-        volumes or irregular sampling. For example, 0.01 means intervals can vary by
-        at most 1% of the median. Set to ``None`` to disable uniformity checking.
+    uniformity_tolerance : float, default: 1e-2
+        Maximum allowed relative range of consecutive time intervals, defined as
+        ``(max_interval - min_interval) / median_interval``. Raise a ``ValueError`` if
+        the time coordinate exceeds this threshold. Increase this value to tolerate
+        slight timestamp jitter (e.g. from acquisition clocks or dropped volumes).
 
     Returns
     -------
@@ -256,7 +199,7 @@ def filter_butterworth(
         - If cutoff frequencies are invalid (negative or >= Nyquist frequency).
         - If insufficient timepoints for the filter order ``(needs >
           3*(2*ceil(order/2)+1))``.
-        - If time sampling is non-uniform beyond `time_uniformity_tolerance`.
+        - If ``time`` coordinates are missing or non-uniformly sampled.
 
     Notes
     -----
@@ -295,7 +238,19 @@ def filter_butterworth(
     """
     time_axis = validate_time_series(signals, "filtering")
 
-    sampling_rate = _compute_sampling_rate_from_time(signals, time_uniformity_tolerance)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        spacing = _compute_spacing(signals, uniformity_tolerance=uniformity_tolerance)
+
+    time_spacing = spacing["time"]
+    if time_spacing is None:
+        raise ValueError(
+            "Non-uniform 'time' coordinates detected. Butterworth filtering requires "
+            "uniformly sampled data. Consider interpolating your data to a regular "
+            "time grid first."
+        )
+
+    sampling_rate = 1.0 / time_spacing
     _validate_cutoff_frequencies(
         low_cutoff=low_cutoff, high_cutoff=high_cutoff, nyquist=sampling_rate / 2.0
     )
