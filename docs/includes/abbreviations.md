@@ -12,3 +12,7 @@
 *[FIR]: Finite Impulse Response
 *[FDR]: False Discovery Rate
 *[FWER]: Family-Wise Error Rate
+*[SNR]: Signal-to-Noise Ratio
+*[CNR]: Contrast-to-Noise Ratio
+*[DOF]: Degrees of Freedom
+
