@@ -2,7 +2,7 @@
 
 import xarray as xr
 
-from confusius._utils import _compute_spacing
+from confusius._utils import _compute_origin, _compute_spacing
 from confusius.xarray.extract import FUSIExtractAccessor
 from confusius.xarray.io import FUSIIOAccessor
 from confusius.xarray.iq import FUSIIQAccessor
@@ -175,3 +175,30 @@ class FUSIAccessor:
         {'y': 0.2, 'x': 0.1}
         """
         return _compute_spacing(self._obj)
+
+    @property
+    def origin(self) -> dict[str, float]:
+        """Physical origin (first coordinate value) for all dimensions.
+
+        For each dimension, returns the first coordinate value. If a coordinate is
+        missing, warns and falls back to ``0.0``.
+
+        Returns
+        -------
+        dict[str, float]
+            Origin per dimension, in DataArray dimension order.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> import numpy as np
+        >>> import confusius  # noqa: F401
+        >>> data = xr.DataArray(
+        ...     np.zeros((10, 20)),
+        ...     dims=["y", "x"],
+        ...     coords={"y": np.arange(10) * 0.2, "x": np.arange(20) * 0.1},
+        ... )
+        >>> data.fusi.origin
+        {'y': 0.0, 'x': 0.0}
+        """
+        return _compute_origin(self._obj)

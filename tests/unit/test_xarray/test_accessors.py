@@ -141,7 +141,57 @@ class TestFUSIAccessor:
         np.testing.assert_allclose(result.values, expected_db)
 
 
-class TestSpacing:
+class TestOrigin:
+    """Tests for fusi.origin."""
+
+    def test_returns_correct_origin(self):
+        """Returns the first coordinate value for each dimension."""
+        data = xr.DataArray(
+            np.zeros((10, 20)),
+            dims=["y", "x"],
+            coords={"y": np.arange(10) * 0.2 + 1.0, "x": np.arange(20) * 0.1 + 5.0},
+        )
+        assert data.fusi.origin == {"y": pytest.approx(1.0), "x": pytest.approx(5.0)}
+
+    def test_zero_origin(self):
+        """Returns 0.0 when coordinates start at zero."""
+        data = xr.DataArray(
+            np.zeros((10, 20)),
+            dims=["y", "x"],
+            coords={"y": np.arange(10) * 0.2, "x": np.arange(20) * 0.1},
+        )
+        assert data.fusi.origin == {"y": pytest.approx(0.0), "x": pytest.approx(0.0)}
+
+    def test_missing_coord_warns_and_returns_zero(self):
+        """Missing coordinate warns and falls back to 0.0."""
+        data = xr.DataArray(np.zeros((5, 10)), dims=["y", "x"])
+        with pytest.warns(UserWarning, match="no coordinate"):
+            origin = data.fusi.origin
+        assert origin["y"] == pytest.approx(0.0)
+        assert origin["x"] == pytest.approx(0.0)
+
+    def test_dim_order_preserved(self):
+        """Returned dict keys follow DataArray dimension order."""
+        data = xr.DataArray(
+            np.zeros((5, 10, 20)),
+            dims=["z", "y", "x"],
+            coords={
+                "z": np.arange(5) * 0.5 + 2.0,
+                "y": np.arange(10) * 0.2 + 1.0,
+                "x": np.arange(20) * 0.1,
+            },
+        )
+        assert list(data.fusi.origin.keys()) == ["z", "y", "x"]
+
+    def test_single_point_coordinate(self):
+        """Single-point coordinate returns its value as origin."""
+        data = xr.DataArray(
+            np.zeros((1, 10)),
+            dims=["z", "x"],
+            coords={"z": [3.5], "x": np.arange(10) * 0.1},
+        )
+        assert data.fusi.origin["z"] == pytest.approx(3.5)
+
     """Tests for fusi.spacing."""
 
     @pytest.fixture
@@ -216,5 +266,3 @@ class TestSpacing:
             },
         )
         assert list(data.fusi.spacing.keys()) == ["z", "y", "x"]
-
-
