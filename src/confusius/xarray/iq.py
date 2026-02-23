@@ -81,8 +81,11 @@ class FUSIIQAccessor:
             filters to compute clutter vectors from masked voxels. If not provided,
             all voxels are used. The mask spatial coordinates (z, y, x) must match
             the IQ data coordinates.
-        low_cutoff, high_cutoff : int or float, optional
-            Low and high cutoffs for clutter filtering. Interpretation depends on
+        low_cutoff : int or float, optional
+            Low cutoff for clutter filtering. Interpretation depends on `filter_method`.
+            If not provided, uses method-specific defaults.
+        high_cutoff : int or float, optional
+            High cutoff for clutter filtering. Interpretation depends on
             `filter_method`. If not provided, uses method-specific defaults.
         butterworth_order : int, default: 4
             Order of Butterworth filter. Effective order is doubled due to
@@ -173,8 +176,11 @@ class FUSIIQAccessor:
             filters to compute clutter vectors from masked voxels. If not provided,
             all voxels are used. The mask spatial coordinates (z, y, x) must match
             the IQ data coordinates.
-        low_cutoff, high_cutoff : int or float, optional
-            Low and high cutoffs for clutter filtering. Interpretation depends on
+        low_cutoff : int or float, optional
+            Low cutoff for clutter filtering. Interpretation depends on `filter_method`.
+            If not provided, uses method-specific defaults.
+        high_cutoff : int or float, optional
+            High cutoff for clutter filtering. Interpretation depends on
             `filter_method`. If not provided, uses method-specific defaults.
         butterworth_order : int, default: 4
             Order of Butterworth filter. Effective order is doubled due to
