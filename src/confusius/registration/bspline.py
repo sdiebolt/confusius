@@ -231,7 +231,6 @@ def _extract_bspline(transform: "sitk.Transform") -> "sitk.BSplineTransform":
     TypeError
         If no ``BSplineTransform`` can be found.
     """
-    import SimpleITK as sitk
 
     name = transform.GetName()
     if "BSpline" in name:
