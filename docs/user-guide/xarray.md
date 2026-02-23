@@ -149,20 +149,32 @@ function calls for readability.
 
 ### Global Helpers
 
-Currently, a single global helper is available,
-[`.fusi.spacing`][confusius.xarray.FUSIAccessor.spacing], which returns the step size
-along each dimension as a dictionary:
+Currently, two global helpers are available:
 
-```python
-pwd.fusi.spacing
-# {'time': 0.6, 'z': 0.4, 'y': 0.049, 'x': 0.091}
-```
+- [`.fusi.spacing`][confusius.xarray.FUSIAccessor.spacing], which returns the step size
+  along each dimension as a dictionary:
 
-This is particularly useful for sanity-checking voxel sizes or sampling periods before
-passing data to functions that require regular spacing (e.g., temporal filters, affine
-registration). `None` is returned with a warning for any dimension where spacing cannot
-be determined: non-uniform coordinates, a single coordinate point without a `voxdim`
-attribute, or no coordinate at all.
+  ```python
+  pwd.fusi.spacing
+  # {'time': 0.6, 'z': 0.4, 'y': 0.049, 'x': 0.091}
+  ```
+
+    This is particularly useful for sanity-checking voxel sizes or sampling periods
+    before passing data to functions that require regular spacing (e.g., temporal
+    filters, affine registration). `None` is returned with a warning for any dimension
+    where spacing cannot be determined: non-uniform coordinates, a single coordinate
+    point without a `voxdim` attribute, or no coordinate at all.
+
+- [`.fusi.origin`][confusius.xarray.FUSIAccessor.origin], which returns the coordinate
+  values at the origin along each dimension as a dictionary:
+
+  ```python
+  pwd.fusi.origin
+  # {'time': 0.299, 'z': 0.0, 'y': 5.664, 'x': -3.583}
+  ```
+
+  This is typically used for computing the affine transformation corresponding to the
+  physical coordinates of the DataArray, for example when saving to NIfTI.
 
 ### IQ Processing ([`.fusi.iq`][confusius.xarray.FUSIIQAccessor])
 
