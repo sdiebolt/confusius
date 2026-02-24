@@ -1,11 +1,11 @@
 :root > * {
-  --md-primary-fg-color: #ee5653;
-  --md-primary-fg-color--light: #ffccbc;
-  --md-primary-fg-color--dark: #c62828;
-  --md-accent-fg-color: #ee5653;
-  --md-accent-fg-color--transparent: #ee56531a;
-  --md-accent-bg-color: #ee5653;
-  --md-accent-bg-color--light: #ffccbc;
+  --md-primary-fg-color: #e53935;
+  --md-primary-fg-color--light: #ffcdd2;
+  --md-primary-fg-color--dark: #b71c1c;
+  --md-accent-fg-color: #e53935;
+  --md-accent-fg-color--transparent: #e539351a;
+  --md-accent-bg-color: #e53935;
+  --md-accent-bg-color--light: #ffcdd2;
 }
 
 .md-typeset a {

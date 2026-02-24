@@ -3,7 +3,7 @@
 [![DOI](https://zenodo.org/badge/1155356116.svg)](https://doi.org/10.5281/zenodo.18611124)
 [![codecov](https://codecov.io/github/sdiebolt/confusius/graph/badge.svg?token=TL5AIRNSHS)](https://codecov.io/github/sdiebolt/confusius)
 
-# ConfUSIus
+# ConfUSIus <img src="docs/images/confusius-logo.svg" width="200" title="ConfUSIus" alt="ConfUSIus" align="right">
 
 > [!WARNING]
 > ConfUSIus is currently in pre-alpha and under active development. The API is subject

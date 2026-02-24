@@ -61,6 +61,8 @@ name = "Functional Ultrasound Imaging on Discord"
 [project.theme]
 variant = "modern"
 language = "en"
+logo = "images/confusius-logo.svg"
+favicon = "images/confusius-favicon.ico"
 features = [
     "navigation.tabs",
     "navigation.sections",
