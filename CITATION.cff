@@ -1,0 +1,31 @@
+cff-version: 1.2.0
+title: ConfUSIus
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Samuel
+    family-names: Le Meur-Diebolt
+    email: s.le-meur-diebolt@ucl.ac.uk
+    affiliation: >-
+      UCL Institute of Ophthalmology, University College
+      London
+    orcid: 'https://orcid.org/0000-0002-9788-7263'
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.18611124
+    description: Zenodo link
+repository-code: 'https://github.com/sdiebolt/confusius'
+url: 'https://samuel.diebolt.io/confusius/'
+abstract: >-
+  Python package for analysis and visualization of
+  functional ultrasound imaging data.
+keywords:
+  - Functional ultrasound imaging
+  - Brain connectivity
+  - Python
+license: BSD-3-Clause
+commit: bb0d19e1e91543d11dad949b3d8ef7653c9b58b6
+version: 0.0.1-a5
+date-released: '2026-02-19'

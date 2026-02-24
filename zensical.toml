@@ -40,6 +40,7 @@ nav = [
     { "Examples" = "examples/index.md" },
     { "Roadmap" = "roadmap.md" },
     { "Contributing" = "contributing.md" },
+    { "Citing" = "citing.md" },
 ]
 
 [[project.extra.social]]
@@ -51,6 +52,11 @@ name = "ConfUSIus on GitHub"
 icon = "fontawesome/brands/python"
 link = "https://pypi.org/project/confusius/"
 name = "ConfUSIus on PyPI"
+
+[[project.extra.social]]
+icon = "fontawesome/brands/discord"
+link = "https://discord.gg/mZd87tgmy2"
+name = "Functional Ultrasound Imaging on Discord"
 
 [project.theme]
 variant = "modern"

@@ -191,7 +191,10 @@ Ready to get started?
 3. **[Examples](../examples/index.md)**: See complete workflows for common tasks.
 4. **[API Reference](../api/index.md)**: Explore detailed function documentation.
 
-Still have questions? Check the [GitHub issues](https://github.com/sdiebolt/confusius/issues) or open a new one!
+Still have questions? Check the [GitHub
+issues](https://github.com/sdiebolt/confusius/issues) or open a new one! You can also
+join the [fUSI community Discord](https://discord.gg/mZd87tgmy2) to ask questions and
+connect with other researchers using fUSI.
 
 ## Useful Python Resources for fUSI
 
