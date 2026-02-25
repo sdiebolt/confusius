@@ -48,39 +48,36 @@ Every ConfUSIus DataArray that represents a fUSI recording uses the dimension or
 | `y` | Axial / depth | Tens to hundreds |
 | `x` | Lateral | Tens to hundreds |
 
+!!! tip "Dimension ordering is mostly transparent in Xarray"
+    Users familiar with neuroimaging may be more accustomed to spatiotemporal
+    conventions like `(x, y, z, t)`. Thankfully, Xarray makes dimension ordering largely
+    transparent in practice: you can always refer to dimensions by name and in any
+    order(e.g. `data.mean("time")`, `data.sel(x=4.54, y=-2.48, z=0.0)`) rather than by
+    axis index, so you won't have to remember the order of the dimensions.
+
 This ordering is motivated by several considerations.
 
-- **Equivalence with NIfTI:** NIfTI stores arrays in column-major (Fortran) order with
-  axis sequence `(x, y, z, time)`. NumPy (and Python in general) uses row-major (C)
-  order arrays by default. Transposing a `(x, y, z, time)` NIfTI array is a zero-copy
-  operation that leads to a `(time, z, y, x)` array in row-major order.
-- **Acquisition and processing order:** fUSI data is acquired and processed volume by
-  volume. In NumPy's row-major (C) layout the last axes are contiguous in memory, so
-  `data[t]`—a single spatial volume—is a contiguous block. This matches the
-  natural unit of work for block-wise IQ processing, motion correction, and other
-  volume-wise operations.
+- **Equivalence with NIfTI:** NIfTI stores arrays in column-major (Fortran) order as
+  `(x, y, z, time)`. Transposing to the more Pythonic row-major (C) order is a zero-copy
+  operation that yields `(time, z, y, x)`.
+- **Memory layout for volume-wise processing:** In row-major order the last axes are
+  contiguous in memory, so `data[t]`—a single spatial volume—is a contiguous block,
+  which is the natural unit of work for IQ processing, motion correction, and similar
+  operations.
 - **Statistical analysis convention:** After spatial processing, fUSI data is typically
-  reshaped to a 2D `(time, voxels)` matrix to run general linear models, dimensionality
-  reduction, and similar analyses. In Xarray, this reshape is as simple as
-  `data.stack(voxels=["z", "y", "x"])`, matching the standard `(samples, features)`
-  convention used by libraries like [scikit-learn](https://scikit-learn.org/stable/) and
+  reshaped to `(time, voxels)` for GLMs and dimensionality reduction. This is
+  `data.stack(voxels=["z", "y", "x"])` in Xarray, matching the standard
+  `(samples, features)` convention of
+  [scikit-learn](https://scikit-learn.org/stable/) and
   [statsmodels](https://www.statsmodels.org/stable/index.html).
-- **Alignment with standard neuroanatomical atlases:** In preclinical fUSI, the probe
-  is typically a linear or multi-array transducer translated along the antero-posterior
-  axis using a motorized stage, yielding coronal images. In this common setup,
+- **Alignment with neuroanatomical atlases:** For coronal preclinical fUSI,
   `(z, y, x) = (elevation, axial/depth, lateral)` maps to
-  `(antero-posterior, superior-inferior, left-right)` in anatomical terms, forming a
-  right-handed coordinate system. [BrainGlobe](https://brainglobe.info) atlases such as
-  the Allen Mouse Brain Atlas use `ASR` orientation (origin at the most anterior,
-  superior, right corner), giving axes `(antero-posterior, superior-inferior,
-  right-left)` — a left-handed system that shares the first two axes with ConfUSIus but
-  has an opposite lateral direction. The physical → world affine captures this lateral
-  mirror, making registration with standard atlases straightforward.
-- **Visualization:** Most visualization tools (e.g. Napari) expect the last
-  two axes to be the display axes of a 2D image. With `(time, z, y, x)`, indexing a
-  single time point and elevation slice—`data.sel(t=t, z=z)`—yields a `(y, x)` array
-  that plots correctly without transposing. For 2D acquisitions where `z` has size 1,
-  `data[t, 0]` is the natural way to access a single frame.
+  `(antero-posterior, superior-inferior, left-right)`, sharing the first two axes with
+  [BrainGlobe](https://brainglobe.info) atlases (e.g. Allen CCFv3). The physical →
+  world affine captures any remaining orientation difference (e.g. a lateral mirror).
+- **Visualization:** Most visualization tools (e.g. Napari) expect the last two axes to
+  be the display axes of a 2D image. `data.sel(time=t, z=z)` yields a `(y, x)` array
+  that plots correctly without transposing.
 
 ## Coordinate Systems
 
