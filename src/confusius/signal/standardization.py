@@ -39,8 +39,9 @@ def standardize(
     Raises
     ------
     ValueError
-        If `method` is not ``"zscore"`` or ``"psc"``.
         If `signals` does not have a ``time`` dimension.
+    ValueError
+        If `method` is not ``"zscore"`` or ``"psc"``.
 
     Warns
     -----

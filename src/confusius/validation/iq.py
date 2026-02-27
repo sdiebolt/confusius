@@ -50,11 +50,9 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> xr.DataArray:
     Raises
     ------
     ValueError
-        If any of the following conditions are not met:
-
-        - The DataArray does not have dimensions ("time", "z", "y", "x").
-        - Any required coordinates are missing.
-        - Required attributes are missing (when ``require_attrs=True``).
+        If the DataArray does not have dimensions ("time", "z", "y", "x") or
+        corresponding coordinates, or if required attributes are missing (when
+        `require_attrs=True`).
 
     TypeError
         If the IQ data is not complex-valued.

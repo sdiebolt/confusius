@@ -116,14 +116,15 @@ def interpolate_samples(
 
     Raises
     ------
+    ValueError
+        If `signals` doesn't have a ``time`` dimension or ``time`` coordinates.
     TypeError
         If `sample_mask` is not an xarray.DataArray.
     ValueError
-        - If `signals` does not have a ``time`` dimension or ``time`` coordinates.
-        - If `sample_mask` does not have a ``time`` dimension.
-        - If `sample_mask` has wrong length or mismatched time coordinates.
-        - If `sample_mask` is not boolean dtype.
-        - If all samples are censored (cannot interpolate).
+        If `sample_mask` has wrong dtype, length, missing time dimension, or mismatched
+        coordinates.
+    ValueError
+        If all samples are censored (cannot interpolate).
 
     Warns
     -----
@@ -232,14 +233,15 @@ def censor_samples(
 
     Raises
     ------
+    ValueError
+        If `signals` doesn't have a ``time`` dimension or ``time`` coordinates.
     TypeError
         If `sample_mask` is not an xarray.DataArray.
     ValueError
-        - If `signals` does not have a ``time`` dimension.
-        - If `sample_mask` does not have a ``time`` dimension.
-        - If `sample_mask` has wrong length or mismatched time coordinates.
-        - If `sample_mask` is not boolean dtype.
-        - If all samples are censored (no timepoints left).
+        If `sample_mask` has wrong dtype, length, missing time dimension, or mismatched
+        coordinates.
+    ValueError
+        If all samples are censored (cannot interpolate).
 
     Warns
     -----

@@ -192,14 +192,16 @@ def filter_butterworth(
     Raises
     ------
     ValueError
-        - If `signals` does not have a ``time`` dimension or ``time`` coordinates.
-        - If both `low_cutoff` and `high_cutoff` are ``None`` (no filtering).
-        - If ``high_cutoff <= low_cutoff`` for band-pass filtering.
-        - If `order` is not positive.
-        - If cutoff frequencies are invalid (negative or >= Nyquist frequency).
-        - If insufficient timepoints for the filter order ``(needs >
-          3*(2*ceil(order/2)+1))``.
-        - If ``time`` coordinates are missing or non-uniformly sampled.
+        If `signals` does not have a ``time`` dimension or ``time`` coordinates, if
+        time coordinates are not uniformly sampled within the specified tolerance, or if
+        insufficient timepoints for the filter order (needs more than ``3 * (2 *
+        ceil(order / 2) + 1)``).
+    ValueError
+        If both `low_cutoff` and `high_cutoff` are ``None`` (no filtering), or if cutoff
+        frequencies are invalid (negative, above Nyquist, or if high_cutoff <=
+        low_cutoff for band-pass).
+    ValueError
+        If `order` is not positive.
 
     Notes
     -----

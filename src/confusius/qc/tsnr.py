@@ -35,8 +35,8 @@ def compute_tsnr(signals: xr.DataArray) -> xr.DataArray:
     Raises
     ------
     ValueError
-        - If `signals` has no ``time`` dimension.
-        - If the ``time`` dimension has only 1 timepoint.
+        If `signals` has no ``time`` dimension or if the ``time`` dimension has only 1
+        timepoint.
 
     Notes
     -----
@@ -111,8 +111,8 @@ def compute_cv(signals: xr.DataArray) -> xr.DataArray:
     Raises
     ------
     ValueError
-        - If `signals` has no ``time`` dimension.
-        - If the ``time`` dimension has only 1 timepoint.
+        If `signals` has no ``time`` dimension or if the ``time`` dimension has only 1
+        timepoint.
 
     Notes
     -----

@@ -432,15 +432,19 @@ def compute_compcor_confounds(
     Raises
     ------
     ValueError
-        - If both `noise_mask` and `variance_threshold` are ``None`` (must specify at
-          least one).
-        - If `variance_threshold` is not in range ``(0, 1)``.
-        - If `n_components` is not positive.
-        - If `signals` does not have a ``time`` dimension.
-        - If mask dimensions/coordinates don't match signal spatial dimensions.
-        - If no voxels are selected (empty mask or threshold too high).
-    TypeError
-        - If `noise_mask` is not boolean dtype.
+        If `signals` does not have a ``time`` dimension.
+    ValueError
+        If mask doesn't have the right dtype or its dimensions/coordinates don't match
+        signal spatial dimensions.
+    ValueError
+        If both `noise_mask` and `variance_threshold` are ``None`` (must specify at
+        least one).
+    ValueError
+        If `variance_threshold` is not in range ``(0, 1)``.
+    ValueError
+        If `n_components` is not positive.
+    ValueError
+        If no voxels are selected (empty mask or threshold too high).
 
     Notes
     -----

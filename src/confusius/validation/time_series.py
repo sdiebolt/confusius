@@ -35,9 +35,9 @@ def validate_time_series(
     Raises
     ------
     ValueError
-        - If `signals` has no ``time`` dimension.
-        - If time dimension has only 1 timepoint.
-        - If time dimension is chunked in a Dask array (when ``check_time_chunks=True``).
+        If `signals` has no ``time`` dimension, if the ``time`` dimension has only 1
+        timepoint, or if the ``time`` dimension is chunked in a Dask array (when
+        `check_time_chunks=True`).
     """
     if "time" not in signals.dims:
         raise ValueError("signals must have a 'time' dimension")
