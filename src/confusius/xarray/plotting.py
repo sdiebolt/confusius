@@ -249,6 +249,8 @@ class FUSIPlotAccessor:
         vmin: float | None = None,
         vmax: float | None = None,
         alpha: float = 1.0,
+        yincrease: bool = False,
+        xincrease: bool = True,
         black_bg: bool = True,
         figure: "Figure | None" = None,
         axes: "npt.NDArray[Any] | None" = None,
@@ -291,6 +293,10 @@ class FUSIPlotAccessor:
             Upper bound of the colormap. Defaults to the 98th percentile.
         alpha : float, default: 1.0
             Opacity of the image (0 transparent, 1 opaque).
+        yincrease : bool, default: False
+            Whether the y-axis increases upward (True) or downward (False).
+        xincrease : bool, default: True
+            Whether the x-axis increases to the right (True) or left (False).
         black_bg : bool, default: True
             If ``True``, set backgrounds to black and text/spines to white.
         figure : matplotlib.figure.Figure, optional
@@ -337,6 +343,8 @@ class FUSIPlotAccessor:
             vmin=vmin,
             vmax=vmax,
             alpha=alpha,
+            yincrease=yincrease,
+            xincrease=xincrease,
             black_bg=black_bg,
             figure=figure,
             axes=axes,

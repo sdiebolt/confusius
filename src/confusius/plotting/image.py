@@ -157,6 +157,13 @@ class VolumePlotter:
     axes : numpy.ndarray, optional
         2D array of matplotlib.axes.Axes objects. If not provided, axes will be created
         on the first call to add_volume.
+    black_bg : bool, default: True
+        Whether to set the figure background to black.
+    yincrease : bool, default: False
+        Whether the y-axis increases upward. When False, y coordinates decrease
+        upward (standard for medical imaging).
+    xincrease : bool, default: True
+        Whether the x-axis increases to the right.
     """
 
     def __init__(
@@ -164,12 +171,18 @@ class VolumePlotter:
         slice_mode: str = "z",
         figure: "Figure | None" = None,
         axes: "npt.NDArray[Any] | None" = None,
+        *,
+        black_bg: bool = True,
+        yincrease: bool = False,
+        xincrease: bool = True,
     ):
         self.slice_mode = slice_mode
         self.figure = figure
         self.axes = axes
+        self._black_bg = black_bg
+        self._yincrease = yincrease
+        self._xincrease = xincrease
         self._coord_to_axis: dict[float, int] = {}
-        self._black_bg: bool = True
         # Explicitly tracked axis data limits to avoid matplotlib's auto-margin.
         self._axis_xlims: dict[int, tuple[float, float]] = {}
         self._axis_ylims: dict[int, tuple[float, float]] = {}
@@ -180,7 +193,6 @@ class VolumePlotter:
         nrows: int | None = None,
         ncols: int | None = None,
         dpi: int | None = None,
-        black_bg: bool = True,
         x_range: float | None = None,
         y_range: float | None = None,
     ) -> None:
@@ -215,7 +227,7 @@ class VolumePlotter:
             axes_array = self.figure.subplots(_nrows, _ncols, squeeze=False)
 
         self.axes = np.array(axes_array)
-        self.figure.patch.set_facecolor("black" if black_bg else "white")
+        self.figure.patch.set_facecolor("black" if self._black_bg else "white")
 
     def _find_matching_axes(
         self, actual_coords: list[float], tolerance: float = 1e-6
@@ -252,8 +264,6 @@ class VolumePlotter:
         display_axis_labels: bool = True,
         display_axis_ticks: bool = True,
         axis_off: bool = False,
-        origin: Literal["upper", "lower"] = "upper",
-        black_bg: bool = True,
         nrows: int | None = None,
         ncols: int | None = None,
         dpi: int | None = None,
@@ -293,11 +303,6 @@ class VolumePlotter:
             Whether to display axis tick labels.
         axis_off : bool, default: False
             Whether to turn off all axis decorations.
-        origin : {"upper", "lower"}, default: "upper"
-            Position of the y-axis origin.
-        black_bg : bool, default: True
-            Whether to set the figure background to black. Only applies when
-            creating a new figure (match_coordinates=False).
         nrows : int, optional
             Number of rows in the subplot grid when creating a new figure.
             If not provided, computed automatically.
@@ -467,13 +472,9 @@ class VolumePlotter:
                     nrows=nrows,
                     ncols=ncols,
                     dpi=dpi,
-                    black_bg=black_bg,
                     x_range=x_range,
                     y_range=y_range,
                 )
-
-            self._black_bg = black_bg
-            self.figure.patch.set_facecolor("black" if black_bg else "white")  # type: ignore[union-attr]
 
             if not self._coord_to_axis:
                 self._coord_to_axis = {
@@ -581,10 +582,15 @@ class VolumePlotter:
                 )
             self._axis_ylims[axis_idx] = current_ylim
 
-            if origin == "upper":
-                ax.set_ylim(current_ylim[1], current_ylim[0])
-            else:
+            if self._yincrease:
                 ax.set_ylim(current_ylim)
+            else:
+                ax.set_ylim(current_ylim[1], current_ylim[0])
+
+            if self._xincrease:
+                ax.set_xlim(current_xlim)
+            else:
+                ax.set_xlim(current_xlim[1], current_xlim[0])
 
         if not match_coordinates:
             for ax in axes_flat[n_slices:]:
@@ -1006,7 +1012,8 @@ def plot_volume(
     show_colorbar: bool = True,
     cbar_label: str | None = None,
     dpi: int | None = None,
-    origin: Literal["upper", "lower"] = "upper",
+    yincrease: bool = False,
+    xincrease: bool = True,
     display_titles: bool = True,
     display_axis_labels: bool = True,
     display_axis_ticks: bool = True,
@@ -1073,10 +1080,10 @@ def plot_volume(
         Label for the colorbar.
     dpi : int, optional
         Figure resolution in dots per inch. Ignored when `figure` is provided.
-    origin : {"upper", "lower"}, default: "upper"
-        Position of the y-axis origin. ``"upper"`` places the origin at the top
-        (decreasing y coordinates downward), which is standard for medical imaging.
-        ``"lower"`` places the origin at the bottom.
+    yincrease : bool, default: False
+        Whether the y-axis increases upward (True) or downward (False).
+    xincrease : bool, default: True
+        Whether the x-axis increases to the right (True) or left (False).
     display_titles : bool, default: True
         Whether to display subplot titles showing the slice coordinate.
     display_axis_labels : bool, default: True
@@ -1141,7 +1148,14 @@ def plot_volume(
     ...     cbar_label="Power (dB)",
     ... )
     """
-    plotter = VolumePlotter(slice_mode=slice_mode, figure=figure, axes=axes)
+    plotter = VolumePlotter(
+        slice_mode=slice_mode,
+        figure=figure,
+        axes=axes,
+        black_bg=black_bg,
+        yincrease=yincrease,
+        xincrease=xincrease,
+    )
 
     return plotter.add_volume(
         data=data,
@@ -1159,8 +1173,6 @@ def plot_volume(
         display_axis_labels=display_axis_labels,
         display_axis_ticks=display_axis_ticks,
         axis_off=axis_off,
-        origin=origin,
-        black_bg=black_bg,
         nrows=nrows,
         ncols=ncols,
         dpi=dpi,

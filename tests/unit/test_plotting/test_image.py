@@ -189,14 +189,16 @@ class TestPlotVolume:
         assert ax.get_xlim() == pytest.approx((0.0, 5.0))
         assert ax.get_ylim() == pytest.approx((4.0, 0.0))
 
-    def test_origin_lower_flips_ylim(self, sample_3d_volume, matplotlib_pyplot):
-        """plot_volume with origin='lower' places y-origin at bottom."""
+    def test_yincrease_true_places_origin_at_bottom(
+        self, sample_3d_volume, matplotlib_pyplot
+    ):
+        """plot_volume with yincrease=True places y-origin at bottom."""
         z_coord = sample_3d_volume.coords["z"].values[0]
         plotter = plot_volume(
             sample_3d_volume,
             slice_mode="z",
             slice_coords=[z_coord],
-            origin="lower",
+            yincrease=True,
             show_colorbar=False,
         )
         ax = plotter.axes[0, 0]
