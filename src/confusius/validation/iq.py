@@ -15,7 +15,7 @@ _REQUIRED_ATTRS = (
 )
 
 
-def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> xr.DataArray:
+def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
     """Validate that a DataArray contains valid IQ data.
 
     This function performs validation of an IQ DataArray to ensure it meets all
@@ -41,11 +41,6 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> xr.DataArray:
         Whether to validate that all required attributes
         (`compound_sampling_frequency`, `transmit_frequency`,
         `sound_velocity`) are present in the DataArray attributes.
-
-    Returns
-    -------
-    xarray.DataArray
-        The validated IQ DataArray (same object as input, for chaining).
 
     Raises
     ------
@@ -78,9 +73,7 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> xr.DataArray:
     ...         "sound_velocity": 1540.0,
     ...     },
     ... )
-    >>> iq = validate_iq(iq)
-    >>> print(iq.shape)
-    (10, 4, 6, 8)
+    >>> validate_iq(iq)
 
     Skip attribute validation for intermediate processing:
 
@@ -91,7 +84,7 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> xr.DataArray:
     ...     coords={"time": np.arange(10), "z": np.arange(4),
     ...             "y": np.arange(6), "x": np.arange(8)},
     ... )
-    >>> iq = validate_iq(iq_no_attrs, require_attrs=False)
+    >>> validate_iq(iq_no_attrs, require_attrs=False)
     """
     if iq.dims != _REQUIRED_DIMS:
         raise ValueError(
@@ -116,5 +109,3 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> xr.DataArray:
                 f"Missing required DataArray attributes: {missing_attrs}. "
                 f"All IQ data must have attributes: {_REQUIRED_ATTRS}."
             )
-
-    return iq

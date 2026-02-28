@@ -771,11 +771,12 @@ def process_iq_to_power_doppler(
     import dask.array as da
     from dask.array import Array
 
-    iq = validate_iq(iq)
+    validate_iq(iq)
 
     clutter_mask_array = None
     if clutter_mask is not None:
-        clutter_mask_array = validate_mask(clutter_mask, iq, "clutter_mask")
+        validate_mask(clutter_mask, iq, "clutter_mask")
+        clutter_mask_array = clutter_mask.values
 
     dask_iq: Array = iq.data
     if not isinstance(dask_iq, Array):
@@ -990,11 +991,12 @@ def process_iq_to_axial_velocity(
     import dask.array as da
     from dask.array import Array
 
-    iq = validate_iq(iq)
+    validate_iq(iq)
 
     clutter_mask_array = None
     if clutter_mask is not None:
-        clutter_mask_array = validate_mask(clutter_mask, iq, "clutter_mask")
+        validate_mask(clutter_mask, iq, "clutter_mask")
+        clutter_mask_array = clutter_mask.values
 
     dask_iq: Array = iq.data
     if not isinstance(dask_iq, Array):

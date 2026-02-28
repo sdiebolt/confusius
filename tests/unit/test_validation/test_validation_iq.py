@@ -29,13 +29,6 @@ class TestValidateIq:
             },
         )
 
-    def test_valid_dataarray_returns_dataarray(self, valid_iq_dataarray):
-        """Valid DataArray returns the same DataArray."""
-        result = validate_iq(valid_iq_dataarray)
-
-        assert isinstance(result, xr.DataArray)
-        assert result.shape == (10, 4, 6, 8)
-
     def test_wrong_dimensions_raises(self, valid_iq_dataarray):
         """DataArray with wrong dimensions raises `ValueError`."""
         iq = valid_iq_dataarray.rename({"time": "t"})
@@ -93,8 +86,7 @@ class TestValidateIq:
         del iq.attrs["compound_sampling_frequency"]
 
         # Should not raise when require_attrs=False.
-        result = validate_iq(iq, require_attrs=False)
-        assert result is not None
+        validate_iq(iq, require_attrs=False)
 
     def test_multiple_missing_attributes_in_error_message(self, valid_iq_dataarray):
         """Error message lists all missing attributes."""

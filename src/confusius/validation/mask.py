@@ -1,7 +1,6 @@
 """Mask validation utilities."""
 
 import numpy as np
-import numpy.typing as npt
 import xarray as xr
 
 
@@ -87,7 +86,7 @@ def validate_mask(
     mask_name: str = "mask",
     rtol: float = 1e-5,
     atol: float = 1e-8,
-) -> npt.NDArray:
+) -> None:
     """Validate that a mask matches data spatial dimensions and coordinates.
 
     Parameters
@@ -102,11 +101,6 @@ def validate_mask(
         Relative tolerance for coordinate comparison.
     atol : float, default: 1e-8
         Absolute tolerance for coordinate comparison.
-
-    Returns
-    -------
-    numpy.ndarray
-        Validated mask as numpy array.
 
     Raises
     ------
@@ -130,8 +124,6 @@ def validate_mask(
 
     _validate_spatial_coords(mask, data, mask_name, rtol, atol)
 
-    return mask.values
-
 
 def validate_labels(
     labels: xr.DataArray,
@@ -139,7 +131,7 @@ def validate_labels(
     labels_name: str = "labels",
     rtol: float = 1e-5,
     atol: float = 1e-8,
-) -> npt.NDArray:
+) -> None:
     """Validate that a label map matches data spatial dimensions and coordinates.
 
     Parameters
@@ -155,11 +147,6 @@ def validate_labels(
         Relative tolerance for coordinate comparison.
     atol : float, default: 1e-8
         Absolute tolerance for coordinate comparison.
-
-    Returns
-    -------
-    numpy.ndarray
-        Validated labels as numpy array.
 
     Raises
     ------
@@ -182,5 +169,3 @@ def validate_labels(
         raise TypeError(f"{labels_name} must be integer dtype, got {labels.dtype}.")
 
     _validate_spatial_coords(labels, data, labels_name, rtol, atol)
-
-    return labels.values
