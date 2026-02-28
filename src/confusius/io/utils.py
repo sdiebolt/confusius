@@ -20,8 +20,8 @@ def check_path(
     label : str, default: "path"
         Name of the variable passed to `check_path`, used in the error message.
     type : {"file", "dir"}, optional
-        Type of path to check for. If ``"file"``, checks that the path is a file. If
-        ``"dir"``, checks that the path is a directory. If not provided, no type check
+        Type of path to check for. If `"file"`, checks that the path is a file. If
+        `"dir"`, checks that the path is a directory. If not provided, no type check
         is performed, meaning the path may not exist.
 
     Returns
@@ -34,7 +34,7 @@ def check_path(
     TypeError
         If `path` cannot be cast to pathlib.Path.
     ValueError
-        If type is not ``None`` and the path is not of the correct type.
+        If type is not `None` and the path is not of the correct type.
     """
     try:
         path = Path(path)

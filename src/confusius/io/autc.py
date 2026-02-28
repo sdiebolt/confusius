@@ -50,7 +50,7 @@ def _get_dat_dtype(
     Parameters
     ----------
     block_shape : tuple[int, int, int]
-        Block shape with ``(n_x, n_z, n_frames)``.
+        Block shape with `(n_x, n_z, n_frames)`.
     header_dtype : dtype_like, default: numpy.int32
         Data type used for the header fields.
     data_dtype : dtype_like, default: numpy.complex64
@@ -113,7 +113,7 @@ class AUTCDAT:
     path : pathlib.Path
         Resolved path to the AUTC DAT file.
     shape : tuple[int, int, int, int]
-        Shape of the data in the AUTC DAT file in the format ``(blocks, x, z, frames)``.
+        Shape of the data in the AUTC DAT file in the format `(blocks, x, z, frames)`.
     n_blocks : int
         Number of frame blocks in the AUTC DAT file.
     n_frames_per_block : int
@@ -206,7 +206,7 @@ class AUTCDAT:
         Returns
         -------
         tuple[int, int, int, int]
-            Tuple of the form ``(blocks, x, z, frames)``.
+            Tuple of the form `(blocks, x, z, frames)`.
         """
         return self._memmap["data"].shape
 
@@ -279,17 +279,17 @@ class AUTCDATsLoader:
     pattern : str, default: "bf*part*.dat"
         Glob pattern used to search for AUTC DAT files inside `root`.
     show_progress : bool, default: True
-        Whether to show progress during file indexing. If ``False``, no progress bars
+        Whether to show progress during file indexing. If `False`, no progress bars
         are displayed.
     progress : rich.progress.Progress, optional
         External `rich.progress.Progress` instance to add tasks to. If provided and
-        `show_progress` is ``True``, a task will be added to this
+        `show_progress` is `True`, a task will be added to this
         `rich.progress.Progress` instance instead of creating a new progress bar with
         `rich.progress.track`.
     track_kwargs : dict, optional
         Additional keyword arguments to pass to `rich.progress.track` if using internal
-        progress tracking (only used if `show_progress` is ``True`` and `progress` is
-        ``None``).
+        progress tracking (only used if `show_progress` is `True` and `progress` is
+        `None`).
 
     Attributes
     ----------
@@ -376,9 +376,9 @@ class AUTCDATsLoader:
         ----------
         slice_object : int or slice or tuple[int or slice, ...]
             Indexing object for the data. Can be:
-            - ``int``: Single block index;
-            - ``slice``: Range of block indices;
-            - ``tuple``: Multi-dimensional indexing ``(block, x, z, frame)``.
+            - `int`: Single block index;
+            - `slice`: Range of block indices;
+            - `tuple`: Multi-dimensional indexing `(block, x, z, frame)`.
 
         Returns
         -------
@@ -458,7 +458,7 @@ class AUTCDATsLoader:
         Returns
         -------
         tuple[int, int, int, int]
-            Shape in the format ``(n_blocks, n_x, n_z, n_frames)``.
+            Shape in the format `(n_blocks, n_x, n_z, n_frames)`.
         """
         first_dat_shape = list(self.dats.values())[0].shape
         return (
@@ -508,10 +508,10 @@ def convert_autc_dats_to_zarr(
 ) -> "zarr.Group":
     """Convert AUTC DAT files to Zarr format compatible with Xarray.
 
-    Beamformed IQ data is converted to a Zarr group with an ``iq`` array of shape
-    ``(time, z, y, x)`` chunked along the first dimension. Coordinates are stored as
+    Beamformed IQ data is converted to a Zarr group with an `iq` array of shape
+    `(time, z, y, x)` chunked along the first dimension. Coordinates are stored as
     separate Zarr arrays following Xarray conventions, allowing the data to be opened
-    directly with ``xarray.open_zarr()``.
+    directly with `xarray.open_zarr()`.
 
     Parameters
     ----------
@@ -559,7 +559,7 @@ def convert_autc_dats_to_zarr(
     compound_sampling_frequency : float, optional
         Sampling frequency of the compounded frames in hertz.
     beamforming_method : str, optional
-        Beamforming method used (e.g. ``"DAS"``).
+        Beamforming method used (e.g. `"DAS"`).
     skip_first_blocks : int, default: 0
         Number of blocks to skip from the beginning of the acquisition. This is useful
         when the first blocks are known to be corrupted or unusable.
@@ -573,23 +573,23 @@ def convert_autc_dats_to_zarr(
         provided, time coordinate will be computed based on
         `compound_sampling_frequency` or set to frame indices.
     show_progress : bool, default: True
-        Whether to show progress during conversion. If ``False``, no progress bars are
+        Whether to show progress during conversion. If `False`, no progress bars are
         displayed.
     progress : rich.progress.Progress, optional
         External `rich.progress.Progress` instance to add tasks to. If provided and
-        `show_progress` is ``True``, a task will be added to this
+        `show_progress` is `True`, a task will be added to this
         `rich.progress.Progress` instance instead of creating a new progress bar with
         `rich.progress.track`.
     track_kwargs : dict, optional
         Additional keyword arguments to pass to `rich.progress.track` if using internal
-        progress tracking (only used if `show_progress` is ``True`` and `progress` is
-        ``None``).
+        progress tracking (only used if `show_progress` is `True` and `progress` is
+        `None`).
 
     Returns
     -------
     zarr.Group
-        The created Zarr group containing the ``iq`` data array and coordinate arrays.
-        Can be opened directly with ``xarray.open_zarr()``.
+        The created Zarr group containing the `iq` data array and coordinate arrays.
+        Can be opened directly with `xarray.open_zarr()`.
 
     Notes
     -----
@@ -599,23 +599,23 @@ def convert_autc_dats_to_zarr(
         ds = xr.open_zarr("output.zarr")
         iq = ds["iq"]
 
-    Metadata attributes (e.g., ``transmit_frequency``, ``sound_velocity``) are stored
-    on the ``iq`` DataArray (accessible via ``iq.attrs``), consistent with how
+    Metadata attributes (e.g., `transmit_frequency`, `sound_velocity`) are stored
+    on the `iq` DataArray (accessible via `iq.attrs`), consistent with how
     reduction functions return DataArrays with attributes.
 
     The group contains:
 
-    - ``iq``: The main data array with dimensions ``(time, z, y, x)``.
-    - ``time``: Time coordinate array.
-    - ``z``: Elevation coordinate array (always ``[0.0]`` mm for 2D data).
-    - ``y``: Axial (depth) coordinate array in probe-relative mm.
-    - ``x``: Lateral coordinate array in probe-relative mm.
+    - `iq`: The main data array with dimensions `(time, z, y, x)`.
+    - `time`: Time coordinate array.
+    - `z`: Elevation coordinate array (always `[0.0]` mm for 2D data).
+    - `y`: Axial (depth) coordinate array in probe-relative mm.
+    - `x`: Lateral coordinate array in probe-relative mm.
 
-    Spatial coordinates (``z``, ``y``, ``x``) follow the ConfUSIus probe-relative
+    Spatial coordinates (`z`, `y`, `x`) follow the ConfUSIus probe-relative
     coordinate system: physical distances in millimeters along each voxel axis, with the
     origin at the center of the probe face. Unlike EchoFrame data (where coordinates are
     embedded in the metadata file), AUTC data carries no spatial calibration, so
-    ``lateral_coords`` and ``axial_coords`` must be supplied by the caller. Omitting
+    `lateral_coords` and `axial_coords` must be supplied by the caller. Omitting
     them produces physically meaningless voxel-index coordinates.
     """
     from rich.progress import track

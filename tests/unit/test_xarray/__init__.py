@@ -1,1 +1,1 @@
-"""Unit tests for the ``xarray`` module."""
+"""Unit tests for the `xarray` module."""

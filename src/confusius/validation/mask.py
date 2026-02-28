@@ -41,7 +41,7 @@ def validate_mask(
 
     Notes
     -----
-    Uses ``np.allclose`` (with rtol/atol) for coordinate comparison, which is more
+    Uses `np.allclose` (with rtol/atol) for coordinate comparison, which is more
     appropriate for floating-point coordinates than exact equality.
     """
     if not isinstance(mask, xr.DataArray):

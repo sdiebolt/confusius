@@ -23,7 +23,7 @@ def _validate_cutoff_frequencies(
     high_cutoff : float or None
         High cutoff frequency in Hz.
     nyquist : float
-        Nyquist frequency (``sampling_rate / 2``).
+        Nyquist frequency (`sampling_rate / 2`).
 
     Raises
     ------
@@ -148,19 +148,19 @@ def filter_butterworth(
 ) -> xr.DataArray:
     """Apply a low-pass, high-pass, or band-pass Butterworth digital filter to signals.
 
-    This function filters along the ``time`` dimension and works with arrays of any
+    This function filters along the `time` dimension and works with arrays of any
     shape, making it flexible for both extracted signals and full fUSI data.
 
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Array to filter. Must have a ``time`` dimension. Can be any shape, e.g.,
-        extracted signals ``(time, voxels)``, full 3D+t imaging data ``(time, z, y,
-        x)``, or regional signals ``(time, regions)``.
+        Array to filter. Must have a `time` dimension. Can be any shape, e.g.,
+        extracted signals `(time, voxels)`, full 3D+t imaging data ``(time, z, y,
+        x)`, or regional signals `(time, regions)``.
 
         !!! warning "Chunking along time is not supported"
-            The ``time`` dimension must NOT be chunked. Chunk only spatial dimensions:
-            ``data.chunk({'time': -1})``.
+            The `time` dimension must NOT be chunked. Chunk only spatial dimensions:
+            `data.chunk({'time': -1})`.
 
     low_cutoff : float, optional
         Low cutoff frequency in Hz. Frequencies below this are attenuated (acts as
@@ -172,15 +172,15 @@ def filter_butterworth(
         Filter order. Higher orders give steeper roll-off but may be less stable.
     padtype : {"odd", "even", "constant", None}, default: "odd"
         Type of padding to use. See `scipy.signal.sosfiltfilt` for details.
-        ``"odd"`` pads with odd-extension (reduces edge effects), ``"even"`` pads
-        with even-extension, ``"constant"`` pads with zeros. If not provided, no
+        `"odd"` pads with odd-extension (reduces edge effects), `"even"` pads
+        with even-extension, `"constant"` pads with zeros. If not provided, no
         padding is applied.
     padlen : int, optional
         Number of elements to pad at each end. If not provided, uses scipy's default:
-        ``3 * (2 * n_sections + 1 - compensation)`` where ``n_sections = ceil(order/2)``.
+        `3 * (2 * n_sections + 1 - compensation)` where `n_sections = ceil(order/2)`.
     uniformity_tolerance : float, default: 1e-2
         Maximum allowed relative range of consecutive time intervals, defined as
-        ``(max_interval - min_interval) / median_interval``. Raise a ``ValueError`` if
+        `(max_interval - min_interval) / median_interval`. Raise a `ValueError` if
         the time coordinate exceeds this threshold. Increase this value to tolerate
         slight timestamp jitter (e.g. from acquisition clocks or dropped volumes).
 
@@ -192,12 +192,12 @@ def filter_butterworth(
     Raises
     ------
     ValueError
-        If `signals` does not have a ``time`` dimension or ``time`` coordinates, if
+        If `signals` does not have a `time` dimension or `time` coordinates, if
         time coordinates are not uniformly sampled within the specified tolerance, or if
         insufficient timepoints for the filter order (needs more than ``3 * (2 *
         ceil(order / 2) + 1)``).
     ValueError
-        If both `low_cutoff` and `high_cutoff` are ``None`` (no filtering), or if cutoff
+        If both `low_cutoff` and `high_cutoff` are `None` (no filtering), or if cutoff
         frequencies are invalid (negative, above Nyquist, or if high_cutoff <=
         low_cutoff for band-pass).
     ValueError

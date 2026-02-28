@@ -12,14 +12,14 @@ def extract_with_mask(
     """Extract signals from fUSI data using a boolean mask.
 
     This function flattens the spatial dimensions specified by the mask into a
-    single ``voxels`` dimension, while preserving all other dimensions (e.g., time,
+    single `voxels` dimension, while preserving all other dimensions (e.g., time,
     pose).
 
     Parameters
     ----------
     data : xarray.DataArray
         Input array with spatial dimensions matching the mask. Can have any number
-        of non-spatial dimensions (e.g., ``time``, ``pose``). The spatial dimensions
+        of non-spatial dimensions (e.g., `time`, `pose`). The spatial dimensions
         must match those in the mask.
     mask : xarray.DataArray
         Boolean mask defining which voxels to extract. Its dimensions define the
@@ -29,17 +29,17 @@ def extract_with_mask(
     Returns
     -------
     xarray.DataArray
-        Array with spatial dimensions flattened into a ``voxels`` dimension.
-        All non-spatial dimensions are preserved. The ``voxels`` dimension has a
+        Array with spatial dimensions flattened into a `voxels` dimension.
+        All non-spatial dimensions are preserved. The `voxels` dimension has a
         MultiIndex storing spatial coordinates.
 
         For example:
 
-        - ``(time, z, y, x)`` → ``(time, voxels)``
-        - ``(time, pose, z, y, x)`` → ``(time, pose, voxels)``
-        - ``(z, y, x)`` → ``(voxels,)``
+        - `(time, z, y, x)` → `(time, voxels)`
+        - `(time, pose, z, y, x)` → `(time, pose, voxels)`
+        - `(z, y, x)` → `(voxels,)`
 
-        For simple round-trip reconstruction, use ``.unstack("voxels")`` which
+        For simple round-trip reconstruction, use `.unstack("voxels")` which
         re-creates the original DataArray using the smallest bounding box containing the
         masked voxels. For full mask shape reconstruction, use
         `confusius.extract.unmask`.

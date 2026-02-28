@@ -1,7 +1,7 @@
 """DVARS computation for quality control.
 
 Portions of this file are derived from Nipype, which is licensed under the Apache
-License 2.0. See ``NOTICE`` file for details.
+License 2.0. See `NOTICE` file for details.
 """
 
 import numpy as np
@@ -17,8 +17,8 @@ def _ar1_yule_walker(signal: npt.NDArray) -> float:
     The Yule-Walker equations estimate the autoregressive coefficients of a process by
     solving a system of linear equations involving the autocorrelation sequence.
 
-    For an AR(1) process ``x(n) = a(1) * x(n-1) + e(n)``, the Yule-Walker equation
-    is: ``R(1) = a(1) * R(0)``, where ``R(k)`` is the autocorrelation at lag ``k``.
+    For an AR(1) process `x(n) = a(1) * x(n-1) + e(n)`, the Yule-Walker equation
+    is: `R(1) = a(1) * R(0)`, where `R(k)` is the autocorrelation at lag `k`.
 
     Parameters
     ----------
@@ -28,12 +28,12 @@ def _ar1_yule_walker(signal: npt.NDArray) -> float:
     Returns
     -------
     float
-        The AR(1) coefficient ``a(1)``.
+        The AR(1) coefficient `a(1)`.
 
     Notes
     -----
     For AR(1), we only need autocorrelation at lags 0 and 1, so we use direct
-    computation (``O(n)``) rather than FFT-based methods (``O(n log n)``).
+    computation (`O(n)`) rather than FFT-based methods (`O(n log n)`).
     """
     signal = np.asarray(signal, dtype=np.float64)
     signal = signal - signal.mean()
@@ -76,12 +76,12 @@ def compute_dvars(
         (e.g., voxel time series). For 3D+t input, spatial dimensions are flattened
         to voxels.
     standardize : bool, default: True
-        Whether to computed the standardized DVARS. When ``True``, the DVARS values are
+        Whether to computed the standardized DVARS. When `True`, the DVARS values are
         standardized by the expected standard deviation given the AR(1) structure of the
-        data. When ``False``, return non-standardized DVARS (raw RMS of temporal
+        data. When `False`, return non-standardized DVARS (raw RMS of temporal
         differences).
     normalization_factor : float or None, default: 1000
-        Normalization factor applied to the median signal intensity. If ``None``, no
+        Normalization factor applied to the median signal intensity. If `None`, no
         normalization is performed. Note that standardized DVARS is invariant to
         intensity normalization.
     remove_zero_variance : bool, default: True
@@ -90,14 +90,14 @@ def compute_dvars(
         typically be removed.
     variance_tolerance : float, default: 0.0
         Tolerance for identifying zero-variance signals. Signals with robust standard
-        deviation (``IQR/1.349``) less than or equal to this value are considered to
+        deviation (`IQR/1.349`) less than or equal to this value are considered to
         have zero variance.
 
     Returns
     -------
     (time,) xarray.DataArray
         DVARS values with time coordinates matching input. When `standardized` is
-        ``True``, returns standardized DVARS. The first element is set to the minimum
+        `True`, returns standardized DVARS. The first element is set to the minimum
         DVARS value (following FSL convention).
 
     Notes

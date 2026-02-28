@@ -61,9 +61,9 @@ def compute_processed_volume_times(
     timing_reference : {"start", "center", "end"}, default: "center"
         Which point in the inner window to use as the timestamp:
 
-        - ``"start"``: Use the timestamp of the first volume in the window.
-        - ``"center"``: Use the timestamp at the center of the window.
-        - ``"end"``: Use the timestamp of the last volume in the window.
+        - `"start"`: Use the timestamp of the first volume in the window.
+        - `"center"`: Use the timestamp at the center of the window.
+        - `"end"`: Use the timestamp of the last volume in the window.
 
     Returns
     -------
@@ -159,8 +159,8 @@ def _process_block_with_clutter_filter(
         Array of complex IQ data.
     process_block_func : callable
         Function used to process a set of IQ volumes into a single volume.
-        `process_block_func` must accept a ``(time, z, y, x)`` array of complex IQ
-        data as first argument and return a ``(z, y, x)`` array corresponding to the
+        `process_block_func` must accept a `(time, z, y, x)` array of complex IQ
+        data as first argument and return a `(z, y, x)` array corresponding to the
         processed volume. `process_block_func` may accept additional arguments
         provided via `kwargs`, but must ignore any extra keyword arguments. Note that
         `fs` will be passed to `process_block_func`.
@@ -182,24 +182,24 @@ def _process_block_with_clutter_filter(
         `window_width`.
     filter_method : {"svd_indices", "svd_energy", "svd_cumulative_energy", "butterworth"}, \
             default: "svd_indices"
-        ``"svd_indices"``:
-            By default, `filter_method` is ``"svd_indices"`` to use a static SVD clutter
+        `"svd_indices"`:
+            By default, `filter_method` is `"svd_indices"` to use a static SVD clutter
             filter based on singular vector indices. Assuming singular vectors in
             decreasing singular value order, singular vectors with indices outside
-            ``[low_cutoff, high_cutoff[`` are regressed out.
+            `[low_cutoff, high_cutoff[` are regressed out.
 
-        ``"svd_energy"``:
-            The ``"svd_energy"`` clutter filter is an adaptive SVD clutter filter based
+        `"svd_energy"`:
+            The `"svd_energy"` clutter filter is an adaptive SVD clutter filter based
             on singular vector energy. Singular vectors with energy outside
-            ``[low_cutoff, high_cutoff]`` are regressed out.
+            `[low_cutoff, high_cutoff]` are regressed out.
 
-        ``"svd_cumulative_energy"``:
-            The ``"svd_cumulative_energy"`` clutter filter is an adaptive SVD clutter filter
+        `"svd_cumulative_energy"`:
+            The `"svd_cumulative_energy"` clutter filter is an adaptive SVD clutter filter
             based on singular vector cumulative energy. Singular vectors with cumulative
-            energy outside ``[low_cutoff, high_cutoff]`` are regressed out.
+            energy outside `[low_cutoff, high_cutoff]` are regressed out.
 
-        ``"butterworth"``:
-            The ``"butterworth"`` clutter filter uses a Butterworth low-pass, high-pass,
+        `"butterworth"`:
+            The `"butterworth"` clutter filter uses a Butterworth low-pass, high-pass,
             or band-pass filter.
     fs : float, optional
         When using the Butterworth clutter filter, the sampling frequency, in Hertz.
@@ -211,7 +211,7 @@ def _process_block_with_clutter_filter(
     Returns
     -------
     (windows, z, y, x) numpy.ndarray
-        The computed volumes, with ``windows`` the number of sliding windows used.
+        The computed volumes, with `windows` the number of sliding windows used.
     """
     if window_width is None:
         window_width = block.shape[0]
@@ -302,16 +302,16 @@ def compute_power_doppler_volume(
     Parameters
     ----------
     block : (time, z, y, x) numpy.ndarray
-        Complex beamformed IQ data, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions.
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
     filter_method : {"svd_indices", "svd_energy", "svd_cumulative_energy", "butterworth"}, \
             default: "svd_indices"
         Clutter filtering method to apply before power Doppler computation.
 
-        - ``"svd_indices"``: Static SVD filter using singular vector indices.
-        - ``"svd_energy"``: Adaptive SVD filter using singular vector energies.
-        - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
-        - ``"butterworth"``: Butterworth frequency-domain filter.
+        - `"svd_indices"`: Static SVD filter using singular vector indices.
+        - `"svd_energy"`: Adaptive SVD filter using singular vector energies.
+        - `"svd_cumulative_energy"`: Adaptive SVD filter using cumulative energies.
+        - `"butterworth"`: Butterworth frequency-domain filter.
 
     clutter_mask : (z, y, x) numpy.ndarray, optional
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
@@ -338,8 +338,8 @@ def compute_power_doppler_volume(
     Returns
     -------
     (windows, z, y, x) numpy.ndarray
-        Power Doppler volumes, where ``windows`` is the number of temporal sliding
-        windows and ``(z, y, x)`` are spatial dimensions.
+        Power Doppler volumes, where `windows` is the number of temporal sliding
+        windows and `(z, y, x)` are spatial dimensions.
     """
 
     def process_block_func(block: npt.NDArray, **_: Any) -> npt.NDArray:
@@ -402,18 +402,18 @@ def compute_axial_velocity_volume(
     Parameters
     ----------
     block : (time, z, y, x) numpy.ndarray
-        Complex beamformed IQ data, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions.
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
     fs : float
         Volume sampling frequency in Hertz.
     filter_method : {"svd_indices", "svd_energy", "svd_cumulative_energy", "butterworth"}, \
             default: "svd_indices"
         Clutter filtering method to apply before velocity computation.
 
-        - ``"svd_indices"``: Static SVD filter using singular vector indices
-        - ``"svd_energy"``: Adaptive SVD filter using singular vector energies
-        - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies
-        - ``"butterworth"``: Butterworth frequency-domain filter
+        - `"svd_indices"`: Static SVD filter using singular vector indices
+        - `"svd_energy"`: Adaptive SVD filter using singular vector energies
+        - `"svd_cumulative_energy"`: Adaptive SVD filter using cumulative energies
+        - `"butterworth"`: Butterworth frequency-domain filter
 
     clutter_mask : (z, y, x) numpy.ndarray, optional
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
@@ -437,11 +437,11 @@ def compute_axial_velocity_volume(
     lag : int, default: 1
         Temporal lag in volumes for autocorrelation computation. Must be positive.
     absolute_velocity : bool, default: False
-        If ``True``, compute absolute velocity values. If ``False``, preserve sign
+        If `True`, compute absolute velocity values. If `False`, preserve sign
         information.
     spatial_kernel : int, default: 1
         Size of the median filter kernel applied spatially to denoise. Must be
-        positive and odd. If ``1``, no spatial filtering is applied.
+        positive and odd. If `1`, no spatial filtering is applied.
     ultrasound_frequency : float, default: 15.625e6
         Probe central frequency in Hertz.
     sound_velocity : float, default: 1540
@@ -449,16 +449,16 @@ def compute_axial_velocity_volume(
     estimation_method : {"average_angle", "angle_average"}, default: "average_angle"
         Method for computing the velocity estimate.
 
-        - ``"average_angle"``: Compute the angle of the autocorrelation, then average
+        - `"average_angle"`: Compute the angle of the autocorrelation, then average
           (i.e., average of angles).
-        - ``"angle_average"``: Average the autocorrelation, then compute the angle
+        - `"angle_average"`: Average the autocorrelation, then compute the angle
           (i.e., angle of average).
 
     Returns
     -------
     (windows, z, y, x) numpy.ndarray
-        Axial velocity volumes, where ``windows`` is the number of temporal sliding
-        windows and ``(z, y, x)`` are spatial dimensions. Velocity values are in meters
+        Axial velocity volumes, where `windows` is the number of temporal sliding
+        windows and `(z, y, x)` are spatial dimensions. Velocity values are in meters
         per second.
 
     Notes
@@ -490,7 +490,7 @@ def compute_axial_velocity_volume(
         lag : int
             Temporal lag in volumes for autocorrelation computation.
         absolute_velocity : bool
-            If ``True``, compute absolute velocity values. If ``False``, preserve sign
+            If `True`, compute absolute velocity values. If `False`, preserve sign
             information.
         fs : float
             Volume sampling frequency in Hertz.
@@ -588,7 +588,7 @@ def process_iq_blocks(
         Dask array of complex IQ data.
     process_func : callable
         Function to apply to each temporal window. It must accept a ``(window_volumes,
-        z, y, x)`` array as first argument and return a ``(output_volumes, ...)`` array.
+        z, y, x)` array as first argument and return a `(output_volumes, ...)`` array.
     window_width : int, optional
         Width of the sliding temporal window, in volumes. If not provided, uses the
         chunk size along the first dimension.
@@ -680,9 +680,9 @@ def process_iq_to_power_doppler(
     ----------
     iq : xarray.DataArray
         Xarray DataArray containing complex beamformed IQ data with dimensions
-        ``(time, z, y, x)``, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions. The DataArray should have a
-        ``compound_sampling_frequency`` attribute (required when using the
+        `(time, z, y, x)`, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions. The DataArray should have a
+        `compound_sampling_frequency` attribute (required when using the
         Butterworth filter).
     clutter_window_width : int, optional
         Width of the sliding temporal window for clutter filtering, in volumes. If not
@@ -694,15 +694,15 @@ def process_iq_to_power_doppler(
             default: "svd_indices"
         Clutter filtering method to apply before power Doppler computation.
 
-        - ``"svd_indices"``: Static SVD filter using singular vector indices.
-        - ``"svd_energy"``: Adaptive SVD filter using singular vector energies.
-        - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
-        - ``"butterworth"``: Butterworth frequency-domain filter.
+        - `"svd_indices"`: Static SVD filter using singular vector indices.
+        - `"svd_energy"`: Adaptive SVD filter using singular vector energies.
+        - `"svd_cumulative_energy"`: Adaptive SVD filter using cumulative energies.
+        - `"butterworth"`: Butterworth frequency-domain filter.
 
     clutter_mask : (z, y, x) xarray.DataArray, optional
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
-        used. The mask spatial coordinates ``(z, y, x)`` must match the IQ data
+        used. The mask spatial coordinates `(z, y, x)` must match the IQ data
         coordinates.
     low_cutoff : int or float, optional
         Low cutoff of the clutter filter. See `filter_method` for details. If not
@@ -724,8 +724,8 @@ def process_iq_to_power_doppler(
     -------
     (clutter_windows * doppler_windows, z, y, x) xarray.DataArray
         Power Doppler volumes as an Xarray DataArray with updated time coordinates,
-        where ``clutter_windows`` is the number of clutter filter sliding windows and
-        ``doppler_windows`` is the number of power Doppler sliding windows per clutter
+        where `clutter_windows` is the number of clutter filter sliding windows and
+        `doppler_windows` is the number of power Doppler sliding windows per clutter
         window.
 
     Notes
@@ -881,13 +881,13 @@ def process_iq_to_axial_velocity(
     ----------
     iq : xarray.DataArray
         Xarray DataArray containing complex beamformed IQ data with dimensions
-        ``(time, z, y, x)``, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions. The DataArray must have the
+        `(time, z, y, x)`, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions. The DataArray must have the
         following attributes:
 
-        - ``compound_sampling_frequency``: Volume acquisition rate in Hz.
-        - ``transmit_frequency``: Ultrasound probe central frequency in Hz.
-        - ``sound_velocity``: Speed of sound in the imaged medium in m/s.
+        - `compound_sampling_frequency`: Volume acquisition rate in Hz.
+        - `transmit_frequency`: Ultrasound probe central frequency in Hz.
+        - `sound_velocity`: Speed of sound in the imaged medium in m/s.
     clutter_window_width : int, optional
         Width of the sliding temporal window for clutter filtering, in volumes. If not
         provided, uses the chunk size of the IQ data along the temporal dimension.
@@ -898,15 +898,15 @@ def process_iq_to_axial_velocity(
             default: "svd_indices"
         Clutter filtering method to apply before velocity computation.
 
-        - ``"svd_indices"``: Static SVD filter using singular vector indices.
-        - ``"svd_energy"``: Adaptive SVD filter using singular vector energies.
-        - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
-        - ``"butterworth"``: Butterworth frequency-domain filter.
+        - `"svd_indices"`: Static SVD filter using singular vector indices.
+        - `"svd_energy"`: Adaptive SVD filter using singular vector energies.
+        - `"svd_cumulative_energy"`: Adaptive SVD filter using cumulative energies.
+        - `"butterworth"`: Butterworth frequency-domain filter.
 
     clutter_mask : (z, y, x) xarray.DataArray, optional
         Boolean mask to define clutter regions. Only used by SVD-based clutter filters
         to compute clutter vectors from masked voxels. If not provided, all voxels are
-        used. The mask spatial coordinates ``(z, y, x)`` must match the IQ data
+        used. The mask spatial coordinates `(z, y, x)` must match the IQ data
         coordinates.
     low_cutoff : int or float, optional
         Low cutoff of the clutter filter. See `filter_method` for details. If not
@@ -926,25 +926,25 @@ def process_iq_to_axial_velocity(
     lag : int, default: 1
         Temporal lag in volumes for autocorrelation computation. Must be positive.
     absolute_velocity : bool, default: False
-        If ``True``, compute absolute velocity values. If ``False``, preserve sign
+        If `True`, compute absolute velocity values. If `False`, preserve sign
         information.
     spatial_kernel : int, default: 1
         Size of the median filter kernel applied spatially to denoise. Must be
-        positive and odd. If ``1``, no spatial filtering is applied.
+        positive and odd. If `1`, no spatial filtering is applied.
     estimation_method : {"average_angle", "angle_average"}, default: "average_angle"
         Method for computing the velocity estimate.
 
-        - ``"average_angle"``: Compute the angle of the autocorrelation, then average
+        - `"average_angle"`: Compute the angle of the autocorrelation, then average
           (i.e., average of angles).
-        - ``"angle_average"``: Average the autocorrelation, then compute the angle
+        - `"angle_average"`: Average the autocorrelation, then compute the angle
           (i.e., angle of average).
 
     Returns
     -------
     (clutter_windows * velocity_windows, z, y, x) xarray.DataArray
         Axial velocity volumes as an Xarray DataArray with updated time coordinates,
-        where ``clutter_windows`` is the number of clutter filter sliding windows and
-        ``velocity_windows`` is the number of velocity sliding windows per clutter window.
+        where `clutter_windows` is the number of clutter filter sliding windows and
+        `velocity_windows` is the number of velocity sliding windows per clutter window.
         Velocity values are in meters per second.
 
     Notes

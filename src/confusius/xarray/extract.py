@@ -54,13 +54,13 @@ class FUSIExtractAccessor:
         Returns
         -------
         xarray.DataArray
-            Array with spatial dimensions flattened into a ``voxels`` dimension.
-            All non-spatial dimensions are preserved. The ``voxels`` dimension has a
+            Array with spatial dimensions flattened into a `voxels` dimension.
+            All non-spatial dimensions are preserved. The `voxels` dimension has a
             MultiIndex storing spatial coordinates.
 
-            For simple round-trip reconstruction, use ``.unstack("voxels")`` which
+            For simple round-trip reconstruction, use `.unstack("voxels")` which
             re-creates the original DataArray using the smallest bounding box. For full
-            mask shape reconstruction, use ``.fusi.extract.unmask()``.
+            mask shape reconstruction, use `.fusi.extract.unmask()`.
 
         Examples
         --------
@@ -86,7 +86,7 @@ class FUSIExtractAccessor:
         """Reconstruct N-D volume from masked signals.
 
         Reconstructs the full spatial volume from a DataArray of signals, which must
-        have a ``voxels`` dimension. This is a convenience wrapper around
+        have a `voxels` dimension. This is a convenience wrapper around
         `confusius.extract.unmask()`.
 
         Parameters
@@ -100,7 +100,7 @@ class FUSIExtractAccessor:
         Returns
         -------
         xarray.DataArray
-            Reconstructed DataArray with shape ``(..., z, y, x)`` where spatial
+            Reconstructed DataArray with shape `(..., z, y, x)` where spatial
             coordinates come from the mask.
 
         Examples

@@ -1,1 +1,1 @@
-"""Unit tests for the ``plotting`` module."""
+"""Unit tests for the `plotting` module."""

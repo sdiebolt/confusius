@@ -23,19 +23,19 @@ def compute_tsnr(signals: xr.DataArray) -> xr.DataArray:
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Signals to compute tSNR from. Must have a ``time`` dimension. Additional
-        dimensions represent spatial locations (e.g., ``voxels``, ``z``/``y``/``x``).
+        Signals to compute tSNR from. Must have a `time` dimension. Additional
+        dimensions represent spatial locations (e.g., `voxels`, `z`/`y`/`x`).
 
     Returns
     -------
     xarray.DataArray
-        Spatial map of tSNR values with the ``time`` dimension reduced. Voxels with zero
-        temporal standard deviation (constant signals) yield ``inf``.
+        Spatial map of tSNR values with the `time` dimension reduced. Voxels with zero
+        temporal standard deviation (constant signals) yield `inf`.
 
     Raises
     ------
     ValueError
-        If `signals` has no ``time`` dimension or if the ``time`` dimension has only 1
+        If `signals` has no `time` dimension or if the `time` dimension has only 1
         timepoint.
 
     Notes
@@ -45,7 +45,7 @@ def compute_tsnr(signals: xr.DataArray) -> xr.DataArray:
     $$\\text{tSNR} = \\frac{\\bar{x}}{\\sigma_x}$$
 
     where $\\bar{x}$ is the temporal mean and $\\sigma_x$ is the temporal standard
-    deviation (computed with ``ddof=0``). This is the inverse of the coefficient of
+    deviation (computed with `ddof=0`). This is the inverse of the coefficient of
     variation (see [`compute_cv`][confusius.qc.compute_cv]).
 
     References
@@ -99,19 +99,19 @@ def compute_cv(signals: xr.DataArray) -> xr.DataArray:
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Signals to compute CV from. Must have a ``time`` dimension. Additional
-        dimensions represent spatial locations (e.g., ``voxels``, ``z``/``y``/``x``).
+        Signals to compute CV from. Must have a `time` dimension. Additional
+        dimensions represent spatial locations (e.g., `voxels`, `z`/`y`/`x`).
 
     Returns
     -------
     xarray.DataArray
-        Spatial map of CV values with the ``time`` dimension reduced. Voxels with zero
-        temporal mean yield ``inf`` (or ``NaN`` if the standard deviation is also zero).
+        Spatial map of CV values with the `time` dimension reduced. Voxels with zero
+        temporal mean yield `inf` (or `NaN` if the standard deviation is also zero).
 
     Raises
     ------
     ValueError
-        If `signals` has no ``time`` dimension or if the ``time`` dimension has only 1
+        If `signals` has no `time` dimension or if the `time` dimension has only 1
         timepoint.
 
     Notes
@@ -120,7 +120,7 @@ def compute_cv(signals: xr.DataArray) -> xr.DataArray:
 
     $$\\text{CV} = \\frac{\\sigma_x}{\\bar{x}}$$
 
-    where $\\sigma_x$ is the temporal standard deviation (computed with ``ddof=0``) and
+    where $\\sigma_x$ is the temporal standard deviation (computed with `ddof=0`) and
     $\\bar{x}$ is the temporal mean. This is the inverse of the temporal signal-to-noise
     ratio (see [`compute_tsnr`][confusius.qc.compute_tsnr]).
 

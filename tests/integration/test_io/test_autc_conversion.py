@@ -140,7 +140,7 @@ class TestAUTCConversion:
         assert first_shape == second_shape
 
     def test_frames_per_shard_not_multiple(self, synthetic_autc_session, tmp_path):
-        """Raise `ValueError` when ``frames_per_shard`` is not a multiple of ``frames_per_chunk``."""
+        """Raise `ValueError` when `frames_per_shard` is not a multiple of `frames_per_chunk`."""
         output_path = tmp_path / "output.zarr"
 
         with pytest.raises(
@@ -158,7 +158,7 @@ class TestAUTCConversion:
     def test_block_times_without_frequency_error(
         self, synthetic_autc_session, tmp_path
     ):
-        """Raise `ValueError` when ``block_times`` provided without ``compound_sampling_frequency``."""
+        """Raise `ValueError` when `block_times` provided without `compound_sampling_frequency`."""
         output_path = tmp_path / "output.zarr"
 
         with pytest.raises(
@@ -175,7 +175,7 @@ class TestAUTCConversion:
     def test_zarr_kwargs_override_warning(
         self, synthetic_autc_session, tmp_path, caplog
     ):
-        """Warn when ``zarr_kwargs`` contains keys that are handled by function parameters."""
+        """Warn when `zarr_kwargs` contains keys that are handled by function parameters."""
         output_path = tmp_path / "output.zarr"
 
         with warnings.catch_warnings(record=True) as w:

@@ -42,14 +42,14 @@ class FUSIIOAccessor:
         """Save DataArray to NIfTI format.
 
         Saves the DataArray to a NIfTI file and always writes a BIDS-style JSON sidecar
-        alongside it. The data is transposed to NIfTI convention ``(x, y, z, time)``
+        alongside it. The data is transposed to NIfTI convention `(x, y, z, time)`
         before saving.
 
         Parameters
         ----------
         path : str or pathlib.Path
-            Output path for the NIfTI file, with ``.nii`` or ``.nii.gz`` extension. If
-            ``.nii.gz`` is used, the file will be saved in compressed format.
+            Output path for the NIfTI file, with `.nii` or `.nii.gz` extension. If
+            `.nii.gz` is used, the file will be saved in compressed format.
         nifti_version : {1, 2}, default: 1
             NIfTI format version to use. Version 2 is a simple extension to support
             larger files and arrays with dimension sizes greater than 32,767.

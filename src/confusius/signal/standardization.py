@@ -13,23 +13,23 @@ def standardize(
 ) -> xr.DataArray:
     """Standardize signals across time.
 
-    This function operates along the ``time`` dimension and works with arrays of any
+    This function operates along the `time` dimension and works with arrays of any
     shape, making it flexible for both extracted signals and full fUSI data.
 
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Array to standardize. Must have a ``time`` dimension. Can be any shape, e.g.,
-        extracted signals ``(time, voxels)``, full 3D+t imaging data ``(time, z, y,
-        x)``, or regional signals ``(time, regions)``.
+        Array to standardize. Must have a `time` dimension. Can be any shape, e.g.,
+        extracted signals `(time, voxels)`, full 3D+t imaging data ``(time, z, y,
+        x)`, or regional signals `(time, regions)``.
     method : {"zscore", "psc"}, default: "zscore"
         Standardization method:
 
-        - ``"zscore"``: ``(x - mean) / std`` using sample standard deviation with
+        - `"zscore"`: `(x - mean) / std` using sample standard deviation with
           Bessel's correction. Elements with zero or near-zero variance will be set to
-          ``numpy.nan``.
-        - ``"psc"``: Percent signal change: ``(x - mean) / |mean| * 100``. Elements
-          with zero or near-zero mean will be set to ``numpy.nan``.
+          `numpy.nan`.
+        - `"psc"`: Percent signal change: `(x - mean) / |mean| * 100`. Elements
+          with zero or near-zero mean will be set to `numpy.nan`.
 
     Returns
     -------
@@ -39,9 +39,9 @@ def standardize(
     Raises
     ------
     ValueError
-        If `signals` does not have a ``time`` dimension.
+        If `signals` does not have a `time` dimension.
     ValueError
-        If `method` is not ``"zscore"`` or ``"psc"``.
+        If `method` is not `"zscore"` or `"psc"`.
 
     Warns
     -----

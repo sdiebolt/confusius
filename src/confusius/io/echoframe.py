@@ -27,7 +27,7 @@ def load_echoframe_dat(
     """Load an EchoFrame DAT file containing beamformed IQ data.
 
     !!! warning "EchoFrame spatial dimensions"
-        EchoFrame stores data with ``(x, y, z)`` spatial ordering corresponding to
+        EchoFrame stores data with `(x, y, z)` spatial ordering corresponding to
         (lateral, elevation, axial) dimensions, which is different from the ``(z, y,
         x)`` ordering used in ConfUSIus that corresponds to (elevation, axial, lateral).
         The returned array maintains the EchoFrame ordering to avoid confusion, but
@@ -49,9 +49,9 @@ def load_echoframe_dat(
     Returns
     -------
     (blocks, volumes, x, y, z) numpy.memmap
-        Memory-mapped array containing the beamformed IQ data, where ``blocks`` is the
-        number of acquisitions blocks, ``volumes`` is the number of volumes per block,
-        ``x`` is the lateral dimension, ``y`` is the elevation dimension, and ``z`` is
+        Memory-mapped array containing the beamformed IQ data, where `blocks` is the
+        number of acquisitions blocks, `volumes` is the number of volumes per block,
+        `x` is the lateral dimension, `y` is the elevation dimension, and `z` is
         the axial dimension.
     """
     dat_path = check_path(dat_path, label="dat_path", type="file")
@@ -133,10 +133,10 @@ def convert_echoframe_dat_to_zarr(
 ) -> "zarr.Group":
     """Convert an EchoFrame DAT file to Zarr format compatible with Xarray.
 
-    Beamformed IQ data is converted to a Zarr group with an ``iq`` array of shape
-    ``(time, z, y, x)`` chunked along the first dimension. Coordinates are stored as
+    Beamformed IQ data is converted to a Zarr group with an `iq` array of shape
+    `(time, z, y, x)` chunked along the first dimension. Coordinates are stored as
     separate Zarr arrays following Xarray conventions, allowing the data to be opened
-    directly with ``xarray.open_zarr()``.
+    directly with `xarray.open_zarr()`.
 
     Parameters
     ----------
@@ -179,23 +179,23 @@ def convert_echoframe_dat_to_zarr(
         provided, time coordinate will be computed based on
         `compound_sampling_frequency` or set to frame indices.
     show_progress : bool, default: True
-        Whether to show progress during conversion. If ``False``, no progress bars are
+        Whether to show progress during conversion. If `False`, no progress bars are
         displayed.
     progress : rich.progress.Progress, optional
         External `rich.progress.Progress` instance to add tasks to. If provided and
-        `show_progress` is ``True``, a task will be added to this
+        `show_progress` is `True`, a task will be added to this
         `rich.progress.Progress` instance instead of creating a new progress bar with
         `rich.progress.track`.
     track_kwargs : dict, optional
         Additional keyword arguments to pass to `rich.progress.track` if using internal
-        progress tracking (only used if `show_progress` is ``True`` and `progress` is
-        ``None``).
+        progress tracking (only used if `show_progress` is `True` and `progress` is
+        `None`).
 
     Returns
     -------
     zarr.Group
-        The created Zarr group containing the ``iq`` data array and coordinate arrays.
-        Can be opened directly with ``xarray.open_zarr()``.
+        The created Zarr group containing the `iq` data array and coordinate arrays.
+        Can be opened directly with `xarray.open_zarr()`.
 
     Notes
     -----
@@ -205,17 +205,17 @@ def convert_echoframe_dat_to_zarr(
         ds = xr.open_zarr("output.zarr")
         iq = ds["iq"]
 
-    Metadata attributes (e.g., ``transmit_frequency``, ``sound_velocity``) are stored
-    on the ``iq`` DataArray (accessible via ``iq.attrs``), consistent with how
+    Metadata attributes (e.g., `transmit_frequency`, `sound_velocity`) are stored
+    on the `iq` DataArray (accessible via `iq.attrs`), consistent with how
     reduction functions return DataArrays with attributes.
 
     The group contains:
 
-    - ``iq``: The main data array with dimensions ``(time, z, y, x)``.
-    - ``time``: Time coordinate array.
-    - ``z``: Elevation coordinate array (always ``[0]`` for 2D data).
-    - ``y``: Axial (depth) coordinate array (from metadata).
-    - ``x``: Lateral coordinate array (from metadata).
+    - `iq`: The main data array with dimensions `(time, z, y, x)`.
+    - `time`: Time coordinate array.
+    - `z`: Elevation coordinate array (always `[0]` for 2D data).
+    - `y`: Axial (depth) coordinate array (from metadata).
+    - `x`: Lateral coordinate array (from metadata).
     """
     from rich.progress import track
 

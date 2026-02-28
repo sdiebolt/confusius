@@ -12,7 +12,7 @@ def db_scale(data: xr.DataArray, factor: int = 10) -> xr.DataArray:
     Parameters
     ----------
     data : xarray.DataArray
-        Input ``DataArray``.
+        Input `DataArray`.
     factor : int, default: 10
         Scaling factor for decibel conversion. Use 10 for power quantities (default),
         20 for amplitude quantities.
@@ -20,11 +20,11 @@ def db_scale(data: xr.DataArray, factor: int = 10) -> xr.DataArray:
     Returns
     -------
     xarray.DataArray
-        Data in decibel scale. Values are in range ``[factor * log(min/max), 0]`` dB.
+        Data in decibel scale. Values are in range `[factor * log(min/max), 0]` dB.
 
     Notes
     -----
-    Warnings are suppressed for zero/negative values, which are set to ``-inf``.
+    Warnings are suppressed for zero/negative values, which are set to `-inf`.
 
     If the input data is backed by Dask (lazily loaded), the global maximum is computed
     eagerly when this function is called. This avoids re-triggering a full array scan on
@@ -68,7 +68,7 @@ def log_scale(data: xr.DataArray) -> xr.DataArray:
 
     Notes
     -----
-    Warnings are suppressed for zero/negative values, which are set to ``-inf/nan``.
+    Warnings are suppressed for zero/negative values, which are set to `-inf/nan`.
 
     Examples
     --------
@@ -150,12 +150,12 @@ class FUSIScaleAccessor:
         Returns
         -------
         xarray.DataArray
-            Data in decibel scale. Values are in range ``[factor * log(min/max), 0]``
+            Data in decibel scale. Values are in range `[factor * log(min/max), 0]`
             dB.
 
         Notes
         -----
-        Warnings are suppressed for zero/negative values, which are set to ``-inf``.
+        Warnings are suppressed for zero/negative values, which are set to `-inf`.
 
         If the input data is backed by Dask (lazily loaded), the global maximum is
         computed eagerly when this method is called. This avoids re-triggering a full

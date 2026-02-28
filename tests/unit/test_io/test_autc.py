@@ -35,7 +35,7 @@ def _create_autc_dat_file(
         Starting acquisition block index (1-based in file).
     known_pattern : bool, default: False
         If True, fill each block with a constant complex value equal to
-        ``complex(block_idx + 1, 1)`` for deterministic value checks.
+        `complex(block_idx + 1, 1)` for deterministic value checks.
     """
     header_dtype = np.dtype(
         [

@@ -1,7 +1,7 @@
 """Confound regression functions for signal preprocessing.
 
 Portions of this file are derived from Nilearn, which is licensed under the BSD-3-Clause
-License. See ``NOTICE`` file for details.
+License. See `NOTICE` file for details.
 """
 
 from typing import Callable, cast
@@ -205,16 +205,16 @@ def regress_confounds(
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Signals to clean. Must have a ``time`` dimension. Can be any shape,
-        e.g., extracted signals ``(time, voxels)``, full 3D+t imaging data
-        ``(time, z, y, x)``, or regional signals ``(time, regions)``.
+        Signals to clean. Must have a `time` dimension. Can be any shape,
+        e.g., extracted signals `(time, voxels)`, full 3D+t imaging data
+        `(time, z, y, x)`, or regional signals `(time, regions)`.
 
         !!! warning "Chunking along time is not supported"
-            The ``time`` dimension must NOT be chunked. Chunk only spatial dimensions:
-            ``data.chunk({'time': -1})``.
+            The `time` dimension must NOT be chunked. Chunk only spatial dimensions:
+            `data.chunk({'time': -1})`.
 
     confounds : (time, n_confounds) xarray.DataArray
-        Confound regressors to remove. Can have shape ``(time,)`` for a single
+        Confound regressors to remove. Can have shape `(time,)` for a single
         confound. The time dimension and coordinates must match the signals exactly.
     standardize_confounds : bool, default: True
         Whether to standardize confounds by their maximum absolute value before
@@ -229,7 +229,7 @@ def regress_confounds(
     Raises
     ------
     ValueError
-        If `signals` does not have a ``time`` dimension, or if `confounds` have
+        If `signals` does not have a `time` dimension, or if `confounds` have
         mismatched time dimension or invalid shape.
     TypeError
         If `confounds` is not an xarray DataArray.
@@ -320,9 +320,9 @@ def _extract_compcor_components(
     (time, component) xarray.DataArray
         Principal components (loadings) with:
 
-        - ``time`` dimension with coordinates from input ``noise_signals``
-        - ``component`` dimension (0 to n_components-1)
-        - ``explained_variance_ratio`` coordinate on ``component`` dimension
+        - `time` dimension with coordinates from input `noise_signals`
+        - `component` dimension (0 to n_components-1)
+        - `explained_variance_ratio` coordinate on `component` dimension
 
     Notes
     -----
@@ -391,13 +391,13 @@ def compute_compcor_confounds(
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Signals from which to extract components. Must have a ``time`` dimension.
-        For extracted signals, shape is typically ``(time, voxels)``. For full
-        imaging data, shape is typically ``(time, z, y, x)``.
+        Signals from which to extract components. Must have a `time` dimension.
+        For extracted signals, shape is typically `(time, voxels)`. For full
+        imaging data, shape is typically `(time, z, y, x)`.
 
         !!! warning "Chunking along time is not supported"
-            The ``time`` dimension must NOT be chunked. Chunk only spatial dimensions:
-            ``data.chunk({'time': -1})``.
+            The `time` dimension must NOT be chunked. Chunk only spatial dimensions:
+            `data.chunk({'time': -1})`.
 
     noise_mask : xarray.DataArray, optional
         Binary mask indicating voxels to consider. Must have the same spatial
@@ -415,8 +415,8 @@ def compute_compcor_confounds(
         component quality by removing slow drifts.
     skipna : bool, default: False
         Whether to skip NaN values when computing variance quantiles for tCompCor. If
-        ``False``, uses fast quantile calculation. If ``True``, uses slower NaN-aware
-        quantile calculation. Set to ``True`` only if your data contains NaN values.
+        `False`, uses fast quantile calculation. If `True`, uses slower NaN-aware
+        quantile calculation. Set to `True` only if your data contains NaN values.
 
     Returns
     -------
@@ -424,23 +424,23 @@ def compute_compcor_confounds(
         Extracted CompCor components. Each column (component) is a principal component
         that can be used as a confound regressor. The DataArray includes:
 
-        - ``time`` dimension with coordinates matching the input signals.
-        - ``component`` dimension (0 to ``n_components - 1``).
-        - ``explained_variance_ratio`` coordinate on ``component`` dimension, containing
+        - `time` dimension with coordinates matching the input signals.
+        - `component` dimension (0 to `n_components - 1`).
+        - `explained_variance_ratio` coordinate on `component` dimension, containing
           the proportion of total variance explained by each component.
 
     Raises
     ------
     ValueError
-        If `signals` does not have a ``time`` dimension.
+        If `signals` does not have a `time` dimension.
     ValueError
         If mask doesn't have the right dtype or its dimensions/coordinates don't match
         signal spatial dimensions.
     ValueError
-        If both `noise_mask` and `variance_threshold` are ``None`` (must specify at
+        If both `noise_mask` and `variance_threshold` are `None` (must specify at
         least one).
     ValueError
-        If `variance_threshold` is not in range ``(0, 1)``.
+        If `variance_threshold` is not in range `(0, 1)`.
     ValueError
         If `n_components` is not positive.
     ValueError

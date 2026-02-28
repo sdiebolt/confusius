@@ -18,23 +18,23 @@ def _striu2mat(
     Parameters
     ----------
     striu : (N,) numpy.ndarray
-        Vector giving triangle above diagonal of shear matrix. ``N`` must be a
+        Vector giving triangle above diagonal of shear matrix. `N` must be a
         triangular number (1, 3, 6, 10, …).
 
     Returns
     -------
     SM : (M, M) numpy.ndarray
-        Shear matrix, where ``M`` is the integer satisfying ``M*(M-1)/2 == N``.
+        Shear matrix, where `M` is the integer satisfying `M*(M-1)/2 == N`.
 
     Raises
     ------
     ValueError
-        If ``len(striu)`` is not a triangular number.
+        If `len(striu)` is not a triangular number.
 
     Notes
     -----
-    Adapted from ``transforms3d.affines.striu2mat`` by Matthew Brett et al.
-    (BSD-2-Clause License). See the ``NOTICE`` and ``LICENSE-BSD-2-Clause``
+    Adapted from `transforms3d.affines.striu2mat` by Matthew Brett et al.
+    (BSD-2-Clause License). See the `NOTICE` and `LICENSE-BSD-2-Clause`
     files for details.
     Source: https://github.com/matthew-brett/transforms3d
     """
@@ -60,15 +60,15 @@ def compose_affine(
     Parameters
     ----------
     T : (N,) numpy.ndarray
-        Translation vector, where ``N`` is usually 3 (3D case).
+        Translation vector, where `N` is usually 3 (3D case).
     R : (N, N) numpy.ndarray
-        Rotation matrix, where ``N`` is usually 3 (3D case).
+        Rotation matrix, where `N` is usually 3 (3D case).
     Z : (N,) numpy.ndarray
-        Zoom (scale) vector, where ``N`` is usually 3 (3D case).
+        Zoom (scale) vector, where `N` is usually 3 (3D case).
     S : (P,) numpy.ndarray, optional
         Shear vector filling the upper triangle above the diagonal of the shear
-        matrix. ``P`` is the ``(N-2)``-th triangular number (3 for the 3D case).
-        If ``None``, no shear is applied.
+        matrix. `P` is the `(N-2)`-th triangular number (3 for the 3D case).
+        If `None`, no shear is applied.
 
     Returns
     -------
@@ -77,8 +77,8 @@ def compose_affine(
 
     Notes
     -----
-    Adapted from ``transforms3d.affines.compose`` by Matthew Brett _et al_.
-    (BSD-2-Clause License). See the ``NOTICE`` and ``LICENSE-BSD-2-Clause``
+    Adapted from `transforms3d.affines.compose` by Matthew Brett _et al_.
+    (BSD-2-Clause License). See the `NOTICE` and `LICENSE-BSD-2-Clause`
     files for details.
     Source: https://github.com/matthew-brett/transforms3d
     """
@@ -105,7 +105,7 @@ def decompose_affine(
 ]:
     """Decompose a 4x4 homogeneous affine into translation, rotation, zoom, shear.
 
-    Decomposes ``A44`` into ``T, R, Z, S`` such that::
+    Decomposes `A44` into `T, R, Z, S` such that::
 
         Smat = np.array([[1, S[0], S[1]],
                          [0,    1, S[2]],
@@ -127,15 +127,15 @@ def decompose_affine(
         Rotation matrix.
     Z : (3,) numpy.ndarray
         Zoom (scale) vector. May have one negative zoom to avoid a negative
-        determinant in ``R``.
+        determinant in `R`.
     S : (3,) numpy.ndarray
-        Shear vector ``[sxy, sxz, syz]`` filling the upper triangle of the
+        Shear vector `[sxy, sxz, syz]` filling the upper triangle of the
         shear matrix. Zero for pure rotation/zoom affines.
 
     Notes
     -----
-    Adapted from ``transforms3d.affines.decompose44`` by Matthew Brett et al.
-    (BSD-2-Clause License). See the ``NOTICE`` and ``LICENSE-BSD-2-Clause``
+    Adapted from `transforms3d.affines.decompose44` by Matthew Brett et al.
+    (BSD-2-Clause License). See the `NOTICE` and `LICENSE-BSD-2-Clause`
     files for details.
     Source: https://github.com/matthew-brett/transforms3d
 
@@ -173,10 +173,10 @@ def _sitk_linear_transform_to_affine(
 ) -> npt.NDArray[np.float64]:
     """Convert a SimpleITK linear transform to a homogeneous affine matrix.
 
-    Handles ``TranslationTransform``, ``Euler2DTransform``, ``Euler3DTransform``,
-    ``AffineTransform``, ``VersorRigid3DTransform``, and ``CompositeTransform``
+    Handles `TranslationTransform`, `Euler2DTransform`, `Euler3DTransform`,
+    `AffineTransform`, `VersorRigid3DTransform`, and `CompositeTransform`
     (by composing each sub-transform in order). Non-linear transforms
-    (``BSplineTransform``, ``DisplacementField``) are not supported; callers are
+    (`BSplineTransform`, `DisplacementField`) are not supported; callers are
     responsible for never passing them here.
 
     Parameters
@@ -189,26 +189,26 @@ def _sitk_linear_transform_to_affine(
     (N+1, N+1) numpy.ndarray
         Homogeneous affine matrix in physical space mapping fixed-space points
         to moving-space points (pull/inverse convention used by SimpleITK's
-        ``Resample``).
+        `Resample`).
 
     Raises
     ------
     AssertionError
-        If called with a non-linear transform (``BSplineTransform``,
-        ``DisplacementField``). This indicates a programming error; callers
+        If called with a non-linear transform (`BSplineTransform`,
+        `DisplacementField`). This indicates a programming error; callers
         must not pass non-linear transforms to this function.
 
     Notes
     -----
-    SimpleITK uses a pull (inverse-mapping) convention: ``Resample`` iterates
+    SimpleITK uses a pull (inverse-mapping) convention: `Resample` iterates
     over fixed-grid points and applies the transform to look up the
     corresponding moving-image location. For linear transforms, the stored
     parameters encode::
 
         p_moving = A @ (p_fixed - center) + center + translation
 
-    where ``A`` is the ``(N, N)`` matrix returned by ``GetMatrix()`` and
-    ``center`` is the rotation centre. This is equivalent to the homogeneous
+    where `A` is the `(N, N)` matrix returned by `GetMatrix()` and
+    `center` is the rotation centre. This is equivalent to the homogeneous
     form::
 
         A_full[:N, :N] = A

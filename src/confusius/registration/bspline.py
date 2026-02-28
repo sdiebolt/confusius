@@ -1,8 +1,9 @@
 """B-spline transform helpers for fUSI registration.
 
-A B-spline deformation field is represented as an :class:`xarray.DataArray` with:
+A B-spline deformation field is represented as an [`xarray.DataArray`][xarray.DataArray]
+with:
 
-* **dims**: ``("component", <spatial dims>)`` — e.g. ``("component", "z", "y", "x")``.
+* **dims**: `("component", <spatial dims>)` — e.g. `("component", "z", "y", "x")`.
 * **coords**: physical mm positions of the control-point grid along each spatial axis.
 * **attrs**:
 
@@ -19,10 +20,10 @@ A B-spline deformation field is represented as an :class:`xarray.DataArray` with
           }
       }
 
-When a pre-affine is stored in ``attrs["affines"]["bspline_initialization"]``, the
-full transform is a ``CompositeTransform(pre_affine, bspline)`` — i.e. the pre-affine
+When a pre-affine is stored in `attrs["affines"]["bspline_initialization"]`, the
+full transform is a `CompositeTransform(pre_affine, bspline)` — i.e. the pre-affine
 is applied *first* (coarse global alignment) and the B-spline is applied *second*
-(local deformation refinement).  This mirrors the ``inPlace=True`` composite that
+(local deformation refinement).  This mirrors the `inPlace=True` composite that
 SimpleITK optimises during registration.
 """
 
@@ -50,25 +51,25 @@ def _sitk_bspline_to_dataarray(
     Parameters
     ----------
     transform : SimpleITK.Transform
-        A ``BSplineTransform`` or a ``CompositeTransform`` whose last sub-transform
-        is a ``BSplineTransform``.  Any other type raises ``TypeError``.
+        A `BSplineTransform` or a `CompositeTransform` whose last sub-transform
+        is a `BSplineTransform`.  Any other type raises `TypeError`.
     pre_affine : (N+1, N+1) numpy.ndarray or None, default: None
         Homogeneous affine matrix to store as
-        ``attrs["affines"]["bspline_initialization"]``.  Pass the affine that was
-        used as the pre-alignment so that ``_dataarray_to_sitk_bspline`` can
-        reconstruct the full composite for resampling.  When ``None``, no
-        ``"affines"`` key is written.
+        `attrs["affines"]["bspline_initialization"]`.  Pass the affine that was
+        used as the pre-alignment so that `_dataarray_to_sitk_bspline` can
+        reconstruct the full composite for resampling.  When `None`, no
+        `"affines"` key is written.
 
     Returns
     -------
     xarray.DataArray
-        B-spline control-point DataArray with ``attrs["type"] == "bspline_transform"``.
+        B-spline control-point DataArray with `attrs["type"] == "bspline_transform"`.
 
     Raises
     ------
     TypeError
-        If ``transform`` is not a ``BSplineTransform`` or a ``CompositeTransform``
-        containing a ``BSplineTransform`` as its last sub-transform.
+        If `transform` is not a `BSplineTransform` or a `CompositeTransform`
+        containing a `BSplineTransform` as its last sub-transform.
     """
     import SimpleITK as sitk
 
@@ -124,25 +125,25 @@ def _sitk_bspline_to_dataarray(
 def _dataarray_to_sitk_bspline(da: xr.DataArray) -> "sitk.Transform":
     """Reconstruct a SimpleITK transform from a B-spline DataArray.
 
-    If ``da.attrs["affines"]["bspline_initialization"]`` is present, returns a
-    ``CompositeTransform(pre_affine, bspline)``; otherwise returns a plain
-    ``BSplineTransform``.
+    If `da.attrs["affines"]["bspline_initialization"]` is present, returns a
+    `CompositeTransform(pre_affine, bspline)`; otherwise returns a plain
+    `BSplineTransform`.
 
     Parameters
     ----------
     da : xarray.DataArray
-        B-spline DataArray as produced by :func:`_sitk_bspline_to_dataarray`.
+        B-spline DataArray as produced by `_sitk_bspline_to_dataarray`.
 
     Returns
     -------
     SimpleITK.Transform
-        A ``BSplineTransform`` or ``CompositeTransform`` ready to be passed to
-        ``sitk.Resample``.
+        A `BSplineTransform` or `CompositeTransform` ready to be passed to
+        `sitk.Resample`.
 
     Raises
     ------
     ValueError
-        If ``da`` does not look like a valid B-spline transform DataArray.
+        If `da` does not look like a valid B-spline transform DataArray.
     """
     import SimpleITK as sitk
 
@@ -219,8 +220,8 @@ def _extract_bspline(transform: "sitk.Transform") -> "sitk.BSplineTransform":
     Parameters
     ----------
     transform : SimpleITK.Transform
-        A ``BSplineTransform`` or a ``CompositeTransform`` whose last sub-transform is
-        a ``BSplineTransform``.
+        A `BSplineTransform` or a `CompositeTransform` whose last sub-transform is
+        a `BSplineTransform`.
 
     Returns
     -------
@@ -229,7 +230,7 @@ def _extract_bspline(transform: "sitk.Transform") -> "sitk.BSplineTransform":
     Raises
     ------
     TypeError
-        If no ``BSplineTransform`` can be found.
+        If no `BSplineTransform` can be found.
     """
 
     name = transform.GetName()
@@ -258,7 +259,7 @@ def _validate_bspline_dataarray(da: xr.DataArray) -> None:
     Raises
     ------
     ValueError
-        If ``da.attrs["type"] != "bspline_transform"`` or required attrs are missing.
+        If `da.attrs["type"] != "bspline_transform"` or required attrs are missing.
     """
     if da.attrs.get("type") != "bspline_transform":
         raise ValueError(

@@ -76,7 +76,7 @@ class FUSIPlotAccessor:
             viewer is created.
         **imshow_kwargs
             Additional keyword arguments passed to `napari.imshow`, such as
-            ``contrast_limits``, ``colormap``, etc.
+            `contrast_limits`, `colormap`, etc.
 
         Returns
         -------
@@ -94,8 +94,8 @@ class FUSIPlotAccessor:
 
         For unitary dimensions (e.g., a single-slice elevation axis in 2D+t data), the
         spacing cannot be inferred from coordinates. In that case, the function looks for
-        a ``voxdim`` attribute on the coordinate variable
-        (``data.coords[dim].attrs["voxdim"]``) and uses it as the spacing. If no such
+        a `voxdim` attribute on the coordinate variable
+        (`data.coords[dim].attrs["voxdim"]`) and uses it as the spacing. If no such
         attribute is found, unit spacing is assumed and a warning is emitted.
 
         Examples
@@ -148,14 +148,14 @@ class FUSIPlotAccessor:
         ----------
         mask : xarray.DataArray, optional
             Boolean mask with same spatial dimensions and coordinates as `data`.
-            ``True`` values indicate voxels to include. If not provided, all non-zero
+            `True` values indicate voxels to include. If not provided, all non-zero
             voxels from the data are included.
         detrend_order : int, optional
             Polynomial order for detrending:
 
-            - ``0``: Remove mean (constant detrending).
-            - ``1``: Remove linear trend using least squares regression (default).
-            - ``2+``: Remove polynomial trend of specified order.
+            - `0`: Remove mean (constant detrending).
+            - `1`: Remove linear trend using least squares regression (default).
+            - `2+`: Remove polynomial trend of specified order.
 
             If not provided, no detrending is applied.
         standardize : bool, default: True
@@ -163,15 +163,15 @@ class FUSIPlotAccessor:
         cmap : str, default: "gray"
             Matplotlib colormap name.
         vmin : float, optional
-            Minimum value for colormap. If not provided, uses ``mean - 2*std``.
+            Minimum value for colormap. If not provided, uses `mean - 2*std`.
         vmax : float, optional
-            Maximum value for colormap. If not provided, uses ``mean + 2*std``.
+            Maximum value for colormap. If not provided, uses `mean + 2*std`.
         decimation_threshold : int or None, default: 800
             If the number of timepoints exceeds this value, data is downsampled
-            along the time axis to improve plotting performance. Set to ``None`` to
+            along the time axis to improve plotting performance. Set to `None` to
             disable downsampling.
         figsize : tuple[float, float], default: (10, 5)
-            Figure size in inches ``(width, height)``.
+            Figure size in inches `(width, height)`.
         title : str, optional
             Plot title.
         ax : matplotlib.axes.Axes, optional
@@ -257,26 +257,26 @@ class FUSIPlotAccessor:
         Parameters
         ----------
         slice_coords : list[float], optional
-            Coordinate values along ``slice_mode`` at which to extract slices.
+            Coordinate values along `slice_mode` at which to extract slices.
             Slices are selected by nearest-neighbour lookup. If not provided,
-            all coordinate values along ``slice_mode`` are used.
+            all coordinate values along `slice_mode` are used.
         slice_mode : str, default: "z"
-            Dimension along which to slice (e.g. ``"x"``, ``"y"``, ``"z"``,
-            ``"time"``). After slicing, each panel must be 2D.
+            Dimension along which to slice (e.g. `"x"`, `"y"`, `"z"`,
+            `"time"`). After slicing, each panel must be 2D.
         nrows : int, optional
             Number of rows in the subplot grid. If not provided, computed
-            automatically together with ``ncols`` to produce a near-square layout.
+            automatically together with `ncols` to produce a near-square layout.
         ncols : int, optional
             Number of columns in the subplot grid. If not provided, computed
-            automatically together with ``nrows``.
+            automatically together with `nrows`.
         threshold : float, optional
-            Threshold applied to ``|data|``. See ``threshold_mode`` for the
+            Threshold applied to `|data|`. See `threshold_mode` for the
             masking direction. If not provided, no thresholding is applied.
         threshold_mode : {"lower", "upper"}, default: "lower"
-            Controls how ``threshold`` is applied:
+            Controls how `threshold` is applied:
 
-            - ``"lower"``: set pixels where ``|data| < threshold`` to NaN.
-            - ``"upper"``: set pixels where ``|data| > threshold`` to NaN.
+            - `"lower"`: set pixels where `|data| < threshold` to NaN.
+            - `"upper"`: set pixels where `|data| > threshold` to NaN.
 
         cmap : str, default: "gray"
             Matplotlib colormap name.
@@ -298,22 +298,22 @@ class FUSIPlotAccessor:
             Whether to display axis tick labels.
         show_axes : bool, default: True
             Whether to show all axis decorations (spines, ticks, labels). When
-            ``False``, overrides ``show_axis_labels`` and ``show_axis_ticks``.
+            `False`, overrides `show_axis_labels` and `show_axis_ticks`.
         yincrease : bool, default: False
-            Whether the y-axis increases upward (``True``) or downward (``False``).
+            Whether the y-axis increases upward (`True`) or downward (`False`).
         xincrease : bool, default: True
-            Whether the x-axis increases to the right (``True``) or left
-            (``False``).
+            Whether the x-axis increases to the right (`True`) or left
+            (`False`).
         black_bg : bool, default: True
             Whether to set the figure background to black.
         figure : matplotlib.figure.Figure, optional
             Existing figure to draw into. If not provided, a new figure is
             created.
         axes : numpy.ndarray, optional
-            Existing 2D array of ``matplotlib.axes.Axes`` to draw into. If not
-            provided, new axes are created inside ``figure``.
+            Existing 2D array of `matplotlib.axes.Axes` to draw into. If not
+            provided, new axes are created inside `figure`.
         dpi : int, optional
-            Figure resolution in dots per inch. Ignored when ``figure`` is
+            Figure resolution in dots per inch. Ignored when `figure` is
             provided.
 
         Returns
@@ -324,11 +324,11 @@ class FUSIPlotAccessor:
         Raises
         ------
         ValueError
-            If ``slice_mode`` is not a dimension of the data.
+            If `slice_mode` is not a dimension of the data.
         ValueError
             If the data is not 3D after squeezing unitary dimensions.
         ValueError
-            If ``axes`` is provided but does not contain enough elements for all
+            If `axes` is provided but does not contain enough elements for all
             slices.
 
         Examples
@@ -396,25 +396,25 @@ class FUSIPlotAccessor:
         Parameters
         ----------
         colors : dict[int, str] or str, optional
-            Color specification for contour lines. A ``dict`` maps each label to a
-            color (e.g. ``{1: "red", 2: "blue"}``); a ``str`` applies one color to
+            Color specification for contour lines. A `dict` maps each label to a
+            color (e.g. `{1: "red", 2: "blue"}`); a `str` applies one color to
             all regions. If not provided, distinct colors are drawn from the
-            ``tab10``/``tab20`` colormap.
+            `tab10`/`tab20` colormap.
         linewidths : float, default: 1.5
             Width of contour lines in points.
         linestyles : str, default: "solid"
-            Line style for contour lines (e.g. ``"solid"``, ``"dashed"``).
+            Line style for contour lines (e.g. `"solid"`, `"dashed"`).
         slice_mode : str, default: "z"
-            Dimension along which to slice (e.g. ``"x"``, ``"y"``, ``"z"``).
+            Dimension along which to slice (e.g. `"x"`, `"y"`, `"z"`).
             After slicing, each panel must be 2D.
         slice_coords : list[float], optional
             Coordinate values along `slice_mode` at which to extract slices.
             Slices are selected by nearest-neighbour lookup. If not provided, all
             coordinate values along `slice_mode` are used.
         yincrease : bool, default: False
-            Whether the y-axis increases upward (``True``) or downward (``False``).
+            Whether the y-axis increases upward (`True`) or downward (`False`).
         xincrease : bool, default: True
-            Whether the x-axis increases to the right (``True``) or left (``False``).
+            Whether the x-axis increases to the right (`True`) or left (`False`).
         black_bg : bool, default: True
             Whether to set the figure background to black.
         figure : matplotlib.figure.Figure, optional

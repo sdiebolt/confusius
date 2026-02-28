@@ -48,7 +48,7 @@ def _compute_grid_dims(
 
 
 def _centers_to_edges(centers: np.ndarray) -> np.ndarray:
-    """Convert 1-D coordinate centers to cell edge positions for ``pcolormesh``.
+    """Convert 1-D coordinate centers to cell edge positions for `pcolormesh`.
 
     Handles non-uniform spacing by using midpoints between adjacent centers as interior
     edges, and extrapolating half a step at each end.
@@ -70,8 +70,8 @@ def _build_threshold_cmap(
 ) -> "Colormap":
     """Build colormap with grey band indicating thresholded regions.
 
-    For ``threshold_mode='lower'``: grey between ``[-threshold, threshold]``.
-    For ``threshold_mode='upper'``: grey outside ``[-threshold, threshold]``.
+    For `threshold_mode='lower'`: grey between `[-threshold, threshold]`.
+    For `threshold_mode='upper'`: grey outside `[-threshold, threshold]`.
     """
     import matplotlib.colors as mcolors
 
@@ -156,7 +156,7 @@ def _extract_slices(
     slice_mode: str,
     slice_coords: Sequence[float],
 ) -> tuple[list[xr.DataArray], list[float]]:
-    """Extract 2D slices from ``data`` along ``slice_mode``.
+    """Extract 2D slices from `data` along `slice_mode`.
 
     Returns the slices and their actual snapped coordinate values.
     """
@@ -185,7 +185,7 @@ class VolumePlotter:
     Parameters
     ----------
     slice_mode : str
-        The dimension along which slices are taken (e.g., ``"z"``).
+        The dimension along which slices are taken (e.g., `"z"`).
     figure : matplotlib.figure.Figure, optional
         The figure containing the axes. If not provided, a new figure will be created
         on the first call to
@@ -197,7 +197,7 @@ class VolumePlotter:
     black_bg : bool, default: True
         Whether to set the figure background to black.
     yincrease : bool, default: False
-        Whether the y-axis increases upward. When ``False``, y coordinates decrease
+        Whether the y-axis increases upward. When `False`, y coordinates decrease
         upward.
     xincrease : bool, default: True
         Whether the x-axis increases to the right.
@@ -353,7 +353,7 @@ class VolumePlotter:
         show_axis_ticks : bool, default: True
             Whether to display axis tick labels.
         show_axes : bool, default: True
-            Whether to show all axis decorations (spines, ticks, labels). When ``False``,
+            Whether to show all axis decorations (spines, ticks, labels). When `False`,
             overrides `show_axis_labels` and `show_axis_ticks`.
         nrows : int, optional
             Number of rows in the subplot grid when creating a new figure.
@@ -648,8 +648,8 @@ class VolumePlotter:
         Parameters
         ----------
         fname : str
-            Path to save the figure. Extension determines format (e.g., ``.png``,
-            ``.pdf```).
+            Path to save the figure. Extension determines format (e.g., `.png`,
+            `.pdf``).
         **kwargs
             Additional arguments passed to `matplotlib.figure.Figure.savefig`.
 
@@ -709,38 +709,38 @@ class VolumePlotter:
         ----------
         mask : xarray.DataArray
             Integer-labeled mask where 0 is background and each positive integer
-            labels a distinct region. Must be 3D with ``slice_mode`` as one dimension.
+            labels a distinct region. Must be 3D with `slice_mode` as one dimension.
         colors : dict[int, str] or str, optional
-            Color specification for contour lines. A ``dict`` maps each label to a
-            color (e.g. ``{1: "red", 2: "blue"}``); a ``str`` applies one color to
+            Color specification for contour lines. A `dict` maps each label to a
+            color (e.g. `{1: "red", 2: "blue"}`); a `str` applies one color to
             all regions. If not provided, distinct colors are drawn from the
-            ``tab10``/``tab20`` colormap.
+            `tab10`/`tab20` colormap.
         linewidths : float, default: 1.5
             Width of contour lines in points.
         linestyles : str, default: "solid"
-            Line style for contour lines (e.g. ``"solid"``, ``"dashed"``).
+            Line style for contour lines (e.g. `"solid"`, `"dashed"`).
         match_coordinates : bool, default: True
-            If ``True``, overlay contours on axes whose slice coordinate matches the
-            mask. If ``False``, plot sequentially on all axes (used internally by
-            :func:`plot_contours`).
+            If `True`, overlay contours on axes whose slice coordinate matches the
+            mask. If `False`, plot sequentially on all axes.
         slice_coords : list[float], optional
-            Coordinate values along the plotter's ``slice_mode`` at which to draw
+            Coordinate values along the plotter's `slice_mode` at which to draw
             contours. Slices are selected by nearest-neighbour lookup. If not
-            provided, all coordinate values along ``slice_mode`` are used.
+            provided, all coordinate values along `slice_mode` are used.
         **kwargs
-            Additional keyword arguments passed to ``matplotlib.axes.Axes.plot``.
+            Additional keyword arguments passed to
+            [`matplotlib.axes.Axes.plot`][matplotlib.axes.Axes.plot].
 
         Returns
         -------
         VolumePlotter
-            Returns ``self`` for method chaining.
+            Returns `self` for method chaining.
 
         Raises
         ------
         ValueError
-            If the plotter's ``slice_mode`` is not a dimension of ``mask``.
+            If the plotter's `slice_mode` is not a dimension of `mask`.
         ValueError
-            If ``mask`` is not 3D.
+            If `mask` is not 3D.
         """
         from skimage.measure import find_contours
 
@@ -948,24 +948,24 @@ def plot_contours(
         Integer-labeled mask where 0 is background and each positive integer labels a
         distinct region. Must be 3D with `slice_mode` as one dimension.
     colors : dict[int, str] or str, optional
-        Color specification for contour lines. A ``dict`` maps each label to a color
-        (e.g. ``{1: "red", 2: "blue"}``); a ``str`` applies one color to all regions. If
-        not provided, distinct colors are drawn from the ``tab10``/``tab20`` colormap.
+        Color specification for contour lines. A `dict` maps each label to a color
+        (e.g. `{1: "red", 2: "blue"}`); a `str` applies one color to all regions. If
+        not provided, distinct colors are drawn from the `tab10`/`tab20` colormap.
     linewidths : float, default: 1.5
         Width of contour lines in points.
     linestyles : str, default: "solid"
-        Line style for contour lines (e.g. ``"solid"``, ``"dashed"``).
+        Line style for contour lines (e.g. `"solid"`, `"dashed"`).
     slice_mode : str, default: "z"
-        Dimension along which to slice (e.g. ``"x"``, ``"y"``, ``"z"``). After
+        Dimension along which to slice (e.g. `"x"`, `"y"`, `"z"`). After
         slicing, each panel must be 2D.
     slice_coords : list[float], optional
         Coordinate values along `slice_mode` at which to extract slices. Slices are
         selected by nearest-neighbour lookup. If not provided, all coordinate values
         along `slice_mode` are used.
     yincrease : bool, default: False
-        Whether the y-axis increases upward (``True``) or downward (``False``).
+        Whether the y-axis increases upward (`True`) or downward (`False`).
     xincrease : bool, default: True
-        Whether the x-axis increases to the right (``True``) or left (``False``).
+        Whether the x-axis increases to the right (`True`) or left (`False`).
     black_bg : bool, default: True
         Whether to set the figure background to black.
     figure : matplotlib.figure.Figure, optional
@@ -993,7 +993,7 @@ def plot_contours(
     -----
     Contours are computed with `skimage.measure.find_contours` on a binary mask for each
     label, then mapped to physical coordinates via linear interpolation between
-    coordinate centers. Each panel has ``aspect="equal"`` so that 1 unit in x matches 1
+    coordinate centers. Each panel has `aspect="equal"` so that 1 unit in x matches 1
     unit in y.
 
     The returned [`VolumePlotter`][confusius.plotting.VolumePlotter] stores the
@@ -1064,7 +1064,7 @@ def plot_volume(
 ) -> VolumePlotter:
     """Plot 2D slices of a volume using matplotlib.
 
-    Displays a series of 2D slices extracted along ``slice_mode`` as a grid of subplots.
+    Displays a series of 2D slices extracted along `slice_mode` as a grid of subplots.
     Each slice is rendered using physical coordinates for axis ticks when available.
 
     Parameters
@@ -1078,8 +1078,8 @@ def plot_volume(
         selected by nearest-neighbour lookup. If not provided, all coordinate values
         along `slice_mode` are used.
     slice_mode : str, default: "z"
-        Dimension along which to slice (e.g., ``"x"``, ``"y"``, ``"z"``,
-        ``"time"``). After slicing, each panel must be 2D.
+        Dimension along which to slice (e.g., `"x"`, `"y"`, `"z"`,
+        `"time"`). After slicing, each panel must be 2D.
     cmap : str, default: "gray"
         Matplotlib colormap name.
     vmin : float, optional
@@ -1087,13 +1087,13 @@ def plot_volume(
     vmax : float, optional
         Upper bound of the colormap. Defaults to the 98th percentile.
     threshold : float, optional
-        Threshold applied to ``|data|``. See ``threshold_mode`` for the masking
+        Threshold applied to `|data|`. See `threshold_mode` for the masking
         direction. If not provided, no thresholding is applied.
     threshold_mode : {"lower", "upper"}, default: "lower"
-        Controls how ``threshold`` is applied:
+        Controls how `threshold` is applied:
 
-        - ``"lower"``: set pixels where ``|data| < threshold`` to NaN.
-        - ``"upper"``: set pixels where ``|data| > threshold`` to NaN.
+        - `"lower"`: set pixels where `|data| < threshold` to NaN.
+        - `"upper"`: set pixels where `|data| > threshold` to NaN.
 
     alpha : float, default: 1.0
         Opacity of the image.
@@ -1108,12 +1108,12 @@ def plot_volume(
     show_axis_ticks : bool, default: True
         Whether to display axis tick labels.
     show_axes : bool, default: True
-        Whether to show all axis decorations (spines, ticks, labels). When ``False``,
+        Whether to show all axis decorations (spines, ticks, labels). When `False`,
         overrides `show_axis_labels` and `show_axis_ticks`.
     yincrease : bool, default: False
-        Whether the y-axis increases upward (``True``) or downward (``False``).
+        Whether the y-axis increases upward (`True`) or downward (`False`).
     xincrease : bool, default: True
-        Whether the x-axis increases to the right (``True``) or left (``False``).
+        Whether the x-axis increases to the right (`True`) or left (`False`).
     black_bg : bool, default: True
         Whether to set the figure background to black.
     figure : matplotlib.figure.Figure, optional
@@ -1154,12 +1154,12 @@ def plot_volume(
     The two dimensions that remain after slicing define the panel axes: the
     first remaining dimension maps to the vertical axis and the second to the
     horizontal axis. Coordinates are used directly as axis tick values; each
-    axis has ``aspect="equal"`` so that 1 unit in x matches 1 unit in y.
+    axis has `aspect="equal"` so that 1 unit in x matches 1 unit in y.
 
     NaN and Inf values (including those introduced by `threshold`) are rendered
     transparently via a masked array.
 
-    When the figure is created internally, ``layout="constrained"`` is used so
+    When the figure is created internally, `layout="constrained"` is used so
     that subplot titles, axis labels, tick labels, and the colorbar are spaced
     automatically without overlapping. When an external `figure` or `axes`
     is provided, layout management is left to the caller.
@@ -1229,7 +1229,7 @@ def plot_napari(
     data : xarray.DataArray
         Input data array to visualize. Expected dimensions are (time, z, y, x) where
         z is the elevation/stacking axis, y is depth, and x is lateral. Use
-        ``dim_order`` to specify a different dimension ordering.
+        `dim_order` to specify a different dimension ordering.
     show_colorbar : bool, default: True
         Whether to show the colorbar.
     show_scale_bar : bool, default: True
@@ -1242,7 +1242,7 @@ def plot_napari(
         is created.
     **imshow_kwargs
         Additional keyword arguments passed to `napari.imshow`, such as
-        ``contrast_limits``, ``colormap``, etc.
+        `contrast_limits`, `colormap`, etc.
 
     Returns
     -------
@@ -1260,13 +1260,13 @@ def plot_napari(
 
     For unitary dimensions (e.g., a single-slice elevation axis in 2D+t data), the
     spacing cannot be inferred from coordinates. In that case, the function looks for a
-    ``voxdim`` attribute on the coordinate variable
-    (``data.coords[dim].attrs["voxdim"]``) and uses it as the spacing. If no such
+    `voxdim` attribute on the coordinate variable
+    (`data.coords[dim].attrs["voxdim"]`) and uses it as the spacing. If no such
     attribute is found, unit spacing is assumed and a warning is emitted.
 
-    The first coordinate value of each spatial dimension is used as the ``translate``
+    The first coordinate value of each spatial dimension is used as the `translate`
     parameter so that the image is positioned at its correct physical origin. For
-    dimensions without coordinates, a translate of ``0.0`` is used. This ensures that
+    dimensions without coordinates, a translate of `0.0` is used. This ensures that
     multiple datasets with different fields of view overlay correctly when added to the
     same viewer.
 
@@ -1376,9 +1376,9 @@ def plot_carpet(
     detrend_order : int, optional
         Polynomial order for detrending:
 
-        - ``0``: Remove mean (constant detrending).
-        - ``1``: Remove linear trend using least squares regression.
-        - ``2+``: Remove polynomial trend of specified order.
+        - `0`: Remove mean (constant detrending).
+        - `1`: Remove linear trend using least squares regression.
+        - `2+`: Remove polynomial trend of specified order.
 
         If not provided, no detrending is applied.
     standardize : bool, default: True
@@ -1386,15 +1386,15 @@ def plot_carpet(
     cmap : str, default: "gray"
         Matplotlib colormap name.
     vmin : float, optional
-        Minimum value for colormap. If not provided, uses ``mean - 2*std``.
+        Minimum value for colormap. If not provided, uses `mean - 2*std`.
     vmax : float, optional
-        Maximum value for colormap. If not provided, uses ``mean + 2*std``.
+        Maximum value for colormap. If not provided, uses `mean + 2*std`.
     decimation_threshold : int or None, default: 800
         If the number of timepoints exceeds this value, data is downsampled
-        along the time axis to improve plotting performance. Set to ``None`` to
+        along the time axis to improve plotting performance. Set to `None` to
         disable downsampling.
     figsize : tuple[float, float], default: (10, 5)
-        Figure size in inches ``(width, height)``.
+        Figure size in inches `(width, height)`.
     title : str, optional
         Plot title.
     ax : matplotlib.axes.Axes, optional

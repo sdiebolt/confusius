@@ -17,14 +17,14 @@ def unmask(
     Parameters
     ----------
     signals : numpy.ndarray or xarray.DataArray
-        Array with shape ``(..., voxels)`` where ``...`` can be any number of
+        Array with shape `(..., voxels)` where `...` can be any number of
         dimensions. The last dimension must correspond to masked voxels.
 
-        - If `signals` is a DataArray, it must have a ``voxels`` dimension as the
+        - If `signals` is a DataArray, it must have a `voxels` dimension as the
           last dimension. All other dimensions and their coordinates are preserved.
         - If `signals` is a Numpy array, you can specify names and coordinates for
           the leading dimensions using `new_dims` and `new_dims_coords`. If not
-          provided, dimensions are named ``["dim_0", "dim_1", ...]`` with integer
+          provided, dimensions are named `["dim_0", "dim_1", ...]` with integer
           coordinates.
 
     mask : xarray.DataArray
@@ -33,7 +33,7 @@ def unmask(
         and coordinates as the original data.
     new_dims : list of str, optional
         Names for leading dimensions when `signals` is a Numpy array. Must match the
-        number of leading dimensions ``(ndim - 1)``. If not provided, uses ``["dim_0",
+        number of leading dimensions `(ndim - 1)`. If not provided, uses ``["dim_0",
         "dim_1", ...]``. Ignored if `signals` is a DataArray.
     new_dims_coords : dict[str, numpy.ndarray], optional
         Coordinates for leading dimensions when `signals` is a Numpy array. Keys must
@@ -47,7 +47,7 @@ def unmask(
     Returns
     -------
     xarray.DataArray
-        Reconstructed DataArray with shape ``(..., z, y, x)`` where spatial
+        Reconstructed DataArray with shape `(..., z, y, x)` where spatial
         coordinates come from the mask.
 
     Raises

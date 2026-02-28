@@ -18,17 +18,17 @@ def extract_motion_parameters(
 ) -> NDArray[np.floating]:
     """Extract motion parameters from affine matrices.
 
-    Decomposes each ``(N+1, N+1)`` homogeneous affine into translation and
+    Decomposes each `(N+1, N+1)` homogeneous affine into translation and
     rotation parameters.
 
-    For 2D transforms, extracts: ``[rotation, translation_x, translation_y]``.
+    For 2D transforms, extracts: `[rotation, translation_x, translation_y]`.
     For 3D transforms, extracts:
-    ``[rot_x, rot_y, rot_z, trans_x, trans_y, trans_z]``.
+    `[rot_x, rot_y, rot_z, trans_x, trans_y, trans_z]`.
 
     Parameters
     ----------
     affines : list[numpy.ndarray | None]
-        List of affine matrices from registration. ``None`` entries (e.g. from
+        List of affine matrices from registration. `None` entries (e.g. from
         B-spline transforms) are treated as identity transforms.
 
     Returns
@@ -36,13 +36,13 @@ def extract_motion_parameters(
     (n_frames, n_params) numpy.ndarray
         Motion parameters array.
 
-        - For 2D: ``n_params = 3 (rotation, tx, ty)``.
-        - For 3D: ``n_params = 6 (rot_x, rot_y, rot_z, trans_x, trans_y, trans_z)``.
+        - For 2D: `n_params = 3 (rotation, tx, ty)`.
+        - For 3D: `n_params = 6 (rot_x, rot_y, rot_z, trans_x, trans_y, trans_z)`.
 
     Raises
     ------
     ValueError
-        If any affine does not have shape ``(3, 3)`` (2D) or ``(4, 4)`` (3D).
+        If any affine does not have shape `(3, 3)` (2D) or `(4, 4)` (3D).
     """
     import math
 
@@ -190,7 +190,7 @@ def compute_framewise_displacement(
     Parameters
     ----------
     affines : list[numpy.ndarray | None]
-        List of affine matrices, one per frame. ``None`` entries are treated as identity
+        List of affine matrices, one per frame. `None` entries are treated as identity
         transforms.
     reference : xarray.DataArray
         Spatial DataArray defining the physical grid (spacing and origin derived from
@@ -204,9 +204,9 @@ def compute_framewise_displacement(
     dict
         Dictionary with keys:
 
-        - ``"mean_fd"``: Mean framewise displacement per frame.
-        - ``"max_fd"``: Maximum framewise displacement per frame.
-        - ``"rms_fd"``: RMS framewise displacement per frame.
+        - `"mean_fd"`: Mean framewise displacement per frame.
+        - `"max_fd"`: Maximum framewise displacement per frame.
+        - `"rms_fd"`: RMS framewise displacement per frame.
     """
     from confusius._utils import _compute_origin, _compute_spacing
 
@@ -271,7 +271,7 @@ def create_motion_dataframe(
     Parameters
     ----------
     affines : list[numpy.ndarray | None]
-        List of affine matrices from registration. ``None`` entries (e.g. from B-spline
+        List of affine matrices from registration. `None` entries (e.g. from B-spline
         transforms) are treated as identity.
     reference : xarray.DataArray
         Spatial DataArray defining the physical grid for framewise displacement
@@ -288,19 +288,19 @@ def create_motion_dataframe(
 
         For 2D:
 
-        - ``rotation``: Rotation angle in radians.
-        - ``trans_x``: Translation in x (mm).
-        - ``trans_y``: Translation in y (mm).
+        - `rotation`: Rotation angle in radians.
+        - `trans_x`: Translation in x (mm).
+        - `trans_y`: Translation in y (mm).
 
         For 3D:
 
-        - ``rot_x, rot_y, rot_z``: Rotation angles in radians.
-        - ``trans_x, trans_y, trans_z``: Translations (mm).
+        - `rot_x, rot_y, rot_z`: Rotation angles in radians.
+        - `trans_x, trans_y, trans_z`: Translations (mm).
 
         Both:
-        - ``mean_fd``: Mean framewise displacement (mm).
-        - ``max_fd``: Maximum framewise displacement (mm).
-        - ``rms_fd``: RMS framewise displacement (mm).
+        - `mean_fd`: Mean framewise displacement (mm).
+        - `max_fd`: Maximum framewise displacement (mm).
+        - `rms_fd`: RMS framewise displacement (mm).
     """
     import pandas as pd
 

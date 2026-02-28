@@ -19,13 +19,13 @@ def _validate_sample_mask(
     signals : xarray.DataArray
         Input signals with time dimension.
     sample_mask : xarray.DataArray
-        Boolean sample mask (``True`` = keep, ``False`` = censor). Must have a ``time``
+        Boolean sample mask (`True` = keep, `False` = censor). Must have a `time`
         dimension matching signals.
 
     Returns
     -------
     numpy.ndarray
-        Boolean mask with same length as time dimension, where ``True`` = keep.
+        Boolean mask with same length as time dimension, where `True` = keep.
 
     Raises
     ------
@@ -87,22 +87,22 @@ def interpolate_samples(
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Array to interpolate. Must have a ``time`` dimension and ``time`` coordinates.
-        Can be any shape, e.g., extracted signals ``(time, voxels)``, full 3D+t imaging
-        data ``(time, z, y, x)``, or confounds ``(time, n_confounds)``.
+        Array to interpolate. Must have a `time` dimension and `time` coordinates.
+        Can be any shape, e.g., extracted signals `(time, voxels)`, full 3D+t imaging
+        data `(time, z, y, x)`, or confounds `(time, n_confounds)`.
     sample_mask : (time,) xarray.DataArray
-        Boolean sample mask indicating which timepoints to keep (``True``) vs.
-        interpolate (``False``). Must have a ``time`` dimension matching `signals`.
-        If both `signals` and `sample_mask` have ``time`` coordinates, they must match
+        Boolean sample mask indicating which timepoints to keep (`True`) vs.
+        interpolate (`False`). Must have a `time` dimension matching `signals`.
+        If both `signals` and `sample_mask` have `time` coordinates, they must match
         exactly.
     method : {"linear", "nearest", "zero", "slinear", "quadratic", "cubic", "quintic", \
             "polynomial", "pchip", "barycentric", "krogh", "akima", "makima"}, \
             default: "linear"
         Interpolation method passed to `xarray.DataArray.interp`. Common options:
 
-        - ``"nearest"``: Nearest-neighbor interpolation (fastest, least smooth).
-        - ``"linear"``: Linear interpolation (faster, less smooth).
-        - ``"cubic"``: Cubic spline interpolation (slower, smooth).
+        - `"nearest"`: Nearest-neighbor interpolation (fastest, least smooth).
+        - `"linear"`: Linear interpolation (faster, less smooth).
+        - `"cubic"`: Cubic spline interpolation (slower, smooth).
 
         See `xarray.DataArray.interp` for all available methods.
     **kwargs
@@ -117,7 +117,7 @@ def interpolate_samples(
     Raises
     ------
     ValueError
-        If `signals` doesn't have a ``time`` dimension or ``time`` coordinates.
+        If `signals` doesn't have a `time` dimension or `time` coordinates.
     TypeError
         If `sample_mask` is not an xarray.DataArray.
     ValueError
@@ -133,8 +133,8 @@ def interpolate_samples(
 
     Notes
     -----
-    - Kept samples (``sample_mask=True``) are unchanged; only censored samples
-      (``sample_mask=False``) are replaced with interpolated values.
+    - Kept samples (`sample_mask=True`) are unchanged; only censored samples
+      (`sample_mask=False`) are replaced with interpolated values.
     - Uses `xarray.DataArray.interp` which handles coordinates and Dask arrays
       automatically.
 
@@ -216,25 +216,25 @@ def censor_samples(
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Array to censor. Must have a ``time`` dimension. Can be any shape, e.g.,
-        extracted signals ``(time, voxels)``, full 3D+t imaging data ``(time, z, y,
-        x)``, or confounds ``(time, n_confounds)``.
+        Array to censor. Must have a `time` dimension. Can be any shape, e.g.,
+        extracted signals `(time, voxels)`, full 3D+t imaging data ``(time, z, y,
+        x)`, or confounds `(time, n_confounds)``.
     sample_mask : (time,) xarray.DataArray
-        Boolean sample mask indicating which timepoints to keep (``True``) vs. remove
-        (``False``). Must have a ``time`` dimension matching ``signals``. If both
-        `signals` and `sample_mask` have ``time`` coordinates, they must match exactly.
+        Boolean sample mask indicating which timepoints to keep (`True`) vs. remove
+        (`False`). Must have a `time` dimension matching `signals`. If both
+        `signals` and `sample_mask` have `time` coordinates, they must match exactly.
 
     Returns
     -------
     xarray.DataArray
-        Signals with censored timepoints removed. Shape is ``(n_kept, ...)`` where
-        ``n_kept`` is the number of ``True`` values in `sample_mask`. Time coordinates
+        Signals with censored timepoints removed. Shape is `(n_kept, ...)` where
+        `n_kept` is the number of `True` values in `sample_mask`. Time coordinates
         are subsetted to kept samples.
 
     Raises
     ------
     ValueError
-        If `signals` doesn't have a ``time`` dimension or ``time`` coordinates.
+        If `signals` doesn't have a `time` dimension or `time` coordinates.
     TypeError
         If `sample_mask` is not an xarray.DataArray.
     ValueError

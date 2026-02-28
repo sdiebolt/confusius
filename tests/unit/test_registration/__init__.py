@@ -1,1 +1,1 @@
-"""Unit tests for ``registration`` module."""
+"""Unit tests for `registration` module."""

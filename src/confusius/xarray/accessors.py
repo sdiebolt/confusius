@@ -22,7 +22,7 @@ class FUSIAccessor:
     Parameters
     ----------
     xarray_obj : xarray.DataArray
-        The ``DataArray`` to wrap.
+        The `DataArray` to wrap.
 
     Examples
     --------
@@ -153,12 +153,12 @@ class FUSIAccessor:
 
         Spacing is computed as the median of consecutive coordinate differences.
         A coordinate is considered uniform if its relative interval range
-        ``(max_diff - min_diff) / median_diff`` is below 1%.
+        `(max_diff - min_diff) / median_diff` is below 1%.
 
         Returns
         -------
         dict[str, float | None]
-            Spacing per dimension, in DataArray dimension order. Returns ``None`` for
+            Spacing per dimension, in DataArray dimension order. Returns `None` for
             dimensions with non-uniform or undefined spacing, with a warning.
 
         Examples
@@ -181,7 +181,7 @@ class FUSIAccessor:
         """Physical origin (first coordinate value) for all dimensions.
 
         For each dimension, returns the first coordinate value. If a coordinate is
-        missing, warns and falls back to ``0.0``.
+        missing, warns and falls back to `0.0`.
 
         Returns
         -------

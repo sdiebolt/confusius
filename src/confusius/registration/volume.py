@@ -20,12 +20,12 @@ if TYPE_CHECKING:
 def _sitk_thread_count(n: int) -> Generator[None, None, None]:
     """Temporarily override SimpleITK's global thread count.
 
-    Follows joblib's ``n_jobs`` sign convention: positive values are used
-    directly; negative values are interpreted as ``max(1, n_cpus + 1 + n)``,
-    so ``-1`` means all CPUs, ``-2`` means all minus one, and so on.
+    Follows joblib's `n_jobs` sign convention: positive values are used
+    directly; negative values are interpreted as `max(1, n_cpus + 1 + n)`,
+    so `-1` means all CPUs, `-2` means all minus one, and so on.
 
     Saves the current value on entry and restores it on exit, even if an
-    exception is raised inside the ``with`` block.
+    exception is raised inside the `with` block.
     """
     import SimpleITK as sitk
 
@@ -43,15 +43,15 @@ def _sitk_thread_count(n: int) -> Generator[None, None, None]:
 def _dataarray_to_sitk(da: xr.DataArray) -> "sitk.Image":
     """Convert a spatial DataArray to a SimpleITK image.
 
-    Uses the transpose convention: ``da.values.T`` is passed to ``GetImageFromArray``,
+    Uses the transpose convention: `da.values.T` is passed to `GetImageFromArray`,
     so that the first DataArray axis maps to SimpleITK's physical x-axis. The DataArray
-    must be spatial-only (no ``time`` dimension).
+    must be spatial-only (no `time` dimension).
 
     Parameters
     ----------
     da : xarray.DataArray
         2D or 3D spatial DataArray. Spacing and origin are derived from its coordinates;
-        missing coordinates warn and fall back to spacing ``1.0`` and origin ``0.0``.
+        missing coordinates warn and fall back to spacing `1.0` and origin `0.0`.
 
     Returns
     -------
@@ -82,7 +82,7 @@ def _validate_register_volume_inputs(
     smoothing_sigmas: Sequence[int],
     resample_interpolation: Literal["linear", "bspline"],
 ) -> None:
-    """Validate all inputs to :func:`register_volume` before any computation.
+    """Validate all inputs to `register_volume` before any computation.
 
     Parameters
     ----------
@@ -97,7 +97,7 @@ def _validate_register_volume_inputs(
     number_of_histogram_bins : int
         Number of histogram bins for Mattes mutual information.
     learning_rate : float or "auto"
-        Optimizer step size or ``"auto"``.
+        Optimizer step size or `"auto"`.
     number_of_iterations : int
         Maximum number of optimizer iterations.
     convergence_window_size : int
@@ -198,12 +198,12 @@ def _validate_register_volume_inputs(
 
 
 def _expand_thin_dims(img: "sitk.Image", min_size: int = 4) -> "sitk.Image":
-    """Expand any image dimension smaller than ``min_size`` by replication.
+    """Expand any image dimension smaller than `min_size` by replication.
 
     SimpleITK's registration and multi-resolution pyramid fail when any spatial
     dimension is smaller than 4 voxels. This helper replicates thin dimensions so that
     the image is safe to register, while preserving the physical extent (spacing is
-    divided by the expansion factor, keeping ``size * spacing`` constant).
+    divided by the expansion factor, keeping `size * spacing` constant).
 
     Parameters
     ----------
@@ -215,7 +215,7 @@ def _expand_thin_dims(img: "sitk.Image", min_size: int = 4) -> "sitk.Image":
     Returns
     -------
     SimpleITK.Image
-        Image with all dimensions >= ``min_size``. Returns `img` unchanged if no
+        Image with all dimensions >= `min_size`. Returns `img` unchanged if no
         dimension is too small.
     """
     import SimpleITK as sitk
@@ -349,7 +349,7 @@ def register_volume(
     """Register a single 2D or 3D volume to a fixed reference.
 
     Voxel spacing and origin are automatically extracted from the DataArray coordinates.
-    Both inputs must be spatial-only (no ``time`` dimension).
+    Both inputs must be spatial-only (no `time` dimension).
 
     Parameters
     ----------
@@ -359,20 +359,20 @@ def register_volume(
         Reference volume. Must be 2D or 3D. Need not have the same shape as
         `moving`.
     transform : {"translation", "rigid", "affine", "bspline"}, default: "rigid"
-        Transform model to use during registration. ``"translation"`` allows
-        only shifts. ``"rigid"`` adds rotation. ``"affine"`` adds scaling and
-        shearing. ``"bspline"`` fits a non-linear deformable transform (see
-        ``mesh_size``).
+        Transform model to use during registration. `"translation"` allows
+        only shifts. `"rigid"` adds rotation. `"affine"` adds scaling and
+        shearing. `"bspline"` fits a non-linear deformable transform (see
+        `mesh_size`).
     metric : {"correlation", "mattes_mi"}, default: "correlation"
-        Similarity metric. ``"correlation"`` (normalized cross-correlation) is
-        appropriate for same-modality registration. ``"mattes_mi"`` (Mattes
+        Similarity metric. `"correlation"` (normalized cross-correlation) is
+        appropriate for same-modality registration. `"mattes_mi"` (Mattes
         mutual information) is better suited for multi-modal registration or
         when the intensity relationship between images is non-linear.
     number_of_histogram_bins : int, default: 50
         Number of histogram bins used by Mattes mutual information. Only
-        relevant when using ``"mattes_mi"`` metric.
+        relevant when using `"mattes_mi"` metric.
     learning_rate : float or "auto", default: "auto"
-        Optimizer step size in normalized units. ``"auto"`` re-estimates the rate at
+        Optimizer step size in normalized units. `"auto"` re-estimates the rate at
         every iteration. A float uses that value directly; if registration diverges or
         fails to converge, reduce it.
     number_of_iterations : int, default: 100
@@ -384,60 +384,60 @@ def register_volume(
         Number of values of the similarity metric which are used to estimate the energy
         profile of the similarity metric.
     initialization : {"geometry", "moments", "none"}, default: "geometry"
-        Transform initializer applied before optimization. ``"geometry"`` aligns the
-        image centers (safe default, no assumptions about content). ``"moments"`` aligns
+        Transform initializer applied before optimization. `"geometry"` aligns the
+        image centers (safe default, no assumptions about content). `"moments"` aligns
         centers of mass (better when images are offset but share the same content).
-        ``"none"`` uses the identity transform. Ignored for ``transform="bspline"``.
+        `"none"` uses the identity transform. Ignored for `transform="bspline"`.
     optimizer_weights : list of float or None, default: None
         Per-parameter weights applied on top of the auto-estimated physical shift
-        scales. ``None`` uses identity weights (all ones). A list is passed directly to
-        SimpleITK's ``SetOptimizerWeights``; its length must match the number of
+        scales. `None` uses identity weights (all ones). A list is passed directly to
+        SimpleITK's `SetOptimizerWeights`; its length must match the number of
         transform parameters (3 for 2D rigid, 6 for 3D rigid, 6 for 2D affine, 12 for 3D
         affine). The weight for each parameter is multiplied into the effective step
-        size: ``0`` freezes a parameter entirely, values in ``(0, 1)`` slow it down, and
-        ``1`` leaves it unchanged. For the 3D Euler transform the parameter order is
-        ``[angleX, angleY, angleZ, tx, ty, tz]``; to disable rotations around x and y
-        set weights to ``[0, 0, 1, 1, 1, 1]``.
+        size: `0` freezes a parameter entirely, values in `(0, 1)` slow it down, and
+        `1` leaves it unchanged. For the 3D Euler transform the parameter order is
+        `[angleX, angleY, angleZ, tx, ty, tz]`; to disable rotations around x and y
+        set weights to `[0, 0, 1, 1, 1, 1]`.
     initial_transform : (N+1, N+1) numpy.ndarray or None, default: None
         Pre-computed affine matrix (pull/inverse convention, as returned by a previous
-        call to ``register_volume``) used as a warm-start before optimisation.  When
-        provided the child transform (``transform``) is composed on top of this
+        call to `register_volume`) used as a warm-start before optimisation.  When
+        provided the child transform (`transform`) is composed on top of this
         pre-alignment.  Primarily useful for the affine → B-spline composition
         workflow: run an affine registration first, then pass its result here together
-        with ``transform="bspline"`` to refine the deformation.  When ``None`` (the
-        default) the existing ``initialization`` behaviour is unchanged.
+        with `transform="bspline"` to refine the deformation.  When `None` (the
+        default) the existing `initialization` behaviour is unchanged.
     mesh_size : tuple of int, default: (10, 10, 10)
         Number of B-spline mesh nodes along each spatial dimension. Only used when
-        ``transform="bspline"``.
+        `transform="bspline"`.
     use_multi_resolution : bool, default: False
-        Whether to use a multi-resolution pyramid during registration. When ``True``,
+        Whether to use a multi-resolution pyramid during registration. When `True`,
         registration proceeds from a coarse downsampled version of the images to the
         full resolution, which improves convergence for large displacements and reduces
         the risk of local minima.
     shrink_factors : sequence of int, default: (6, 2, 1)
         Downsampling factor at each pyramid level, from coarsest to finest. Must have
-        the same length as ``smoothing_sigmas``. Only used when
-        ``use_multi_resolution=True``.
+        the same length as `smoothing_sigmas`. Only used when
+        `use_multi_resolution=True`.
     smoothing_sigmas : sequence of int, default: (6, 2, 1)
         Gaussian smoothing sigma (in voxels) applied at each pyramid level, from
-        coarsest to finest. Must have the same length as ``shrink_factors``. Only used
-        when ``use_multi_resolution=True``.
+        coarsest to finest. Must have the same length as `shrink_factors`. Only used
+        when `use_multi_resolution=True`.
     resample : bool, default: False
         Whether to resample the moving volume onto the fixed grid after estimating the
-        transform. When ``True``, the output is resampled onto the fixed grid and its
-        coordinates match ``fixed``. When ``False`` (the default), only the transform is
+        transform. When `True`, the output is resampled onto the fixed grid and its
+        coordinates match `fixed`. When `False` (the default), only the transform is
         computed and the moving volume is returned unchanged with its original
         coordinates.
     resample_interpolation : {"linear", "bspline"}, default: "linear"
         Interpolator used when resampling the moving volume onto the fixed grid.
-        ``"linear"`` is fast and appropriate for most cases. ``"bspline"`` (3rd-order
+        `"linear"` is fast and appropriate for most cases. `"bspline"` (3rd-order
         B-spline) produces smoother results and reduces ringing, useful for atlas
-        registration. Only used when ``resample=True``.
+        registration. Only used when `resample=True`.
     sitk_threads : int, default: -1
         Number of threads SimpleITK may use internally. Negative values resolve to
-        ``max(1, os.cpu_count() + 1 + sitk_threads)``, so ``-1`` means all CPUs, ``-2``
+        `max(1, os.cpu_count() + 1 + sitk_threads)`, so `-1` means all CPUs, `-2`
         means all minus one, and so on. You may want to set this to a lower value or
-        ``1`` when running multiple registrations in parallel (e.g. with joblib) to
+        `1` when running multiple registrations in parallel (e.g. with joblib) to
         avoid over-subscribing the CPU.
     show_progress : bool, default: False
         Whether to display a live progress plot during registration. The plot is shown
@@ -445,46 +445,46 @@ def register_volume(
         active backend.
     plot_metric : bool, default: True
         Whether to include the optimizer metric curve in the progress plot. Ignored when
-        ``show_progress=False``.
+        `show_progress=False`.
     plot_composite : bool, default: True
         Whether to include a fixed/moving composite overlay in the progress plot.
         Requires resampling the moving image at every iteration. Ignored when
-        ``show_progress=False``.
+        `show_progress=False`.
 
     Returns
     -------
     registered : xarray.DataArray
-        When ``resample=True``, the moving volume resampled onto the fixed grid with
-        coordinates matching `fixed`. When ``resample=False``, the original moving
+        When `resample=True`, the moving volume resampled onto the fixed grid with
+        coordinates matching `fixed`. When `resample=False`, the original moving
         volume with a `registration` attribute added to its metadata.
     transform : (N+1, N+1) numpy.ndarray or xarray.DataArray or None
         Estimated registration transform.  For linear transforms
-        (``"translation"``, ``"rigid"``, ``"affine"``), returns a homogeneous affine
-        matrix of shape ``(N+1, N+1)`` in physical space, where ``N`` is the spatial
+        (`"translation"`, `"rigid"`, `"affine"`), returns a homogeneous affine
+        matrix of shape `(N+1, N+1)` in physical space, where `N` is the spatial
         dimensionality (2 or 3).  Follows SimpleITK's pull/inverse convention: the
         matrix maps fixed-space coordinates to moving-space coordinates.  For
-        ``transform="bspline"``, returns an :class:`xarray.DataArray` encoding the
-        B-spline control-point grid (see :mod:`confusius.registration.bspline` for the
-        DataArray schema).  When ``initial_transform`` was also supplied, the DataArray
-        includes ``attrs["affines"]["bspline_initialization"]`` so that the full
-        composite (pre-affine + B-spline) can be reconstructed for resampling.
+        `transform="bspline"`, returns a DataArray encoding the B-spline control-point
+        grid (see :mod:`confusius.registration.bspline` for the DataArray schema).  When
+        `initial_transform` was also supplied, the DataArray includes
+        `attrs["affines"]["bspline_initialization"]` so that the full composite
+        (pre-affine + B-spline) can be reconstructed for resampling.
 
     Raises
     ------
     ValueError
-        If either input contains a ``time`` dimension or is not 2D or 3D.
+        If either input contains a `time` dimension or is not 2D or 3D.
     ValueError
-        If ``transform``, ``metric``, ``initialization``, or
-        ``resample_interpolation`` is not a recognised value.
+        If `transform`, `metric`, `initialization`, or
+        `resample_interpolation` is not a recognised value.
     ValueError
-        If ``learning_rate`` is not a positive finite float or ``"auto"``.
+        If `learning_rate` is not a positive finite float or `"auto"`.
     ValueError
-        If ``number_of_iterations``, ``convergence_window_size``, or
-        ``number_of_histogram_bins`` is not a positive integer.
+        If `number_of_iterations`, `convergence_window_size`, or
+        `number_of_histogram_bins` is not a positive integer.
     ValueError
-        If ``shrink_factors`` and ``smoothing_sigmas`` have different lengths.
+        If `shrink_factors` and `smoothing_sigmas` have different lengths.
     ValueError
-        If ``initial_transform`` is provided and its shape does not match the image
+        If `initial_transform` is provided and its shape does not match the image
         dimensionality.
     """
     import SimpleITK as sitk

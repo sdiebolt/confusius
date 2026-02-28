@@ -51,12 +51,12 @@ def _compute_spacing(
 
     - If the coordinate has two or more points and is uniformly sampled, returns the
       median step size.
-    - If the coordinate has a single point, returns the ``voxdim`` coordinate attribute
-      if present, otherwise ``None`` with a warning.
-    - If the coordinate is missing or has non-uniform spacing, returns ``None`` with a
+    - If the coordinate has a single point, returns the `voxdim` coordinate attribute
+      if present, otherwise `None` with a warning.
+    - If the coordinate is missing or has non-uniform spacing, returns `None` with a
       warning.
 
-    Uniformity is assessed as ``(max_diff - min_diff) / median_diff``, i.e. the
+    Uniformity is assessed as `(max_diff - min_diff) / median_diff`, i.e. the
     relative range of consecutive differences.
 
     Parameters
@@ -65,13 +65,13 @@ def _compute_spacing(
         DataArray whose coordinate spacing to compute.
     uniformity_tolerance : float, default: 1e-2
         Maximum allowed relative range of consecutive differences, defined as
-        ``(max_diff - min_diff) / median_diff``. Coordinates whose relative range
+        `(max_diff - min_diff) / median_diff`. Coordinates whose relative range
         exceeds this threshold are considered non-uniform.
 
     Returns
     -------
     dict[str, float | None]
-        Spacing per dimension in DataArray dimension order. ``None`` indicates that
+        Spacing per dimension in DataArray dimension order. `None` indicates that
         spacing is undefined for that dimension.
     """
     result: dict[str, float | None] = {}
@@ -117,7 +117,7 @@ def _compute_origin(
     """Compute the physical origin (first coordinate value) for each dimension.
 
     For each dimension, returns the first coordinate value. If a coordinate is missing,
-    warns and falls back to ``0.0``.
+    warns and falls back to `0.0`.
 
     Parameters
     ----------

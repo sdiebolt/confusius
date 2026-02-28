@@ -63,10 +63,10 @@ class FUSIRegistrationAccessor:
         metric : {"correlation", "mattes_mi"}, default: "correlation"
             Similarity metric for registration.
         number_of_histogram_bins : int, default: 50
-            Number of histogram bins (only used when ``metric="mattes_mi"``).
+            Number of histogram bins (only used when `metric="mattes_mi"`).
         learning_rate : float or "auto", default: "auto"
-            Optimizer step size in normalised units (after ``SetOptimizerScalesFromPhysicalShift``).
-            ``"auto"`` re-estimates the rate at every iteration.
+            Optimizer step size in normalised units (after `SetOptimizerScalesFromPhysicalShift`).
+            `"auto"` re-estimates the rate at every iteration.
         number_of_iterations : int, default: 100
             Maximum number of optimizer iterations.
         convergence_minimum_value : float, default: 1e-6
@@ -77,25 +77,25 @@ class FUSIRegistrationAccessor:
             Transform initialization strategy. Ignored for bspline transforms.
         optimizer_weights : list of float or None, default: None
             Per-parameter weights applied on top of auto-estimated scales via
-            ``SetOptimizerWeights()``. ``None`` applies no additional weighting.
+            `SetOptimizerWeights()`. `None` applies no additional weighting.
             The weight for each parameter is multiplied into the effective step
-            size: ``0`` freezes a parameter, values in ``(0, 1)`` slow it
-            down, ``1`` leaves it unchanged. For the 3D Euler transform the
-            order is ``[angleX, angleY, angleZ, tx, ty, tz]``; to disable
-            rotations around x and y use ``[0, 0, 1, 1, 1, 1]``.
+            size: `0` freezes a parameter, values in `(0, 1)` slow it
+            down, `1` leaves it unchanged. For the 3D Euler transform the
+            order is `[angleX, angleY, angleZ, tx, ty, tz]`; to disable
+            rotations around x and y use `[0, 0, 1, 1, 1, 1]`.
         mesh_size : tuple of int, default: (10, 10, 10)
-            BSpline mesh size. Only used when ``transform="bspline"``.
+            BSpline mesh size. Only used when `transform="bspline"`.
         use_multi_resolution : bool, default: False
             Whether to use a multi-resolution pyramid during registration.
         shrink_factors : sequence of int, default: (6, 2, 1)
             Downsampling factor at each pyramid level, from coarsest to
-            finest. Only used when ``use_multi_resolution=True``.
+            finest. Only used when `use_multi_resolution=True`.
         smoothing_sigmas : sequence of int, default: (6, 2, 1)
             Gaussian smoothing sigma (in voxels) at each pyramid level, from
-            coarsest to finest. Only used when ``use_multi_resolution=True``.
+            coarsest to finest. Only used when `use_multi_resolution=True`.
         resample : bool, default: False
             Whether to resample the moving volume into the fixed volume's
-            space. When ``False`` (the default), only the transform is
+            space. When `False` (the default), only the transform is
             estimated and the moving volume is returned unchanged.
         resample_interpolation : {"linear", "bspline"}, default: "linear"
             Interpolation method used for the final resample step.
@@ -103,21 +103,21 @@ class FUSIRegistrationAccessor:
             Whether to display a live progress plot during registration.
         plot_metric : bool, default: True
             Whether to include the optimizer metric curve in the progress
-            plot. Ignored when ``show_progress=False``.
+            plot. Ignored when `show_progress=False`.
         plot_composite : bool, default: True
             Whether to include a fixed/moving composite overlay in the
-            progress plot. Ignored when ``show_progress=False``.
+            progress plot. Ignored when `show_progress=False`.
 
         Returns
         -------
         registered : xarray.DataArray
-            Registered volume. When ``resample=True``, resampled onto the
+            Registered volume. When `resample=True`, resampled onto the
             fixed grid; otherwise the original moving volume with registration
             metadata added.
         affine : (N+1, N+1) numpy.ndarray or xarray.DataArray or None
             Estimated registration transform.  For linear transforms, a
-            homogeneous affine matrix.  For ``transform="bspline"``, an
-            :class:`xarray.DataArray` encoding the B-spline control-point grid.
+            homogeneous affine matrix.  For `transform="bspline"`, a DataArray
+            encoding the B-spline control-point grid.
 
         Examples
         --------
@@ -181,10 +181,10 @@ class FUSIRegistrationAccessor:
         metric : {"correlation", "mattes_mi"}, default: "correlation"
             Similarity metric for registration.
         number_of_histogram_bins : int, default: 50
-            Number of histogram bins (only used when ``metric="mattes_mi"``).
+            Number of histogram bins (only used when `metric="mattes_mi"`).
         learning_rate : float or "auto", default: "auto"
-            Optimizer step size in normalised units (after ``SetOptimizerScalesFromPhysicalShift``).
-            ``"auto"`` re-estimates the rate at every iteration.
+            Optimizer step size in normalised units (after `SetOptimizerScalesFromPhysicalShift`).
+            `"auto"` re-estimates the rate at every iteration.
         number_of_iterations : int, default: 100
             Maximum number of optimizer iterations.
         convergence_minimum_value : float, default: 1e-6
@@ -195,20 +195,20 @@ class FUSIRegistrationAccessor:
             Transform initialization strategy.
         optimizer_weights : list of float or None, default: None
             Per-parameter weights applied on top of auto-estimated scales via
-            ``SetOptimizerWeights()``. ``None`` applies no additional weighting.
+            `SetOptimizerWeights()`. `None` applies no additional weighting.
             The weight for each parameter is multiplied into the effective step
-            size: ``0`` freezes a parameter, values in ``(0, 1)`` slow it
-            down, ``1`` leaves it unchanged. For the 3D Euler transform the
-            order is ``[angleX, angleY, angleZ, tx, ty, tz]``; to disable
-            rotations around x and y use ``[0, 0, 1, 1, 1, 1]``.
+            size: `0` freezes a parameter, values in `(0, 1)` slow it
+            down, `1` leaves it unchanged. For the 3D Euler transform the
+            order is `[angleX, angleY, angleZ, tx, ty, tz]`; to disable
+            rotations around x and y use `[0, 0, 1, 1, 1, 1]`.
         use_multi_resolution : bool, default: False
             Whether to use a multi-resolution pyramid during registration.
         shrink_factors : sequence of int, default: (6, 2, 1)
             Downsampling factor at each pyramid level, from coarsest to
-            finest. Only used when ``use_multi_resolution=True``.
+            finest. Only used when `use_multi_resolution=True`.
         smoothing_sigmas : sequence of int, default: (6, 2, 1)
             Gaussian smoothing sigma (in voxels) at each pyramid level, from
-            coarsest to finest. Only used when ``use_multi_resolution=True``.
+            coarsest to finest. Only used when `use_multi_resolution=True`.
         resample_interpolation : {"linear", "bspline"}, default: "linear"
             Interpolation method used for the final resample step.
 

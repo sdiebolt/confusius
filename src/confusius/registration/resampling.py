@@ -31,17 +31,16 @@ def resample_volume(
     Parameters
     ----------
     moving : xarray.DataArray
-        2D or 3D spatial DataArray to resample. Must not have a ``time`` dimension.
+        2D or 3D spatial DataArray to resample. Must not have a `time` dimension.
     transform : (N+1, N+1) numpy.ndarray or xarray.DataArray
         Registration transform, as returned by
         [`register_volume`][confusius.registration.register_volume].
 
-        - **Affine** (``numpy.ndarray``): homogeneous matrix of shape ``(N+1, N+1)``
+        - **Affine** (`numpy.ndarray`): homogeneous matrix of shape `(N+1, N+1)`
           mapping output (fixed) physical coordinates to moving physical coordinates
           (pull/inverse convention).
-        - **B-spline** (``xarray.DataArray``): control-point DataArray as returned by
-          ``register_volume(transform="bspline")``.  Reconstructed via
-          :func:`~confusius.registration.bspline._dataarray_to_sitk_bspline`.
+        - **B-spline** (`xarray.DataArray`): control-point DataArray as returned by
+          `register_volume(transform="bspline")`.
     shape : sequence of int
         Number of voxels along each output axis, in DataArray dimension order.
     spacing : sequence of float
@@ -58,22 +57,22 @@ def resample_volume(
         view after resampling.
     sitk_threads : int, default: -1
         Number of threads SimpleITK may use internally. Negative values resolve to
-        ``max(1, os.cpu_count() + 1 + sitk_threads)``, so ``-1`` means all CPUs, ``-2``
+        `max(1, os.cpu_count() + 1 + sitk_threads)`, so `-1` means all CPUs, `-2`
         means all minus one, and so on. You may want to set this to a lower value or
-        ``1`` when running multiple registrations in parallel (e.g. with joblib) to
+        `1` when running multiple registrations in parallel (e.g. with joblib) to
         avoid over-subscribing the CPU.
 
     Returns
     -------
     xarray.DataArray
-        Resampled volume on the specified grid with ``moving``'s attributes.
+        Resampled volume on the specified grid with `moving`'s attributes.
 
     Raises
     ------
     ValueError
-        If ``moving`` contains a ``time`` dimension or is not 2D or 3D.
+        If `moving` contains a `time` dimension or is not 2D or 3D.
     ValueError
-        If ``transform`` is a numpy array whose shape does not match the image
+        If `transform` is a numpy array whose shape does not match the image
         dimensionality.
     """
     import SimpleITK as sitk
@@ -154,29 +153,29 @@ def resample_like(
 
     Convenience wrapper around
     [`resample_volume`][confusius.registration.resample_volume] that extracts the output
-    grid (``shape``, ``spacing``, ``origin``) from `reference`'s coordinates.
+    grid (`shape`, `spacing`, `origin`) from `reference`'s coordinates.
 
     Parameters
     ----------
     moving : xarray.DataArray
-        2D or 3D spatial DataArray to resample. Must not have a ``time`` dimension.
+        2D or 3D spatial DataArray to resample. Must not have a `time` dimension.
     reference : xarray.DataArray
-        DataArray defining the output grid. Must not have a ``time`` dimension and must
+        DataArray defining the output grid. Must not have a `time` dimension and must
         be 2D or 3D.
     transform : (N+1, N+1) numpy.ndarray or xarray.DataArray
         Registration transform, as returned by
         [`register_volume`][confusius.registration.register_volume].  Maps points from
         the reference physical space to moving physical space (pull/inverse convention).
 
-        - **Affine** (``numpy.ndarray``): homogeneous matrix.
-        - **B-spline** (``xarray.DataArray``): control-point DataArray.
+        - **Affine** (`numpy.ndarray`): homogeneous matrix.
+        - **B-spline** (`xarray.DataArray`): control-point DataArray.
     interpolation : {"linear", "bspline"}, default: "linear"
         Interpolation method used during resampling.
     default_value : float, default: 0.0
         Value assigned to voxels that fall outside the moving image's field of view
         after resampling.
     sitk_threads : int, default: os.cpu_count() or 1
-        Number of threads SimpleITK may use for the ``Resample`` call.
+        Number of threads SimpleITK may use for the `Resample` call.
         Defaults to all available CPUs.
 
     Returns
@@ -188,7 +187,7 @@ def resample_like(
     Raises
     ------
     ValueError
-        If `reference` contains a ``time`` dimension or is not 2D or 3D.
+        If `reference` contains a `time` dimension or is not 2D or 3D.
     """
     if "time" in reference.dims:
         raise ValueError(

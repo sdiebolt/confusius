@@ -40,23 +40,23 @@ def register_volumewise(
         Index of the time point to use as registration target.
     n_jobs : int, default: -1
         Number of parallel jobs. Negative values resolve to ``max(1, os.cpu_count() + 1
-        + n_jobs)``, so ``-1`` means all CPUs, ``-2`` means all minus one, and so on.
-        Use ``1`` for serial processing.
+        + n_jobs)`, so `-1` means all CPUs, `-2`` means all minus one, and so on.
+        Use `1` for serial processing.
     transform : {"translation", "rigid", "affine"}, default: "rigid"
-        Transform model to use during registration. ``"translation"`` allows
-        only shifts. ``"rigid"`` adds rotation. ``"affine"`` adds scaling and
+        Transform model to use during registration. `"translation"` allows
+        only shifts. `"rigid"` adds rotation. `"affine"` adds scaling and
         shearing. B-spline is not available for motion correction.
     metric : {"correlation", "mattes_mi"}, default: "correlation"
-        Similarity metric. ``"correlation"`` (normalized cross-correlation) is
-        appropriate for same-modality registration. ``"mattes_mi"`` (Mattes
+        Similarity metric. `"correlation"` (normalized cross-correlation) is
+        appropriate for same-modality registration. `"mattes_mi"` (Mattes
         mutual information) is better suited for multi-modal registration or
         when the intensity relationship between images is non-linear.
     number_of_histogram_bins : int, default: 50
         Number of histogram bins used by Mattes mutual information. Only
-        relevant when ``metric="mattes_mi"``.
+        relevant when `metric="mattes_mi"`.
     learning_rate : float or "auto", default: "auto"
-        Optimizer step size in normalised units (after ``SetOptimizerScalesFromPhysicalShift``).
-        ``"auto"`` re-estimates the rate at every iteration. A float uses that
+        Optimizer step size in normalised units (after `SetOptimizerScalesFromPhysicalShift`).
+        `"auto"` re-estimates the rate at every iteration. A float uses that
         value directly; if registration diverges or fails to converge, reduce
         it.
     number_of_iterations : int, default: 100
@@ -68,38 +68,38 @@ def register_volumewise(
         Number of recent metric values used to estimate the energy profile
         for convergence checking.
     initialization : {"geometry", "moments", "none"}, default: "geometry"
-        Transform initializer applied before optimization. ``"geometry"``
+        Transform initializer applied before optimization. `"geometry"`
         aligns the image centers (safe default, no assumptions about content).
-        ``"moments"`` aligns centers of mass (better when images are offset
-        but share the same content). ``"none"`` uses the identity transform.
+        `"moments"` aligns centers of mass (better when images are offset
+        but share the same content). `"none"` uses the identity transform.
     optimizer_weights : list of float or None, default: None
         Per-parameter weights applied on top of the auto-estimated physical
-        shift scales. ``None`` uses identity weights (all ones). A list is
-        passed directly to SimpleITK's ``SetOptimizerWeights``; its length
+        shift scales. `None` uses identity weights (all ones). A list is
+        passed directly to SimpleITK's `SetOptimizerWeights`; its length
         must match the number of transform parameters (3 for 2D rigid, 6 for
         3D rigid, 6 for 2D affine, 12 for 3D affine). The weight for each
-        parameter is multiplied into the effective step size: ``0`` freezes a
-        parameter entirely, values in ``(0, 1)`` slow it down, and ``1``
+        parameter is multiplied into the effective step size: `0` freezes a
+        parameter entirely, values in `(0, 1)` slow it down, and `1`
         leaves it unchanged. For the 3D Euler transform the parameter order is
-        ``[angleX, angleY, angleZ, tx, ty, tz]``; to disable rotations around
-        x and y set weights to ``[0, 0, 1, 1, 1, 1]``.
+        `[angleX, angleY, angleZ, tx, ty, tz]`; to disable rotations around
+        x and y set weights to `[0, 0, 1, 1, 1, 1]`.
     use_multi_resolution : bool, default: False
         Whether to use a multi-resolution pyramid during registration. When
-        ``True``, registration proceeds from a coarse downsampled version of
+        `True`, registration proceeds from a coarse downsampled version of
         the images to the full resolution, which improves convergence for large
         displacements and reduces the risk of local minima.
     shrink_factors : sequence of int, default: (6, 2, 1)
         Downsampling factor at each pyramid level, from coarsest to finest.
-        Must have the same length as ``smoothing_sigmas``. Only used when
-        ``use_multi_resolution=True``.
+        Must have the same length as `smoothing_sigmas`. Only used when
+        `use_multi_resolution=True`.
     smoothing_sigmas : sequence of int, default: (6, 2, 1)
         Gaussian smoothing sigma (in voxels) applied at each pyramid level,
         from coarsest to finest. Must have the same length as
-        ``shrink_factors``. Only used when ``use_multi_resolution=True``.
+        `shrink_factors`. Only used when `use_multi_resolution=True`.
     resample_interpolation : {"linear", "bspline"}, default: "linear"
         Interpolator used when resampling each volume onto the reference grid.
-        ``"linear"`` is fast and appropriate for motion correction.
-        ``"bspline"`` (3rd-order B-spline) produces smoother results at the
+        `"linear"` is fast and appropriate for motion correction.
+        `"bspline"` (3rd-order B-spline) produces smoother results at the
         cost of speed.
 
     Returns

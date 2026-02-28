@@ -30,7 +30,7 @@ def _check_frequency(freq: float, nyquist: float) -> float:
     Raises
     ------
     ValueError
-        If `freq` is not in the range ``(0, nyquist)``.
+        If `freq` is not in the range `(0, nyquist)`.
     """
     if not 0 < freq < nyquist:
         raise ValueError(f"Frequency {freq} must be in range (0, {nyquist})")
@@ -48,10 +48,10 @@ def _validate_block_and_clutter_mask(
     Parameters
     ----------
     block : (time, z, y, x) numpy.ndarray
-        Complex beamformed IQ data, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions.
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
     clutter_mask : (z, y, x) numpy.ndarray, optional
-        Boolean spatial mask. If provided, only voxels where mask is ``True`` are
+        Boolean spatial mask. If provided, only voxels where mask is `True` are
         included in the masked signals. Otherwise, all voxels are included.
 
     Returns
@@ -66,7 +66,7 @@ def _validate_block_and_clutter_mask(
     ------
     ValueError
         If `block` is not 4D, or if `clutter_mask` shape doesn't match spatial
-        dimensions ``(z, y, x)`` of `block`.
+        dimensions `(z, y, x)` of `block`.
     """
     if block.ndim != 4:
         raise ValueError(f"'block' must be 4D, got {block.ndim}D")
@@ -116,7 +116,7 @@ def _compute_gram_eigendecomposition(
 
     Notes
     -----
-    The Gram matrix is computed as ``signals @ signals.conj().T``. This is more
+    The Gram matrix is computed as `signals @ signals.conj().T`. This is more
     efficient than full SVD when only the temporal correlations are needed, avoiding
     computation of the large spatial covariance matrix.
 
@@ -151,7 +151,7 @@ def _apply_clutter_filter(
     Performs orthogonal projection to remove clutter components from IQ signals.
     The clutter vectors (typically eigenvectors corresponding to clutter) are
     projected out of the signal space using the formula:
-    ``filtered = signals - clutter_vectors @ clutter_vectors.conj().T @ signals``
+    `filtered = signals - clutter_vectors @ clutter_vectors.conj().T @ signals`
 
     Parameters
     ----------
@@ -195,21 +195,21 @@ def clutter_filter_svd_from_indices(
     Parameters
     ----------
     block : (time, z, y, x) numpy.ndarray
-        Complex beamformed IQ data, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions.
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
     mask : (z, y x) numpy.ndarray, optional
         Boolean mask. SVD is computed only from masked voxels. If not provided, all
         voxels are used.
     low_cutoff : int, optional
         Lower bound for singular vector indices to retain (inclusive). Vectors with
         indices less than `low_cutoff` are treated as clutter and removed.
-        `low_cutoff` must be positive. If not provided, defaults to ``0`` (no
+        `low_cutoff` must be positive. If not provided, defaults to `0` (no
         high-energy removal).
     high_cutoff : int, optional
         Upper bound for singular vector indices to retain (exclusive). Vectors with
         indices greater than or equal to `high_cutoff` are treated as clutter and
         removed. `high_cutoff` must be less than the maximum number of components, that
-        is, ``min(time, mask.sum())``. If not provided, defaults to the maximum
+        is, `min(time, mask.sum())`. If not provided, defaults to the maximum
         number of components (no low-energy removal).
 
     Returns
@@ -300,10 +300,10 @@ def _validate_energy_cutoffs(
     ----------
     low_cutoff : int or float or None
         Lower energy threshold. Components with energy below this value are treated as
-        clutter. If ``None``, defaults to ``0.0``.
+        clutter. If `None`, defaults to `0.0`.
     high_cutoff : int or float or None
         Upper energy threshold. Components with energy above this value are treated as
-        clutter. If ``None``, defaults to `numpy.inf`.
+        clutter. If `None`, defaults to `numpy.inf`.
 
     Returns
     -------
@@ -354,15 +354,15 @@ def clutter_filter_svd_from_energy(
     Parameters
     ----------
     block : (time, z, y, x) numpy.ndarray
-        Complex beamformed IQ data, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions.
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
     mask : (z, y, x) numpy.ndarray, optional
         Boolean mask. SVD is computed only from masked voxels. If not provided, all
         voxels are used.
     low_cutoff : int or float, optional
         Lower bound for singular vector energy to retain (inclusive). Vectors with
         energy less than `low_cutoff` are treated as clutter and removed. `low_cutoff`
-        must be positive. If not provided, defaults to ``0.0`` (no low-energy removal).
+        must be positive. If not provided, defaults to `0.0` (no low-energy removal).
     high_cutoff : int or float, optional
         Upper bound for singular vector energy to retain (inclusive). Vectors with
         energy greater than `high_cutoff` are treated as clutter and removed. If not
@@ -453,15 +453,15 @@ def clutter_filter_svd_from_cumulative_energy(
     Parameters
     ----------
     block : (time, z, y, x) numpy.ndarray
-        Complex beamformed IQ data, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions.
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
     mask : (z, y, x) numpy.ndarray, optional
         Boolean mask. SVD is computed only from masked voxels. If not provided, all
         voxels are used.
     low_cutoff : int or float, optional
         Lower bound for cumulative energy to retain (inclusive). Components with
         cumulative energy lower than `low_cutoff` are treated as clutter and removed.
-        `low_cutoff` must be positive. If not provided, defaults to ``0.0`` (no
+        `low_cutoff` must be positive. If not provided, defaults to `0.0` (no
         low-energy removal).
     high_cutoff : int or float, optional
         Upper bound for cumulative energy to retain (inclusive). Components with
@@ -550,8 +550,8 @@ def clutter_filter_sosfiltfilt(
     Parameters
     ----------
     block : (time, z, y, x) numpy.ndarray
-        Complex beamformed IQ data, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions.
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
     sos : (sections, 6) numpy.ndarray
         Second-order sections filter coefficients, typically obtained from SciPy
         functions like `scipy.signal.butter`, `scipy.signal.cheby1`, etc.
@@ -596,15 +596,15 @@ def clutter_filter_butterworth(
     Parameters
     ----------
     block : (time, z, y, x) numpy.ndarray
-        Complex beamformed IQ data, where ``time`` is the temporal dimension and
-        ``(z, y, x)`` are spatial dimensions.
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
     fs : float
         Sampling frequency in Hertz.
     low_cutoff : float, optional
-        Low cutoff frequency in Hertz, in range ``(0, fs/2)``. If provided, applies
+        Low cutoff frequency in Hertz, in range `(0, fs/2)`. If provided, applies
         high-pass filtering above this frequency.
     high_cutoff : float, optional
-        High cutoff frequency in Hertz, in range ``(0, fs/2)``. If provided, applies
+        High cutoff frequency in Hertz, in range `(0, fs/2)`. If provided, applies
         low-pass filtering below this frequency.
     order : int, default: 4
         Filter order. Due to forward-backward filtering, the effective order is
@@ -619,7 +619,7 @@ def clutter_filter_butterworth(
     ------
     ValueError
         If `block` is not 4D, if cutoff frequencies are invalid, or if both `low_cutoff`
-        and `high_cutoff` are ``None``.
+        and `high_cutoff` are `None`.
     """
     import scipy.signal as sp_signal
 

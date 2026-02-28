@@ -25,7 +25,7 @@ class FUSIIQAccessor:
     ----------
     xarray_obj : xarray.DataArray
         The DataArray to wrap. Must contain complex beamformed IQ data
-        with dimensions ``(time, z, y, x)``.
+        with dimensions `(time, z, y, x)`.
 
     Examples
     --------
@@ -72,10 +72,10 @@ class FUSIIQAccessor:
                 "butterworth"}, default: "svd_indices"
             Clutter filtering method to apply before power Doppler computation.
 
-            - ``"svd_indices"``: Static SVD filter using singular vector indices.
-            - ``"svd_energy"``: Adaptive SVD filter using singular vector energies.
-            - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
-            - ``"butterworth"``: Butterworth frequency-domain filter.
+            - `"svd_indices"`: Static SVD filter using singular vector indices.
+            - `"svd_energy"`: Adaptive SVD filter using singular vector energies.
+            - `"svd_cumulative_energy"`: Adaptive SVD filter using cumulative energies.
+            - `"butterworth"`: Butterworth frequency-domain filter.
         clutter_mask : (z, y, x) xarray.DataArray, optional
             Boolean mask to define clutter regions. Only used by SVD-based clutter
             filters to compute clutter vectors from masked voxels. If not provided,
@@ -101,8 +101,8 @@ class FUSIIQAccessor:
         -------
         (clutter_windows * doppler_windows, z, y, x) xarray.DataArray
             Power Doppler volumes with updated time coordinates, where
-            ``clutter_windows`` is the number of clutter filter sliding windows and
-            ``doppler_windows`` is the number of power Doppler sliding windows per
+            `clutter_windows` is the number of clutter filter sliding windows and
+            `doppler_windows` is the number of power Doppler sliding windows per
             clutter window.
 
         Examples
@@ -167,10 +167,10 @@ class FUSIIQAccessor:
                 "butterworth"}, default: "svd_indices"
             Clutter filtering method to apply before velocity computation.
 
-            - ``"svd_indices"``: Static SVD filter using singular vector indices.
-            - ``"svd_energy"``: Adaptive SVD filter using singular vector energies.
-            - ``"svd_cumulative_energy"``: Adaptive SVD filter using cumulative energies.
-            - ``"butterworth"``: Butterworth frequency-domain filter.
+            - `"svd_indices"`: Static SVD filter using singular vector indices.
+            - `"svd_energy"`: Adaptive SVD filter using singular vector energies.
+            - `"svd_cumulative_energy"`: Adaptive SVD filter using cumulative energies.
+            - `"butterworth"`: Butterworth frequency-domain filter.
         clutter_mask : (z, y, x) xarray.DataArray, optional
             Boolean mask to define clutter regions. Only used by SVD-based clutter
             filters to compute clutter vectors from masked voxels. If not provided,
@@ -194,25 +194,25 @@ class FUSIIQAccessor:
         lag : int, default: 1
             Temporal lag in volumes for autocorrelation computation. Must be positive.
         absolute_velocity : bool, default: False
-            If ``True``, compute absolute velocity values. If ``False``, preserve sign
+            If `True`, compute absolute velocity values. If `False`, preserve sign
             information.
         spatial_kernel : int, default: 1
             Size of the median filter kernel applied spatially to denoise. Must be
-            positive and odd. If ``1``, no spatial filtering is applied.
+            positive and odd. If `1`, no spatial filtering is applied.
         estimation_method : {"average_angle", "angle_average"}, default: "average_angle"
             Method for computing the velocity estimate.
 
-            - ``"average_angle"``: Compute the angle of the autocorrelation, then
+            - `"average_angle"`: Compute the angle of the autocorrelation, then
               average (i.e., average of angles).
-            - ``"angle_average"``: Average the autocorrelation, then compute the angle
+            - `"angle_average"`: Average the autocorrelation, then compute the angle
               (i.e., angle of average).
 
         Returns
         -------
         (clutter_windows * velocity_windows, z, y, x) xarray.DataArray
             Axial velocity volumes with updated time coordinates, where
-            ``clutter_windows`` is the number of clutter filter sliding windows and
-            ``velocity_windows`` is the number of velocity sliding windows per clutter
+            `clutter_windows` is the number of clutter filter sliding windows and
+            `velocity_windows` is the number of velocity sliding windows per clutter
             window. Velocity values are in meters per second.
 
         Examples

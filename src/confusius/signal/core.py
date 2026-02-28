@@ -44,21 +44,21 @@ def clean(
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Signals to clean. Must have a ``time`` dimension. Can be any shape, e.g.,
-        extracted signals ``(time, voxels)``, full 3D+t imaging data ``(time, z, y,
-        x)``, or regional signals ``(time, regions)``.
+        Signals to clean. Must have a `time` dimension. Can be any shape, e.g.,
+        extracted signals `(time, voxels)`, full 3D+t imaging data ``(time, z, y,
+        x)`, or regional signals `(time, regions)``.
 
         !!! warning "Chunking along time is not supported"
-            The ``time`` dimension must NOT be chunked, except when using
+            The `time` dimension must NOT be chunked, except when using
             standardization or scrubbing only. Chunk only spatial dimensions:
-            ``data.chunk({'time': -1})``.
+            `data.chunk({'time': -1})`.
 
     detrend_order : int, optional
         Polynomial order for detrending:
 
-        - ``0``: Remove mean (constant detrending).
-        - ``1``: Remove linear trend using least squares regression (default).
-        - ``2+``: Remove polynomial trend of specified order.
+        - `0`: Remove mean (constant detrending).
+        - `1`: Remove linear trend using least squares regression (default).
+        - `2+`: Remove polynomial trend of specified order.
 
         If not provided, no detrending is applied.
     standardize_method : {"zscore", "psc"}, optional
@@ -72,20 +72,20 @@ def clean(
     filter_butterworth_kwargs : dict, optional
         Extra keyword arguments passed to `confusius.signal.filter_butterworth`.
     confounds : xarray.DataArray, optional
-        Confound regressors with shape ``(time, n_confounds)``. When provided,
+        Confound regressors with shape `(time, n_confounds)`. When provided,
         confounds are detrended and filtered along with signals and then removed via
         regression.
     confounds : (time, n_confounds) xarray.DataArray, optional
-        Confound regressors to remove. Can have shape ``(time,)`` for a single
+        Confound regressors to remove. Can have shape `(time,)` for a single
         confound. The time dimension and coordinates must match the signals exactly. If
         not provided, no confound regression is applied.
     standardize_confounds : bool, default: True
         Whether to standardize confounds by their maximum absolute value before
         regression. This improves numerical stability while preserving constant terms.
     sample_mask : (time,) xarray.DataArray, optional
-        Boolean sample mask indicating which timepoints to keep (``True``) vs. remove
-        (``False``). Must have a ``time`` dimension matching ``signals``. If both
-        `signals` and `sample_mask` have ``time`` coordinates, they must match exactly.
+        Boolean sample mask indicating which timepoints to keep (`True`) vs. remove
+        (`False`). Must have a `time` dimension matching `signals`. If both
+        `signals` and `sample_mask` have `time` coordinates, they must match exactly.
         If not provided, no scrubbing is applied.
     interpolate_method : {"linear", "nearest", "zero", "slinear", "quadratic", \
             "cubic", "quintic", "polynomial", "pchip", "barycentric", "krogh", \
@@ -94,9 +94,9 @@ def clean(
         pre-scrubbing interpolation. Ignored if `sample_mask` is not provided or if no
         detrending or filtering is applied. DataArray.interp`. Common options:
 
-        - ``"nearest"``: Nearest-neighbor interpolation (fastest, least smooth).
-        - ``"linear"``: Linear interpolation (faster, less smooth).
-        - ``"cubic"``: Cubic spline interpolation (slower, smooth).
+        - `"nearest"`: Nearest-neighbor interpolation (fastest, least smooth).
+        - `"linear"`: Linear interpolation (faster, less smooth).
+        - `"cubic"`: Cubic spline interpolation (slower, smooth).
 
         See `xarray.DataArray.interp` for all available methods.
 

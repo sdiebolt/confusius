@@ -1,1 +1,1 @@
-"""Unit tests for the ``io`` module."""
+"""Unit tests for the `io` module."""

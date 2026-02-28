@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def _normalize(arr: NDArray[np.floating]) -> NDArray[np.floating]:
-    """Linearly scale ``arr`` to [0, 1], handling flat arrays gracefully."""
+    """Linearly scale `arr` to [0, 1], handling flat arrays gracefully."""
     lo, hi = arr.min(), arr.max()
     if hi == lo:
         return np.zeros_like(arr, dtype=float)
@@ -37,7 +37,7 @@ def _blend_red_cyan(
     Returns
     -------
     numpy.ndarray
-        RGB image of shape ``(*fixed.shape, 3)``.
+        RGB image of shape `(*fixed.shape, 3)`.
     """
     h, w = fixed.shape
     rgb = np.zeros((h, w, 3))
@@ -58,9 +58,9 @@ def _make_mosaic(
     Parameters
     ----------
     fixed_vol : numpy.ndarray
-        3D reference volume ``(n_slices, H, W)``.
+        3D reference volume `(n_slices, H, W)`.
     moving_vol : numpy.ndarray
-        3D moving volume ``(n_slices, H, W)``.
+        3D moving volume `(n_slices, H, W)`.
 
     Returns
     -------
@@ -102,7 +102,7 @@ class RegistrationProgressPlotter:
         Whether to display the optimizer metric over iterations.
     plot_composite : bool, default: True
         Whether to display a blended fixed/moving composite at each iteration.
-        Requires an additional ``sitk.Resample`` call per iteration.
+        Requires an additional `sitk.Resample` call per iteration.
     """
 
     def __init__(
@@ -197,7 +197,7 @@ class RegistrationProgressPlotter:
     def update(self) -> None:
         """Update the plot with the current iteration's data.
 
-        Called at every ``sitkIterationEvent``.
+        Called at every `sitkIterationEvent`.
         """
         if self._plot_metric:
             self._metric_values.append(self._method.GetMetricValue())
@@ -245,7 +245,7 @@ class RegistrationProgressPlotter:
     def close(self) -> None:
         """Finalize the plot when registration ends.
 
-        Called at ``sitkEndEvent``.
+        Called at `sitkEndEvent`.
         """
         # Trigger one last render to show the final state.
         self._render()

@@ -22,25 +22,25 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> xr.DataArray:
     requirements for processing with confusius functions. Validation checks include:
 
     1. **Dimensions**: The IQ DataArray must have exactly 4 dimensions in the
-       order: ``(time, z, y, x)``.
+       order: `(time, z, y, x)`.
     2. **Coordinates**: All dimensions must have corresponding coordinates.
-    3. **Data type**: The data must be complex-valued (``complex64`` or ``complex128``).
-    4. **Attributes** (optional): If `require_attrs` is ``True``, the DataArray must have
+    3. **Data type**: The data must be complex-valued (`complex64` or `complex128`).
+    4. **Attributes** (optional): If `require_attrs` is `True`, the DataArray must have
        the following attributes:
 
-       - ``compound_sampling_frequency``: Volume acquisition rate in Hz.
-       - ``transmit_frequency``: Ultrasound probe central frequency in Hz.
-       - ``sound_velocity``: Speed of sound in the imaged medium in m/s.
+       - `compound_sampling_frequency`: Volume acquisition rate in Hz.
+       - `transmit_frequency`: Ultrasound probe central frequency in Hz.
+       - `sound_velocity`: Speed of sound in the imaged medium in m/s.
 
     Parameters
     ----------
     iq : xarray.DataArray
-        Input DataArray to validate. Must have dimensions ``(time, z, y, x)`` and
+        Input DataArray to validate. Must have dimensions `(time, z, y, x)` and
         the required structure and attributes.
     require_attrs : bool, default: True
         Whether to validate that all required attributes
-        (``compound_sampling_frequency``, ``transmit_frequency``,
-        ``sound_velocity``) are present in the DataArray attributes.
+        (`compound_sampling_frequency`, `transmit_frequency`,
+        `sound_velocity`) are present in the DataArray attributes.
 
     Returns
     -------

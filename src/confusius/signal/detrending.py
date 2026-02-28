@@ -36,26 +36,26 @@ def _polynomial_detrend_wrapper(data, axis, order):
 def detrend(signals: xr.DataArray, order: int = 1) -> xr.DataArray:
     """Remove trends from signals across time.
 
-    This function operates along the ``time`` dimension and works with arrays of any
+    This function operates along the `time` dimension and works with arrays of any
     shape, making it flexible for both extracted signals and full fUSI data.
 
     Parameters
     ----------
     signals : (time, ...) xarray.DataArray
-        Array to detrend. Must have a ``time`` dimension. Can be any shape, e.g.,
-        extracted signals ``(time, voxels)``, full 3D+t imaging data ``(time, z, y,
-        x)``, or regional signals ``(time, regions)``.
+        Array to detrend. Must have a `time` dimension. Can be any shape, e.g.,
+        extracted signals `(time, voxels)`, full 3D+t imaging data ``(time, z, y,
+        x)`, or regional signals `(time, regions)``.
 
         !!! warning "Chunking along time is not supported"
-            The ``time`` dimension must NOT be chunked. Chunk only spatial dimensions:
-            ``data.chunk({'time': -1})``.
+            The `time` dimension must NOT be chunked. Chunk only spatial dimensions:
+            `data.chunk({'time': -1})`.
 
     order : int, default: 1
         Polynomial order for detrending:
 
-        - ``0``: Remove mean (constant detrending).
-        - ``1``: Remove linear trend using least squares regression (default).
-        - ``2+``: Remove polynomial trend of specified order.
+        - `0`: Remove mean (constant detrending).
+        - `1`: Remove linear trend using least squares regression (default).
+        - `2+`: Remove polynomial trend of specified order.
 
     Returns
     -------
@@ -65,7 +65,7 @@ def detrend(signals: xr.DataArray, order: int = 1) -> xr.DataArray:
     Raises
     ------
     ValueError
-        If `signals` does not have a ``time`` dimension. If `order` is negative.
+        If `signals` does not have a `time` dimension. If `order` is negative.
 
     Warns
     -----
@@ -74,8 +74,8 @@ def detrend(signals: xr.DataArray, order: int = 1) -> xr.DataArray:
 
     Notes
     -----
-    - For ``order=0`` and ``order=1``, uses `scipy.signal.detrend`.
-    - For ``order >= 2``, fits a polynomial of the specified order and subtracts it.
+    - For `order=0` and `order=1`, uses `scipy.signal.detrend`.
+    - For `order >= 2`, fits a polynomial of the specified order and subtracts it.
 
     Examples
     --------

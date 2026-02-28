@@ -1,1 +1,1 @@
-"""Unit tests for the ``iq`` module."""
+"""Unit tests for the `iq` module."""
