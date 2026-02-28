@@ -1,6 +1,6 @@
 [project]
 name = "confusius"
-version = "0.0.1-a6"
+version = "0.0.1-a7"
 description = "Python package for analysis and visualization of functional ultrasound imaging data."
 readme = "README.md"
 license = "BSD-3-Clause AND Apache-2.0 AND BSD-2-Clause"
@@ -23,6 +23,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
+    "brainglobe-atlasapi>=2.3.0",
     "dask[complete]>=2025.9.0",
     "h5py>=3.15.1",
     "ipython>=9.6.0",
