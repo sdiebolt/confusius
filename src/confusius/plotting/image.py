@@ -410,7 +410,7 @@ class VolumePlotter:
         resolved_cmap: str | Colormap = (
             cmap if cmap is not None else data.attrs.get("cmap", "gray")
         )
-        resolved_norm: Normalize | None = (
+        resolved_norm: "Normalize | None" = (
             norm if norm is not None else data.attrs.get("norm")
         )
 
