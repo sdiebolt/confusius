@@ -35,7 +35,7 @@ the controls and features.
     import xarray as xr
     import confusius
 
-    pwd = xr.open_zarr("sub-01_task-rest_pwd.zarr")["power_doppler"]
+    pwd = xr.open_zarr("sub-01_task-awake_pwd.zarr")["power_doppler"]
     viewer = pwd.fusi.plot.napari()
     ```
 
@@ -45,7 +45,7 @@ the controls and features.
     import xarray as xr
     import confusius as cf
 
-    pwd = xr.open_zarr("sub-01_task-rest_pwd.zarr")["power_doppler"]
+    pwd = xr.open_zarr("sub-01_task-awake_pwd.zarr")["power_doppler"]
     viewer = cf.plotting.plot_napari(pwd)
     ```
 
@@ -173,7 +173,7 @@ maps, or 3D angiography data.
     import xarray as xr
     import confusius
 
-    pwd = xr.open_zarr("sub-01_task-rest_pwd.zarr")["power_doppler"]
+    pwd = xr.open_zarr("sub-01_task-awake_pwd.zarr")["power_doppler"]
 
     # All elevation slices in an auto-sized grid.
     plotter = pwd.fusi.plot.volume()
@@ -185,7 +185,7 @@ maps, or 3D angiography data.
     import xarray as xr
     import confusius as cf
 
-    pwd = xr.open_zarr("sub-01_task-rest_pwd.zarr")["power_doppler"]
+    pwd = xr.open_zarr("sub-01_task-awake_pwd.zarr")["power_doppler"]
 
     # All elevation slices in an auto-sized grid.
     plotter = cf.plotting.plot_volume(pwd)
@@ -203,7 +203,7 @@ When the data has multiple slices along the sliced dimension, `plot_volume` lays
 out automatically in an approximately square grid:
 
 ```python
-angio = xr.open_zarr("sub-01_angio.zarr")["angio"]
+angio = xr.open_zarr("sub-01_acq-angio_pwd.zarr")["angio"]
 
 plotter = angio.fusi.plot.volume(slice_mode="z", show_colorbar=False)
 ```
@@ -258,7 +258,7 @@ removing saturation artifacts or thresholding decibel-scaled data.
 
 ```python
 plotter = pwd.fusi.plot.volume(slice_mode="z", cmap="hot")
-plotter.savefig("sub-01_power_doppler_slices.png", dpi=150)
+plotter.savefig("sub-01_task-awake_pwd.png", dpi=150)
 plotter.close()
 ```
 
@@ -304,7 +304,6 @@ plotter = pwd.fusi.scale.db().fusi.plot.volume(
 
 # Step 2: overlay atlas contours with Allen colors.
 plotter.add_contours(atlas_mask, colors=allen_colors)
-plotter.savefig("sub-01_functional_with_atlas.png", dpi=150)
 ```
 
 ![Power Doppler volume with Allen atlas region contours overlaid](../images/visualization/volume-with-contours-light.png#only-light)

@@ -1,5 +1,5 @@
 ---
-icon: lucide/gauge
+icon: lucide/clipboard-check
 ---
 
 # `confusius.qc`

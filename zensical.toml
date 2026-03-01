@@ -25,7 +25,11 @@ nav = [
         { "Spatial Conventions" = "user-guide/spatial-conventions.md" },
         { "Beamformed IQ" = "user-guide/beamformed-iq.md" },
         { "Visualization" = "user-guide/visualization.md" },
+        { "Quality Control" = "user-guide/quality-control.md" },
+        { "Atlases" = "user-guide/atlas.md" },
         { "Registration" = "user-guide/registration.md" },
+        { "Signal Processing" = "user-guide/signal.md" },
+        { "Statistical Analysis" = "user-guide/statistical-analysis.md" },
     ]},
     { "API Reference" = [
         { "Overview" = "api/index.md" },
