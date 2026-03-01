@@ -1,30 +1,29 @@
 """B-spline transform helpers for fUSI registration.
 
-A B-spline deformation field is represented as an [`xarray.DataArray`][xarray.DataArray]
-with:
+A B-spline deformation field is represented as a DataArray with:
 
-* **dims**: `("component", <spatial dims>)` — e.g. `("component", "z", "y", "x")`.
-* **coords**: physical mm positions of the control-point grid along each spatial axis.
-* **attrs**:
+- **dims**: `("component", <spatial dims>)` — e.g. `("component", "z", "y", "x")`.
+- **coords**: physical mm positions of the control-point grid along each spatial axis.
+- **attrs**:
 
-  .. code-block:: python
-
-      {
-          "type":      "bspline_transform",
-          "order":     3,                          # B-spline polynomial order
-          "direction": [[...], [...], [...]],      # (ndim, ndim) direction cosine matrix
-          "affines":   {
-              "bspline_initialization": [[...]]   # optional (N+1, N+1) pre-affine;
-                                                  # only present when register_volume
-                                                  # was called with initial_transform.
-          }
+  ```python
+  {
+      "type":      "bspline_transform",
+      "order":     3,                          # B-spline polynomial order
+      "direction": [[...], [...], [...]],      # (ndim, ndim) direction cosine matrix
+      "affines":   {
+          "bspline_initialization": [[...]]   # optional (N+1, N+1) pre-affine;
+                                              # only present when register_volume
+                                              # was called with initial_transform.
       }
+  }
+  ```
 
-When a pre-affine is stored in `attrs["affines"]["bspline_initialization"]`, the
-full transform is a `CompositeTransform(pre_affine, bspline)` — i.e. the pre-affine
-is applied *first* (coarse global alignment) and the B-spline is applied *second*
-(local deformation refinement).  This mirrors the `inPlace=True` composite that
-SimpleITK optimises during registration.
+When a pre-affine is stored in `attrs["affines"]["bspline_initialization"]`, the full
+transform is a `CompositeTransform(pre_affine, bspline)` — i.e. the pre-affine is
+applied *first* (coarse global alignment) and the B-spline is applied *second* (local
+deformation refinement).  This mirrors the `inPlace=True` composite that SimpleITK
+optimises during registration.
 """
 
 from typing import TYPE_CHECKING
@@ -35,11 +34,6 @@ import xarray as xr
 
 if TYPE_CHECKING:
     import SimpleITK as sitk
-
-
-# ---------------------------------------------------------------------------
-# Public helpers
-# ---------------------------------------------------------------------------
 
 
 def _sitk_bspline_to_dataarray(
@@ -209,11 +203,6 @@ def _dataarray_to_sitk_bspline(da: xr.DataArray) -> "sitk.Transform":
     return bspline
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _extract_bspline(transform: "sitk.Transform") -> "sitk.BSplineTransform":
     """Return the BSplineTransform from a transform or its last composite sub-transform.
 
@@ -241,7 +230,7 @@ def _extract_bspline(transform: "sitk.Transform") -> "sitk.BSplineTransform":
         # The B-spline is the last sub-transform (it was added last and is optimised).
         last = transform.GetNthTransform(n - 1)  # type: ignore[attr-defined]
         if "BSpline" in last.GetName():
-            return last  # type: ignore[return-value]
+            return last
     raise TypeError(
         f"Expected a BSplineTransform or a CompositeTransform ending with a "
         f"BSplineTransform; got {transform.GetName()!r}."

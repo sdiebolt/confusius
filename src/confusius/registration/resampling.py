@@ -26,7 +26,8 @@ def resample_volume(
     """Resample a volume onto an explicit output grid using a pre-computed transform.
 
     Low-level resampling primitive. For the common case of resampling onto the grid of
-    another DataArray, use `resample_like` instead.
+    another DataArray, use [`resample_like`][confusius.registration.resample_like]
+    instead.
 
     Parameters
     ----------
