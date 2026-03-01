@@ -44,7 +44,12 @@ statistical analysis of functional ultrasound imaging (fUSI) data.
   NIfTI, Zarr, etc.)
 - **Beamformed IQ Processing**: Process raw beamformed IQ signals into power Doppler,
   velocity, and other derived metrics.
+- **Quality Control**: Compute quality metrics (DVARS, tSNR, CV) to assess data quality.
 - **Registration**: Motion correction and spatial alignment tools.
+- **Signal Extraction**: Extract and reconstruct signals from regions of interest using
+  spatial masks.
+- **Signal Processing**: Denoising, filtering, detrending, and confound regression for
+  hemodynamic signals.
 - **Visualization**: Rich plotting utilities for fUSI data exploration.
 - **Xarray Integration**: Seamless integration with Xarray for labeled multi-dimensional
   arrays.
@@ -75,5 +80,5 @@ data = cf.io.load_nifti("path/to/data.nii.gz")
 corrected_data = data.fusi.register.volumewise()
 
 # Visualize with Napari.
-correted_data.fusi.plot()
+corrected_data.fusi.plot()
 ```

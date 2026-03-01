@@ -1,7 +1,7 @@
 # API Reference
 
 Complete reference documentation for the ConfUSIus API. Please refer to the [user
-guide](../user_guide/index.md) for more detailed explanations and usage examples.
+guide](../user-guide/index.md) for more detailed explanations and usage examples.
 
 ## Core Modules
 
