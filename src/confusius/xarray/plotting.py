@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from matplotlib.colors import Colormap
     from matplotlib.figure import Figure, SubFigure
     from napari import Viewer
-    from napari.layers import Image
 
 
 class FUSIPlotAccessor:
@@ -36,13 +35,13 @@ class FUSIPlotAccessor:
     --------
     >>> import xarray as xr
     >>> data = xr.open_zarr("output.zarr")["iq"]
-    >>> viewer, layer = data.fusi.plot.napari()
+    >>> viewer = data.fusi.plot.napari()
     """
 
     def __init__(self, xarray_obj: xr.DataArray) -> None:
         self._obj = xarray_obj
 
-    def __call__(self, **kwargs) -> tuple[Any, Any]:
+    def __call__(self, **kwargs) -> "Viewer":
         """Call the napari plotting method by default.
 
         Parameters
@@ -58,32 +57,33 @@ class FUSIPlotAccessor:
         show_scale_bar: bool = True,
         dim_order: tuple[str, ...] | None = None,
         viewer: "Viewer | None" = None,
-        **imshow_kwargs,
-    ) -> "tuple[Viewer, list[Image]]":
+        layer_type: Literal["image", "labels"] = "image",
+        **layer_kwargs,
+    ) -> "Viewer":
         """Display data in napari viewer.
 
         Parameters
         ----------
         show_colorbar : bool, default: True
-            Whether to show the colorbar.
+            Whether to show the colorbar. Only applies to image layers.
         show_scale_bar : bool, default: True
             Whether to show the scale bar.
         dim_order : tuple[str, ...], optional
             Dimension ordering for the spatial axes (last three dimensions). If not
             provided, the ordering of the last three dimensions in `data` is used.
         viewer : napari.Viewer, optional
-            Existing Napari viewer to add the image layer to. If not provided, a new
+            Existing Napari viewer to add the layer to. If not provided, a new
             viewer is created.
-        **imshow_kwargs
-            Additional keyword arguments passed to `napari.imshow`, such as
-            `contrast_limits`, `colormap`, etc.
+        layer_type : {"image", "labels"}, default: "image"
+            Type of layer to create. Use "image" for fUSI data and "labels" for
+            ROI masks, segmentations, or other label data.
+        **layer_kwargs
+            Additional keyword arguments passed to the layer creation method.
 
         Returns
         -------
-        viewer : napari.Viewer
-            The Napari viewer instance.
-        layer : napari.layers.Image
-            The image layer added to the viewer.
+        napari.Viewer
+            The Napari viewer instance with the layer added.
 
         Notes
         -----
@@ -103,17 +103,25 @@ class FUSIPlotAccessor:
         >>> import xarray as xr
         >>> import confusius  # Register accessor.
         >>> data = xr.open_zarr("output.zarr")["iq"]
-        >>> viewer, layer = data.fusi.plot.napari()
+        >>> viewer = data.fusi.plot.napari()
 
         >>> # Custom contrast limits
-        >>> viewer, layer = data.fusi.plot.napari(contrast_limits=(0, 100))
+        >>> viewer = data.fusi.plot.napari(contrast_limits=(0, 100))
 
         >>> # Different dimension ordering (e.g., depth, elevation, lateral)
-        >>> viewer, layer = data.fusi.plot.napari(dim_order=("y", "z", "x"))
+        >>> viewer = data.fusi.plot.napari(dim_order=("y", "z", "x"))
 
         >>> # Add a second dataset as a new layer in an existing viewer
-        >>> viewer, layer1 = data1.fusi.plot.napari()
-        >>> viewer, layer2 = data2.fusi.plot.napari(viewer=viewer)
+        >>> viewer = data1.fusi.plot.napari()
+        >>> viewer = data2.fusi.plot.napari(viewer=viewer)
+
+        >>> # Display ROI labels (e.g., segmentation mask)
+        >>> roi_mask = xr.open_zarr("output.zarr")["roi_mask"]
+        >>> viewer = data.fusi.plot.napari(roi_mask, layer_type="labels")
+
+        >>> # Overlay labels on existing image
+        >>> viewer = data.fusi.plot.napari()
+        >>> viewer = roi_mask.fusi.plot.napari(viewer=viewer, layer_type="labels")
         """
         return plot_napari(
             self._obj,
@@ -121,7 +129,8 @@ class FUSIPlotAccessor:
             show_scale_bar=show_scale_bar,
             dim_order=dim_order,
             viewer=viewer,
-            **imshow_kwargs,
+            layer_type=layer_type,
+            **layer_kwargs,
         )
 
     def carpet(
@@ -135,6 +144,7 @@ class FUSIPlotAccessor:
         decimation_threshold: int | None = 800,
         figsize: tuple[float, float] = (10, 5),
         title: str | None = None,
+        black_bg: bool = False,
         ax: "Axes | None" = None,
     ) -> tuple["Figure | SubFigure", "Axes"]:
         """Plot voxel intensities across time as a raster image.
@@ -174,6 +184,9 @@ class FUSIPlotAccessor:
             Figure size in inches `(width, height)`.
         title : str, optional
             Plot title.
+        black_bg : bool, default: False
+            Whether to use a black figure background with white foreground elements
+            (spines, ticks, labels). Use `True` for dark-themed figures.
         ax : matplotlib.axes.Axes, optional
             Axes to plot on. If not provided, creates new figure and axes.
 
@@ -221,6 +234,7 @@ class FUSIPlotAccessor:
             decimation_threshold=decimation_threshold,
             figsize=figsize,
             title=title,
+            black_bg=black_bg,
             ax=ax,
         )
 

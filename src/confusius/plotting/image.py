@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from matplotlib.colors import Colormap
     from matplotlib.figure import Figure, SubFigure
     from napari import Viewer
-    from napari.layers import Image
 
 # Import napari at module level for backward compatibility and test mocking.
 # This is a lightweight import (~111ms) compared to matplotlib/scipy.
@@ -1220,8 +1219,9 @@ def plot_napari(
     show_scale_bar: bool = True,
     dim_order: tuple[str, ...] | None = None,
     viewer: "Viewer | None" = None,
-    **imshow_kwargs,
-) -> tuple["Viewer", list["Image"]]:
+    layer_type: Literal["image", "labels"] = "image",
+    **layer_kwargs,
+) -> "Viewer":
     """Display fUSI data using the Napari viewer.
 
     Parameters
@@ -1229,27 +1229,29 @@ def plot_napari(
     data : xarray.DataArray
         Input data array to visualize. Expected dimensions are (time, z, y, x) where
         z is the elevation/stacking axis, y is depth, and x is lateral. Use
-        `dim_order` to specify a different dimension ordering.
+        `dim_order` to specify a different dimension ordering. Can be image data
+        or label/mask data (e.g., ROIs, segmentations).
     show_colorbar : bool, default: True
-        Whether to show the colorbar.
+        Whether to show the colorbar. Only applies to image layers.
     show_scale_bar : bool, default: True
         Whether to show the scale bar.
     dim_order : tuple[str, ...], optional
         Dimension ordering for the spatial axes (last three dimensions). If not
         provided, the ordering of the last three dimensions in `data` is used.
     viewer : napari.Viewer, optional
-        Existing Napari viewer to add the image layer to. If not provided, a new viewer
+        Existing Napari viewer to add the layer to. If not provided, a new viewer
         is created.
-    **imshow_kwargs
-        Additional keyword arguments passed to `napari.imshow`, such as
-        `contrast_limits`, `colormap`, etc.
+    layer_type : {"image", "labels"}, default: "image"
+        Type of layer to create. Use "image" for fUSI data and "labels" for
+        ROI masks, segmentations, or other label data.
+    **layer_kwargs
+        Additional keyword arguments passed to the layer creation method
+        (`napari.imshow` for images or `viewer.add_labels` for labels).
 
     Returns
     -------
-    viewer : napari.Viewer
-        The Napari viewer instance.
-    layer : napari.layers.Image
-        The image layer added to the viewer.
+    napari.Viewer
+        The Napari viewer instance with the layer added.
 
     Notes
     -----
@@ -1275,17 +1277,25 @@ def plot_napari(
     >>> import xarray as xr
     >>> from confusius.plotting import plot_napari
     >>> data = xr.open_zarr("output.zarr")["iq"]
-    >>> viewer, layer = plot_napari(data)
+    >>> viewer = plot_napari(data)
 
     >>> # Custom contrast limits
-    >>> viewer, layer = plot_napari(data, contrast_limits=(0, 100))
+    >>> viewer = plot_napari(data, contrast_limits=(0, 100))
 
     >>> # Different dimension ordering (e.g., depth, elevation, lateral)
-    >>> viewer, layer = plot_napari(data, dim_order=("y", "z", "x"))
+    >>> viewer = plot_napari(data, dim_order=("y", "z", "x"))
 
     >>> # Add a second dataset as a new layer in an existing viewer
-    >>> viewer, layer1 = plot_napari(data1)
-    >>> viewer, layer2 = plot_napari(data2, viewer=viewer)
+    >>> viewer = plot_napari(data1)
+    >>> viewer = plot_napari(data2, viewer=viewer)
+
+    >>> # Display ROI labels (e.g., segmentation mask)
+    >>> roi_mask = xr.open_zarr("output.zarr")["roi_mask"]
+    >>> viewer = plot_napari(roi_mask, layer_type="labels")
+
+    >>> # Overlay labels on existing image
+    >>> viewer = plot_napari(data)
+    >>> viewer = plot_napari(roi_mask, viewer=viewer, layer_type="labels")
     """
     all_dims = list(data.dims)
     time_dim = "time" if "time" in all_dims else None
@@ -1314,35 +1324,54 @@ def plot_napari(
         for dim in spatial_dims
     ]
 
-    # The last 2 (2D) or 3 (3D) dimensions are the displayed spatial axes.
-    if dim_order is not None:
-        order = []
-        if time_dim:
-            order.append(all_dims.index(time_dim))
-        for dim in dim_order:
-            if dim in all_dims:
-                order.append(all_dims.index(dim))
-        imshow_kwargs["order"] = tuple(order)
+    layer_kwargs.setdefault("name", data.name)
 
-    imshow_kwargs.setdefault("axis_labels", all_dims)
-    imshow_kwargs.setdefault("name", data.name)
-    imshow_kwargs.setdefault("translate", coord_translates)
-    viewer, image_layer = napari.imshow(
-        data,
-        scale=scale,
-        viewer=viewer,
-        **imshow_kwargs,
-    )
+    if layer_type == "image":
+        # The last 2 (2D) or 3 (3D) dimensions are the displayed spatial axes.
+        if dim_order is not None:
+            order = []
+            if time_dim:
+                order.append(all_dims.index(time_dim))
+            for dim in dim_order:
+                if dim in all_dims:
+                    order.append(all_dims.index(dim))
+            layer_kwargs["order"] = tuple(order)
 
-    if show_colorbar:
-        viewer.layers[0].colorbar.visible = True  # type: ignore[attr-defined]
+        layer_kwargs.setdefault("axis_labels", all_dims)
+        layer_kwargs.setdefault("translate", coord_translates)
+        viewer, layer = napari.imshow(
+            data,
+            scale=scale,
+            viewer=viewer,
+            **layer_kwargs,
+        )
+
+        if show_colorbar:
+            viewer.layers[0].colorbar.visible = True  # type: ignore[attr-defined]
+
+    elif layer_type == "labels":
+        layer_kwargs.setdefault("translate", coord_translates)
+        if viewer is None:
+            viewer = napari.Viewer()
+        values = data.values
+        if not np.issubdtype(values.dtype, np.integer):
+            values = values.astype(np.int32)
+        viewer.add_labels(
+            values,
+            scale=scale,
+            **layer_kwargs,
+        )
+
+    else:
+        raise ValueError(
+            f"Unknown layer_type: {layer_type!r}. Expected 'image' or 'labels'."
+        )
 
     if show_scale_bar:
         viewer.scale_bar.visible = True
-        viewer.scale_bar.gridded = True
         viewer.scale_bar.unit = "mm"
 
-    return viewer, image_layer
+    return viewer
 
 
 def plot_carpet(
@@ -1356,6 +1385,7 @@ def plot_carpet(
     decimation_threshold: int | None = 800,
     figsize: tuple[float, float] = (10, 5),
     title: str | None = None,
+    black_bg: bool = False,
     ax: "Axes | None" = None,
 ) -> tuple["Figure | SubFigure", "Axes"]:
     """Plot voxel intensities across time as a raster image.
@@ -1397,6 +1427,9 @@ def plot_carpet(
         Figure size in inches `(width, height)`.
     title : str, optional
         Plot title.
+    black_bg : bool, default: False
+        Whether to use a black figure background with white foreground elements
+        (spines, ticks, labels). Use `True` for dark-themed figures.
     ax : matplotlib.axes.Axes, optional
         Axes to plot on. If not provided, creates new figure and axes.
 
@@ -1482,26 +1515,43 @@ def plot_carpet(
         decimation_factor = 2**n_decimations
         signals = signals[::decimation_factor, :]
 
+    text_color = "white" if black_bg else "black"
+    bg_color = "black" if black_bg else "white"
+
     if ax is None:
         figure, ax = plt.subplots(figsize=figsize)
+        figure.patch.set_facecolor(bg_color)
     else:
         figure = ax.figure
 
-    signals.T.plot(cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, yincrease=False)  # type: ignore[call-arg]
+    ax.set_facecolor(bg_color)
+
+    quad = signals.T.plot(cmap=cmap, vmin=vmin, vmax=vmax, ax=ax, yincrease=False)  # type: ignore[call-arg]
+
+    if quad.colorbar is not None:
+        cbar = quad.colorbar
+        cbar.ax.yaxis.set_tick_params(color=text_color)
+        plt.setp(cbar.ax.yaxis.get_ticklabels(), color=text_color)
+        cbar.ax.yaxis.label.set_color(text_color)
+        cbar.outline.set_edgecolor(text_color)  # type: ignore[union-attr]
+        cbar.ax.set_facecolor(bg_color)
 
     ax.grid(False)
     ax.set_yticks([])
-    ax.set_ylabel("Voxels")
+    ax.set_ylabel("Voxels", color=text_color)
     # TODO: we could get time units from attrs, or maybe use pint?
-    ax.set_xlabel("Time (s)")
+    ax.set_xlabel("Time (s)", color=text_color)
+    ax.tick_params(colors=text_color)
 
     if title:
-        ax.set_title(title)
+        ax.set_title(title, color=text_color)
 
     for side in ["top", "right"]:
         ax.spines[side].set_visible(False)
 
     ax.spines["bottom"].set_position(("outward", 10))
     ax.spines["left"].set_position(("outward", 10))
+    ax.spines["bottom"].set_edgecolor(text_color)
+    ax.spines["left"].set_edgecolor(text_color)
 
     return figure, ax
