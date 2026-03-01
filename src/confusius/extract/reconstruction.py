@@ -65,7 +65,7 @@ def unmask(
     >>>
     >>> # Load data and mask
     >>> data = xr.open_zarr("recording.zarr")["pwd"]
-    >>> mask = xr.open_dataarray("brain_mask.nc")
+    >>> mask = xr.open_zarr("brain_mask.zarr")["mask"]
     >>>
     >>> # Extract signals
     >>> signals = extract_with_mask(data, mask)
