@@ -344,7 +344,7 @@ class VolumePlotter:
         )
 
     def _build_slice_title(self, data: xr.DataArray, coord: float) -> str:
-        """Build a slice title such as ``z = 0.001 mm``."""
+        """Build a slice title such as `z = 0.001 mm`."""
         units = (
             data.coords[self.slice_mode].attrs.get("units")
             if self.slice_mode in data.coords
@@ -1333,6 +1333,11 @@ def plot_napari(
     missing coordinates, no scaling is applied. The spacing is computed as the median
     difference between consecutive coordinate values.
 
+    When spatial coordinates carry a `units` attribute (e.g. `"m"`), the unit list
+    is forwarded to Napari as the `units` layer parameter, which populates the status
+    bar with physical coordinates. The scale bar is also updated to reflect the first
+    found unit; it falls back to `"mm"` when no units are present on the coordinates.
+
     For unitary dimensions (e.g., a single-slice elevation axis in 2D+t data), the
     spacing cannot be inferred from coordinates. In that case, the function looks for a
     `voxdim` attribute on the coordinate variable
@@ -1397,7 +1402,26 @@ def plot_napari(
         for dim in spatial_dims
     ]
 
+    coord_units = [
+        data.coords[dim].attrs.get("units") if dim in data.coords else None
+        for dim in spatial_dims
+    ]
+
+    # Napari requires units to cover ALL dims (including time). Prepend time unit so
+    # that the list length matches ndim; passing None is accepted for unlabelled axes.
+    if time_dim is not None:
+        time_unit = (
+            data.coords[time_dim].attrs.get("units")
+            if time_dim in data.coords
+            else None
+        )
+        all_units: list[str | None] = [time_unit, *coord_units]
+    else:
+        all_units = coord_units
+
     layer_kwargs.setdefault("name", data.name)
+    if any(u is not None for u in all_units):
+        layer_kwargs.setdefault("units", all_units)
 
     if layer_type == "image":
         # The last 2 (2D) or 3 (3D) dimensions are the displayed spatial axes.
@@ -1470,7 +1494,8 @@ def plot_napari(
 
     if show_scale_bar:
         viewer.scale_bar.visible = True
-        viewer.scale_bar.unit = "mm"
+        scale_bar_unit = next((u for u in coord_units if u is not None), "mm")
+        viewer.scale_bar.unit = scale_bar_unit
 
     return viewer
 
@@ -1640,8 +1665,7 @@ def plot_carpet(
     ax.grid(False)
     ax.set_yticks([])
     ax.set_ylabel("Voxels", color=text_color)
-    # TODO: we could get time units from attrs, or maybe use pint?
-    ax.set_xlabel("Time (s)", color=text_color)
+    ax.set_xlabel(_build_axis_label(data, "time").capitalize(), color=text_color)
     ax.tick_params(colors=text_color)
 
     if title:
