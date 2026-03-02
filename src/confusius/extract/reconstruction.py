@@ -33,8 +33,8 @@ def unmask(
         and coordinates as the original data.
     new_dims : list of str, optional
         Names for leading dimensions when `signals` is a Numpy array. Must match the
-        number of leading dimensions `(ndim - 1)`. If not provided, uses ``["dim_0",
-        "dim_1", ...]``. Ignored if `signals` is a DataArray.
+        number of leading dimensions `(ndim - 1)`. If not provided, uses `["dim_0",
+        "dim_1", ...]`. Ignored if `signals` is a DataArray.
     new_dims_coords : dict[str, numpy.ndarray], optional
         Coordinates for leading dimensions when `signals` is a Numpy array. Keys must
         match dimension names in `new_dims`. If not provided, uses integer indices for

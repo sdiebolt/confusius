@@ -28,8 +28,8 @@ def load_echoframe_dat(
 
     !!! warning "EchoFrame spatial dimensions"
         EchoFrame stores data with `(x, y, z)` spatial ordering corresponding to
-        (lateral, elevation, axial) dimensions, which is different from the ``(z, y,
-        x)`` ordering used in ConfUSIus that corresponds to (elevation, axial, lateral).
+        (lateral, elevation, axial) dimensions, which is different from the `(z, y,
+        x)` ordering used in ConfUSIus that corresponds to (elevation, axial, lateral).
         The returned array maintains the EchoFrame ordering to avoid confusion, but
         users should be aware of this when processing the data.
 

@@ -39,8 +39,8 @@ def register_volumewise(
     reference_time : int, default: 0
         Index of the time point to use as registration target.
     n_jobs : int, default: -1
-        Number of parallel jobs. Negative values resolve to ``max(1, os.cpu_count() + 1
-        + n_jobs)`, so `-1` means all CPUs, `-2`` means all minus one, and so on.
+        Number of parallel jobs. Negative values resolve to `max(1, os.cpu_count() + 1
+        + n_jobs)`, so `-1` means all CPUs, `-2` means all minus one, and so on.
         Use `1` for serial processing.
     transform : {"translation", "rigid", "affine"}, default: "rigid"
         Transform model to use during registration. `"translation"` allows

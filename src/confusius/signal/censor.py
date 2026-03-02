@@ -217,8 +217,8 @@ def censor_samples(
     ----------
     signals : (time, ...) xarray.DataArray
         Array to censor. Must have a `time` dimension. Can be any shape, e.g.,
-        extracted signals `(time, voxels)`, full 3D+t imaging data ``(time, z, y,
-        x)`, or confounds `(time, n_confounds)``.
+        extracted signals `(time, voxels)`, full 3D+t imaging data `(time, z, y,
+        x)`, or confounds `(time, n_confounds)`.
     sample_mask : (time,) xarray.DataArray
         Boolean sample mask indicating which timepoints to keep (`True`) vs. remove
         (`False`). Must have a `time` dimension matching `signals`. If both

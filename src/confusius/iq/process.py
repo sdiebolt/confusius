@@ -587,8 +587,8 @@ def process_iq_blocks(
     iq : (time, z, y, x) dask.array.Array
         Dask array of complex IQ data.
     process_func : callable
-        Function to apply to each temporal window. It must accept a ``(window_volumes,
-        z, y, x)` array as first argument and return a `(output_volumes, ...)`` array.
+        Function to apply to each temporal window. It must accept a `(window_volumes,
+        z, y, x)` array as first argument and return a `(output_volumes, ...)` array.
     window_width : int, optional
         Width of the sliding temporal window, in volumes. If not provided, uses the
         chunk size along the first dimension.

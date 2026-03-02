@@ -399,8 +399,8 @@ def load_nifti(
 
         - A blocksize like `1000`.
         - A blockshape like `(1000, 1000)`.
-        - Explicit sizes of all blocks along all dimensions like ``((1000, 1000,
-          500), (400, 400))``.
+        - Explicit sizes of all blocks along all dimensions like `((1000, 1000,
+          500), (400, 400))`.
         - A size in bytes, like `"100 MiB"` which will choose a uniform block-like
           shape.
         - The word `"auto"` to let Dask choose chunk sizes based on heuristics. See
@@ -427,8 +427,8 @@ def load_nifti(
     Physical-to-world affines are stored in `da.attrs["affines"]`, a dict keyed by
     affine name. Each value is a 4×4 affine in ConfUSIus `(z, y, x)` convention that
     maps **physical coordinates** (as stored in `da.coords`) to world-space
-    coordinates. Apply as ``da.attrs["affines"]["physical_to_sform"] @ np.array([pz, py,
-    px, 1.0])` to get `[wz, wy, wx, 1]`, where `pz`, `py`, `px`` come from
+    coordinates. Apply as `da.attrs["affines"]["physical_to_sform"] @ np.array([pz, py,
+    px, 1.0])` to get `[wz, wy, wx, 1]`, where `pz`, `py`, `px` come from
     `da.coords["z"]`, `da.coords["y"]`, `da.coords["x"]` respectively.
 
     Unlike the NIfTI affine (which maps voxel *indices* to world space), the

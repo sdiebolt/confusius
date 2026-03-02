@@ -20,8 +20,8 @@ def standardize(
     ----------
     signals : (time, ...) xarray.DataArray
         Array to standardize. Must have a `time` dimension. Can be any shape, e.g.,
-        extracted signals `(time, voxels)`, full 3D+t imaging data ``(time, z, y,
-        x)`, or regional signals `(time, regions)``.
+        extracted signals `(time, voxels)`, full 3D+t imaging data `(time, z, y,
+        x)`, or regional signals `(time, regions)`.
     method : {"zscore", "psc"}, default: "zscore"
         Standardization method:
 

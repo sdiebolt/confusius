@@ -296,12 +296,12 @@ class FUSIPlotAccessor:
             - `"upper"`: set pixels where `|data| > threshold` to NaN.
 
         cmap : str or matplotlib.colors.Colormap, optional
-            Colormap. When not provided, falls back to ``data.attrs["cmap"]``
-            if present, otherwise ``"gray"``.
+            Colormap. When not provided, falls back to `data.attrs["cmap"]`
+            if present, otherwise `"gray"`.
         norm : matplotlib.colors.Normalize, optional
-            Normalization instance (e.g. ``BoundaryNorm`` for integer label
-            maps). When not provided, falls back to ``data.attrs["norm"]`` if
-            present. When a norm is active, ``vmin`` and ``vmax`` are ignored.
+            Normalization instance (e.g. `BoundaryNorm` for integer label
+            maps). When not provided, falls back to `data.attrs["norm"]` if
+            present. When a norm is active, `vmin` and `vmax` are ignored.
         vmin : float, optional
             Lower bound of the colormap. Defaults to the 2nd percentile.
             Ignored when a norm is active.
@@ -421,11 +421,11 @@ class FUSIPlotAccessor:
         Parameters
         ----------
         colors : dict[int | str, str] or str, optional
-            Color specification for contour lines. A ``dict`` maps each label
-            (integer index or region acronym string) to a color; a ``str`` applies
+            Color specification for contour lines. A `dict` maps each label
+            (integer index or region acronym string) to a color; a `str` applies
             one color to all regions. If not provided, colors are derived from
-            ``attrs["cmap"]`` and ``attrs["norm"]`` when present, otherwise
-            from the ``tab10``/``tab20`` colormap.
+            `attrs["cmap"]` and `attrs["norm"]` when present, otherwise
+            from the `tab10`/`tab20` colormap.
         linewidths : float, default: 1.5
             Width of contour lines in points.
         linestyles : str, default: "solid"

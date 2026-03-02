@@ -351,7 +351,7 @@ class Atlas:
             If any requested region acronym or index is not found in the atlas.
         ValueError
             If `sides` is a sequence whose length does not match `regions`, or if
-            any element of `sides` is not ``"left"``, ``"right"``, or ``"both"``.
+            any element of `sides` is not `"left"`, `"right"`, or `"both"`.
 
         Examples
         --------
@@ -432,8 +432,8 @@ class Atlas:
         region : int or str
             Structure index or acronym.
         side : {"left", "right", "both"}, default: "both"
-            Hemisphere to include. ``"both"`` keeps the full mesh. ``"left"`` and
-            ``"right"`` clip in the original atlas micron space along the RL axis at the
+            Hemisphere to include. `"both"` keeps the full mesh. `"left"` and
+            `"right"` clip in the original atlas micron space along the RL axis at the
             volume midline. Only triangles whose three vertices all fall on the
             requested side are retained; the cut face is not closed.
 

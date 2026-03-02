@@ -155,8 +155,8 @@ def filter_butterworth(
     ----------
     signals : (time, ...) xarray.DataArray
         Array to filter. Must have a `time` dimension. Can be any shape, e.g.,
-        extracted signals `(time, voxels)`, full 3D+t imaging data ``(time, z, y,
-        x)`, or regional signals `(time, regions)``.
+        extracted signals `(time, voxels)`, full 3D+t imaging data `(time, z, y,
+        x)`, or regional signals `(time, regions)`.
 
         !!! warning "Chunking along time is not supported"
             The `time` dimension must NOT be chunked. Chunk only spatial dimensions:
@@ -194,8 +194,8 @@ def filter_butterworth(
     ValueError
         If `signals` does not have a `time` dimension or `time` coordinates, if
         time coordinates are not uniformly sampled within the specified tolerance, or if
-        insufficient timepoints for the filter order (needs more than ``3 * (2 *
-        ceil(order / 2) + 1)``).
+        insufficient timepoints for the filter order (needs more than `3 * (2 *
+        ceil(order / 2) + 1)`).
     ValueError
         If both `low_cutoff` and `high_cutoff` are `None` (no filtering), or if cutoff
         frequencies are invalid (negative, above Nyquist, or if high_cutoff <=
