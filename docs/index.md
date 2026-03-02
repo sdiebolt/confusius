@@ -40,12 +40,22 @@ statistical analysis of functional ultrasound imaging (fUSI) data.
 
 ## Features
 
+!!! info "Design Philosophy"
+    ConfUSIus is not designed as an out-of-the-box, end-to-end fUSI analysis pipeline.
+    Because the fUSI field has not yet converged on standard processing workflows,
+    ConfUSIus instead aims to provide the fundamental building blocks needed to implement
+    any processing workflow described in the fUSI literature, or to design entirely new
+    ones. Researchers can combine these blocks to build analysis pipelines suited to
+    their experimental needs.
+
 - **I/O Operations**: Load and save fUSI data in various formats (AUTC, EchoFrame,
   NIfTI, Zarr, etc.)
 - **Beamformed IQ Processing**: Process raw beamformed IQ signals into power Doppler,
   velocity, and other derived metrics.
 - **Quality Control**: Compute quality metrics (DVARS, tSNR, CV) to assess data quality.
 - **Registration**: Motion correction and spatial alignment tools.
+- **Brain Atlas Integration**: Map fUSI data to standard brain atlases for region-based
+  analysis.
 - **Signal Extraction**: Extract and reconstruct signals from regions of interest using
   spatial masks.
 - **Signal Processing**: Denoising, filtering, detrending, and confound regression for
