@@ -12,6 +12,13 @@ authors:
       UCL Institute of Ophthalmology, University College
       London
     orcid: 'https://orcid.org/0000-0002-9788-7263'
+    alias: sdiebolt
+  - given-names: Felipe
+    family-names: Cybis Pereira
+    email: felipe.cybispereira@gmail.com
+    affiliation: Institute Physics for Medicine Paris
+    orcid: 'https://orcid.org/0009-0009-6124-0466'
+    alias: felipecybis
 identifiers:
   - type: doi
     value: 10.5281/zenodo.18611124

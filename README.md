@@ -108,14 +108,14 @@ examples and tutorials.
 
 If you use ConfUSIus in your research, please cite it using the following reference:
 
-> Le Meur-Diebolt, S. (2026). ConfUSIus (v0.0.1-a8). Zenodo.
+> Le Meur-Diebolt, S., & Cybis Pereira, F. (2026). ConfUSIus (v0.0.1-a8). Zenodo.
 > https://doi.org/10.5281/zenodo.18611124
 
 Or in BibTeX format:
 
 ```bibtex
 @software{confusius,
-  author    = {Le Meur-Diebolt, Samuel},
+  author    = {Le Meur-Diebolt, Samuel and Cybis Pereira, Felipe},
   title     = {ConfUSIus},
   year      = {2026},
   publisher = {Zenodo},
