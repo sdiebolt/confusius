@@ -22,19 +22,19 @@ statistical analysis of functional ultrasound imaging (fUSI) data.
 
     ---
 
-    Learn how to use ConfUSIus for fUSI data analysis
+    Learn how to use ConfUSIus for fUSI data analysis.
 
 -   [:material-code-braces:{ .lg .middle } **API Reference**](api/index.md)
 
     ---
 
-    Comprehensive reference of all modules, classes, and functions
+    Comprehensive reference of all modules, classes, and functions.
 
--   [:material-lightbulb:{ .lg .middle } **Examples**](examples/index.md)
+-   [:material-account-group:{ .lg .middle } **Community**](user-guide/getting-started.md#getting-help)
 
     ---
 
-    Example workflows and use cases
+    Join our weekly drop-in hours on Discord (Thursdays 3-4pm UTC).
 
 </div>
 

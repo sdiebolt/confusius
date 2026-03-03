@@ -196,6 +196,23 @@ issues](https://github.com/sdiebolt/confusius/issues) or open a new one! You can
 join the [fUSI community Discord](https://discord.gg/mZd87tgmy2) to ask questions and
 connect with other researchers using fUSI.
 
+## Getting Help
+
+We host weekly drop-in hours on the [fUSI community
+Discord](https://discord.gg/mZd87tgmy2) usually every **Thursday from 3pm to 4pm UTC**.
+Join us in the `drop-in-hours` voice channel to:
+
+- Get help with ConfUSIus usage and troubleshooting.
+- Discuss new features and provide feedback.
+- Connect with other fUSI researchers.
+- Report bugs in an informal setting.
+
+You can also use the `help-desk` text channel anytime for questions.
+
+We post on [Bluesky](https://bsky.app/profile/sdiebolt.bsky.social) in advance to
+confirm each week's session.
+
+
 ## Useful Python Resources for fUSI
 
 While ConfUSIus offers many features to handle fUSI data, it obviously does not do
