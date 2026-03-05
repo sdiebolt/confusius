@@ -266,3 +266,257 @@ class TestOrigin:
             },
         )
         assert list(data.fusi.spacing.keys()) == ["z", "y", "x"]
+
+
+class TestAffineToMethod:
+    """Tests for fusi.affine.to."""
+
+    @pytest.fixture
+    def rng(self):
+        """Seeded random number generator."""
+        return np.random.default_rng(42)
+
+    def _make_scan(
+        self, affine: np.ndarray, via: str = "physical_to_lab"
+    ) -> xr.DataArray:
+        return xr.DataArray(
+            np.zeros((4, 4, 4)),
+            attrs={"affines": {via: affine}},
+        )
+
+    def test_identity_when_same_affine(self):
+        """Returns identity when both scans share the same affine."""
+        affine = np.eye(4)
+        a = self._make_scan(affine)
+        b = self._make_scan(affine)
+        result = a.fusi.affine.to(b, via="physical_to_lab")
+        np.testing.assert_allclose(result, np.eye(4), atol=1e-12)
+
+    def test_known_relative_transform(self):
+        """Returns inv(b_affine) @ a_affine for known matrices."""
+        a_affine = np.array(
+            [
+                [0.0, 0.0, 1.0, 2.0],
+                [0.0, 1.0, 0.0, 3.0],
+                [1.0, 0.0, 0.0, 4.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        b_affine = np.array(
+            [
+                [1.0, 0.0, 0.0, 1.0],
+                [0.0, 1.0, 0.0, 2.0],
+                [0.0, 0.0, -1.0, 3.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        a = self._make_scan(a_affine)
+        b = self._make_scan(b_affine)
+        expected = np.linalg.inv(b_affine) @ a_affine
+        result = a.fusi.affine.to(b, via="physical_to_lab")
+        np.testing.assert_allclose(result, expected, atol=1e-12)
+
+    def test_inverse_is_consistent(self, rng):
+        """affine.to is consistent: a.affine.to(b) == inv(b.affine.to(a))."""
+
+        # Build two random rotation+translation affines.
+        def random_affine(rng: np.random.Generator) -> np.ndarray:
+            q, _ = np.linalg.qr(rng.standard_normal((3, 3)))
+            m = np.eye(4)
+            m[:3, :3] = q
+            m[:3, 3] = rng.standard_normal(3)
+            return m
+
+        shared = random_affine(rng)
+        # Give both scans affines that go through a common lab frame.
+        a_affine = shared @ random_affine(rng)
+        b_affine = shared @ random_affine(rng)
+        a = self._make_scan(a_affine)
+        b = self._make_scan(b_affine)
+
+        a_to_b = a.fusi.affine.to(b, via="physical_to_lab")
+        b_to_a = b.fusi.affine.to(a, via="physical_to_lab")
+        np.testing.assert_allclose(a_to_b, np.linalg.inv(b_to_a), atol=1e-12)
+
+    def test_custom_via_key(self):
+        """Works with a via key other than physical_to_lab."""
+        affine = np.eye(4)
+        a = self._make_scan(affine, via="physical_to_mri")
+        b = self._make_scan(affine, via="physical_to_mri")
+        result = a.fusi.affine.to(b, via="physical_to_mri")
+        np.testing.assert_allclose(result, np.eye(4), atol=1e-12)
+
+    def test_missing_affines_on_self_raises(self):
+        """Raises ValueError when self has no affines in attrs."""
+        a = xr.DataArray(np.zeros((2, 2)))
+        b = self._make_scan(np.eye(4))
+        with pytest.raises(ValueError, match="self does not have"):
+            a.fusi.affine.to(b, via="physical_to_lab")
+
+    def test_missing_affines_on_other_raises(self):
+        """Raises ValueError when other has no affines in attrs."""
+        a = self._make_scan(np.eye(4))
+        b = xr.DataArray(np.zeros((2, 2)))
+        with pytest.raises(ValueError, match="other does not have"):
+            a.fusi.affine.to(b, via="physical_to_lab")
+
+    def test_missing_via_key_raises(self):
+        """Raises KeyError when via key is absent from the affines dict."""
+        a = self._make_scan(np.eye(4), via="physical_to_lab")
+        b = self._make_scan(np.eye(4), via="physical_to_lab")
+        with pytest.raises(KeyError):
+            a.fusi.affine.to(b, via="nonexistent_key")
+
+    def test_output_shape(self, rng):
+        """Output is always a (4, 4) array."""
+        affine = np.eye(4)
+        a = self._make_scan(affine)
+        b = self._make_scan(affine)
+        result = a.fusi.affine.to(b, via="physical_to_lab")
+        assert result.shape == (4, 4)
+
+
+class TestAffineApplyMethod:
+    """Tests for fusi.affine.apply."""
+
+    def _make_scan(
+        self,
+        shape: tuple[int, ...] = (3, 4, 5),
+        dims: tuple[str, ...] = ("z", "y", "x"),
+        spacing: tuple[float, ...] = (1.0, 1.0, 1.0),
+        origin: tuple[float, ...] = (0.0, 0.0, 0.0),
+        affines: dict | None = None,
+    ) -> xr.DataArray:
+        coords = {
+            dim: np.arange(n) * sp + orig
+            for dim, n, sp, orig in zip(dims, shape, spacing, origin)
+        }
+        return xr.DataArray(
+            np.zeros(shape),
+            dims=list(dims),
+            coords=coords,
+            attrs={"affines": affines} if affines is not None else {},
+        )
+
+    def test_identity_leaves_coords_unchanged(self):
+        """Applying the identity affine does not change coordinates."""
+        da = self._make_scan(origin=(1.0, 2.0, 3.0))
+        result = da.fusi.affine.apply(np.eye(4))
+        for dim in ("z", "y", "x"):
+            np.testing.assert_allclose(result.coords[dim].values, da.coords[dim].values)
+
+    def test_pure_translation_shifts_coords(self):
+        """A pure translation shifts all coordinate arrays by the given amount."""
+        da = self._make_scan()
+        shift = np.eye(4)
+        shift[:3, 3] = [10.0, 5.0, -3.0]
+        result = da.fusi.affine.apply(shift)
+        np.testing.assert_allclose(
+            result.coords["z"].values, da.coords["z"].values + 10.0
+        )
+        np.testing.assert_allclose(
+            result.coords["y"].values, da.coords["y"].values + 5.0
+        )
+        np.testing.assert_allclose(
+            result.coords["x"].values, da.coords["x"].values - 3.0
+        )
+
+    def test_scaling_stretches_coords(self):
+        """A diagonal scaling matrix scales coordinate values."""
+        da = self._make_scan(spacing=(1.0, 1.0, 1.0))
+        scale = np.diag([2.0, 3.0, 0.5, 1.0])
+        result = da.fusi.affine.apply(scale)
+        np.testing.assert_allclose(
+            result.coords["z"].values, da.coords["z"].values * 2.0
+        )
+        np.testing.assert_allclose(
+            result.coords["y"].values, da.coords["y"].values * 3.0
+        )
+        np.testing.assert_allclose(
+            result.coords["x"].values, da.coords["x"].values * 0.5
+        )
+
+    def test_sign_flip_negates_coords(self):
+        """A diagonal rotation with -1 entries negates coordinate values."""
+        da = self._make_scan(spacing=(1.0, 1.0, 1.0), origin=(1.0, 2.0, 3.0))
+        flip = np.diag([-1.0, -1.0, -1.0, 1.0])
+        result = da.fusi.affine.apply(flip)
+        np.testing.assert_allclose(result.coords["z"].values, -da.coords["z"].values)
+        np.testing.assert_allclose(result.coords["y"].values, -da.coords["y"].values)
+        np.testing.assert_allclose(result.coords["x"].values, -da.coords["x"].values)
+
+    def test_axis_mixing_raises_value_error(self):
+        """A rotation that mixes axes raises ValueError."""
+        da = self._make_scan()
+        angle = np.pi / 4
+        rot = np.eye(4)
+        rot[0, 0] = np.cos(angle)
+        rot[0, 1] = -np.sin(angle)
+        rot[1, 0] = np.sin(angle)
+        rot[1, 1] = np.cos(angle)
+        with pytest.raises(ValueError, match="not diagonal"):
+            da.fusi.affine.apply(rot)
+
+    def test_wrong_shape_raises_value_error(self):
+        """Affines with shape other than (4, 4) raise ValueError."""
+        da = self._make_scan()
+        with pytest.raises(ValueError, match="shape"):
+            da.fusi.affine.apply(np.eye(3))
+
+    def test_stored_affines_updated_single(self):
+        """Stored (4, 4) affines are updated by M_new = M_old @ inv(affine)."""
+        stored = np.array(
+            [
+                [1.0, 0.0, 0.0, 5.0],
+                [0.0, 1.0, 0.0, 6.0],
+                [0.0, 0.0, 1.0, 7.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        da = self._make_scan(affines={"physical_to_lab": stored})
+        shift = np.eye(4)
+        shift[:3, 3] = [1.0, 2.0, 3.0]
+        result = da.fusi.affine.apply(shift)
+        expected = stored @ np.linalg.inv(shift)
+        np.testing.assert_allclose(
+            result.attrs["affines"]["physical_to_lab"], expected, atol=1e-12
+        )
+
+    def test_stored_affines_updated_per_pose_stack(self):
+        """Stored (npose, 4, 4) affines are updated per pose."""
+        rng = np.random.default_rng(0)
+        npose = 5
+        # Build random per-pose affines (rotation + translation).
+        stored = np.zeros((npose, 4, 4))
+        for i in range(npose):
+            q, _ = np.linalg.qr(rng.standard_normal((3, 3)))
+            stored[i, :3, :3] = q
+            stored[i, :3, 3] = rng.standard_normal(3)
+            stored[i, 3, 3] = 1.0
+        da = self._make_scan(affines={"physical_to_lab": stored})
+        scale = np.diag([2.0, 1.0, 1.0, 1.0])
+        result = da.fusi.affine.apply(scale)
+        inv_scale = np.linalg.inv(scale)
+        expected = stored @ inv_scale
+        np.testing.assert_allclose(
+            result.attrs["affines"]["physical_to_lab"], expected, atol=1e-12
+        )
+
+    def test_partial_dims_only_updates_present_dims(self):
+        """Only dimensions present in da.dims are updated."""
+        # 2-D scan with only z and y (no x).
+        da = xr.DataArray(
+            np.zeros((3, 4)),
+            dims=["z", "y"],
+            coords={"z": np.arange(3) * 1.0, "y": np.arange(4) * 1.0},
+        )
+        shift = np.eye(4)
+        shift[:3, 3] = [10.0, 5.0, 99.0]  # x-shift should have no effect.
+        result = da.fusi.affine.apply(shift)
+        np.testing.assert_allclose(
+            result.coords["z"].values, da.coords["z"].values + 10.0
+        )
+        np.testing.assert_allclose(
+            result.coords["y"].values, da.coords["y"].values + 5.0
+        )
+        assert "x" not in result.coords

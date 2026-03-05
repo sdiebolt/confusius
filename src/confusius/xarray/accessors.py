@@ -3,6 +3,7 @@
 import xarray as xr
 
 from confusius._utils import _compute_origin, _compute_spacing
+from confusius.xarray.affine import FUSIAffineAccessor
 from confusius.xarray.extract import FUSIExtractAccessor
 from confusius.xarray.io import FUSIIOAccessor
 from confusius.xarray.iq import FUSIIQAccessor
@@ -202,3 +203,26 @@ class FUSIAccessor:
         {'y': 0.0, 'x': 0.0}
         """
         return _compute_origin(self._obj)
+
+    @property
+    def affine(self) -> FUSIAffineAccessor:
+        """Access affine transform operations.
+
+        Returns
+        -------
+        FUSIAffineAccessor
+            Accessor for computing relative transforms between scans and for
+            applying axis-aligned affines to spatial coordinates.
+
+        Examples
+        --------
+        >>> import numpy as np
+        >>> import xarray as xr
+        >>> import confusius  # noqa: F401
+        >>> eye = np.eye(4)
+        >>> a = xr.DataArray(np.zeros((2, 2)), attrs={"affines": {"to_world": eye}})
+        >>> b = xr.DataArray(np.zeros((2, 2)), attrs={"affines": {"to_world": eye}})
+        >>> np.allclose(a.fusi.affine.to(b, via="to_world"), np.eye(4))
+        True
+        """
+        return FUSIAffineAccessor(self._obj)
