@@ -22,18 +22,18 @@ def consolidate_poses(
 ) -> xr.DataArray:
     """Merge `pose` and `sweep_dim` dimensions into a single axis ordered by position.
 
-    For each `(pose, sweep_dim)` voxel, the lab-space position is computed using the
-    sweep-dim column and translation of the per-pose affine (other spatial dims are zero
-    at voxel centres along the sweep):
+    For each `(pose, sweep_dim)` voxel, the position is computed using the sweep-dim
+    column and translation of the per-pose affine (other spatial dims are zero at voxel
+    centres along the sweep):
 
     ```python
-    lab_pos[p, i] = affine[p, :3, sweep_col] * sweep_mm[i] + affine[p, :3, 3]
+    pos[p, i] = affine[p, :3, sweep_col] * sweep_mm[i] + affine[p, :3, 3]
     ```
 
     where `sweep_col` is the column index of `sweep_dim` in the spatial dim ordering
     `(z, y, x)` → columns `(0, 1, 2)`.
 
-    The primary sweep direction is found via singular value decomposition of all lab
+    The primary sweep direction is found via singular value decomposition of all
     positions. Each voxel is projected onto that axis, the positions are checked for
     regularity, then the data is reindexed in ascending order along the consolidated
     sweep axis.
@@ -51,11 +51,11 @@ def consolidate_poses(
     volume  = consolidate_poses(scan_4d)        # dims: (time, z, y, x)
     ```
 
-    The function also works on any DataArray that carries a `(npose, 4, 4)` affine
-    stack in `da.attrs["affines"][affines_key]` with columns ordered as
-    `(sweep_dim, dim1, dim2, translation)` in lab space. For example, a stack of NIfTI
-    DataArrays concatenated along a new `pose` dimension with their `physical_to_qform`
-    affines stacked accordingly.
+    The function also works on any DataArray that carries a `(npose, 4, 4)` affine stack
+    in `da.attrs["affines"][affines_key]` with columns ordered as `(z, y, x,
+    translation)`. The `sweep_dim` parameter selects which spatial dimension is being
+    swept across poses. For example, a stack of NIfTI DataArrays concatenated along a
+    new `pose` dimension with their `physical_to_qform` affines stacked accordingly.
 
     Parameters
     ----------
@@ -65,10 +65,12 @@ def consolidate_poses(
         [`load_scan`][confusius.io.load_scan] for `3Dscan` or `4Dscan` files.
     affines_key : str, default: "physical_to_lab"
         Key into `da.attrs["affines"]` that holds the `(npose, 4, 4)` affine stack.
-        Column order must be `(sweep_dim, dim1, dim2, translation)`.
+        Column order must be `(z, y, x, translation)`.
     sweep_dim : str, default: "z"
-        Name of the spatial dimension being swept across poses. Must be one of
-        `"z"`, `"y"`, or `"x"`, corresponding to affine columns `0`, `1`, `2`.
+        Name of the spatial dimension being swept across poses. Must be one of the
+        spatial dimensions in `da.dims`. The column index in the affine is determined
+        by the order of spatial dimensions in the DataArray (e.g., if spatial dims are
+        `["z", "y", "x"]`, then `"z"` → column 0, `"y"` → column 1, `"x"` → column 2).
     rtol : float, default: 0.01
         Relative tolerance for the regularity check (fraction of mean spacing).
 
@@ -84,20 +86,24 @@ def consolidate_poses(
     Raises
     ------
     ValueError
-        If `da` has no `pose` dimension, if `sweep_dim` is not one of `"z"`, `"y"`,
-        `"x"`, if the rotation block of the affine is not constant across poses
-        (non-translation sweep), or if the consolidated positions are not regularly
-        spaced within `rtol`.
+        If `da` has no `pose` dimension, if `sweep_dim` is not one of the spatial
+        dimensions in `da.dims`, if the rotation block of the affine is not constant
+        across poses (non-translation sweep), or if the consolidated positions are not
+        regularly spaced within `rtol`.
 
     Warns
     -----
     UserWarning
         If the sweep is not purely 1D (secondary/primary singular value ratio > 0.01).
     """
-    _SWEEP_DIM_TO_COL = {"z": 0, "y": 1, "x": 2}
-    if sweep_dim not in _SWEEP_DIM_TO_COL:
-        raise ValueError(f"sweep_dim must be one of 'z', 'y', 'x'; got {sweep_dim!r}.")
-    sweep_col = _SWEEP_DIM_TO_COL[sweep_dim]
+    # Determine spatial dimensions (non-time, non-pose) and their column indices.
+    spatial_dims = [d for d in da.dims if d not in ("time", "pose")]
+    if sweep_dim not in spatial_dims:
+        raise ValueError(
+            f"sweep_dim must be one of the spatial dimensions {spatial_dims!r}; "
+            f"got {sweep_dim!r}."
+        )
+    sweep_col = spatial_dims.index(sweep_dim)
 
     if "pose" not in da.dims:
         raise ValueError("DataArray has no 'pose' dimension.")
@@ -211,11 +217,11 @@ def consolidate_poses(
     new_affine[:3, :3] = q
     new_affine[:3, 3] = t_perp
 
-    other_dims = [d for d in ["z", "y", "x"] if d != sweep_dim]
+    other_dims = [d for d in spatial_dims if d != sweep_dim]
     new_attrs = {**da.attrs, "affines": {affines_key: new_affine}}
     base_coords: dict[str, Any] = {
-        sweep_dim: new_sweep,
-        **{d: da.coords[d] for d in other_dims},
+        str(sweep_dim): new_sweep,
+        **{str(d): da.coords[d] for d in other_dims},
     }
 
     # Build axis-agnostic fancy index tuples so that pose_idx selects the pose axis and
