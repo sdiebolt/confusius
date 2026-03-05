@@ -253,7 +253,7 @@ the [`extract_with_mask`][confusius.extract.extract_with_mask] and
 [`unmask`][confusius.extract.unmask] functions for extracting signals from masked voxels
 and reconstructing spatial volumes from extracted signals. This makes it easy to pass
 fUSI data to scikit-learn, pandas, or other tools that expect a 2D matrix of shape
-``(samples, features)``.
+`(samples, features)`.
 
 ```python
 mask = xr.open_zarr("brain_mask.zarr")["mask"]

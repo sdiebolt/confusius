@@ -464,7 +464,7 @@ def register_volume(
         dimensionality (2 or 3).  Follows SimpleITK's pull/inverse convention: the
         matrix maps fixed-space coordinates to moving-space coordinates.  For
         `transform="bspline"`, returns a DataArray encoding the B-spline control-point
-        grid (see :mod:`confusius.registration.bspline` for the DataArray schema).  When
+        grid (see [`confusius.registration.bspline`][confusius.registration.bspline] for the DataArray schema).  When
         `initial_transform` was also supplied, the DataArray includes
         `attrs["affines"]["bspline_initialization"]` so that the full composite
         (pre-affine + B-spline) can be reconstructed for resampling.
