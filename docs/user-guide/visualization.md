@@ -36,7 +36,7 @@ the controls and features.
     import confusius
 
     pwd = xr.open_zarr("sub-01_task-awake_pwd.zarr")["power_doppler"]
-    viewer = pwd.fusi.plot.napari()
+    viewer, layer = pwd.fusi.plot.napari()
     ```
 
 === "Function API"
@@ -46,7 +46,7 @@ the controls and features.
     import confusius as cf
 
     pwd = xr.open_zarr("sub-01_task-awake_pwd.zarr")["power_doppler"]
-    viewer = cf.plotting.plot_napari(pwd)
+    viewer, layer = cf.plotting.plot_napari(pwd)
     ```
 
 This opens a Napari viewer with a scale bar, colorbar, and correct physical scaling
@@ -71,7 +71,7 @@ in decibel scale with explicit limits is often more informative:
 
 ```python
 # dB-scaled power Doppler with fixed contrast window.
-viewer = cf.plotting.plot_napari(
+viewer, layer = cf.plotting.plot_napari(
     pwd.fusi.scale.db(),
     contrast_limits=(-30, 0),
     colormap="hot",
@@ -102,7 +102,7 @@ from confusius.atlas import Atlas
 
 # Load power Doppler mean volume and open viewer.
 mean_vol = pwd.mean("time").compute()
-viewer = cf.plotting.plot_napari(
+viewer, layer = cf.plotting.plot_napari(
     mean_vol.fusi.scale.db(),
     contrast_limits=(-15, 0),
 )
@@ -113,7 +113,7 @@ atlas_fusi = atlas.resample_like(mean_vol, transform)
 
 # Add as a labels layer — Allen colors are applied automatically from
 # atlas_fusi.annotation.attrs["rgb_lookup"].
-viewer = cf.plotting.plot_napari(
+viewer, labels_layer = cf.plotting.plot_napari(
     atlas_fusi.annotation,
     viewer=viewer,
     layer_type="labels",
@@ -130,8 +130,8 @@ viewer = cf.plotting.plot_napari(
     motion correction:
 
     ```python
-    viewer = pwd_before.fusi.plot.napari(name="Before correction")
-    viewer = pwd_after.fusi.plot.napari(viewer=viewer, name="After correction")
+    viewer, layer = pwd_before.fusi.plot.napari(name="Before correction")
+    viewer, layer = pwd_after.fusi.plot.napari(viewer=viewer, name="After correction")
     ```
 
 ### Slicing Across Different Spatial Dimensions
@@ -143,7 +143,7 @@ axis—for example slicing along `y` (depth) instead of `z` (elevation)—use
 
 ```python
 # Swap z and y: depth becomes the slider axis.
-viewer = pwd_3d.fusi.plot.napari(dim_order=("y", "z", "x"))
+viewer, layer = pwd_3d.fusi.plot.napari(dim_order=("y", "z", "x"))
 ```
 
 ### 3D Rendering

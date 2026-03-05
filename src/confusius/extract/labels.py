@@ -84,6 +84,14 @@ def _extract_with_flat_labels(
     unique_labels = np.unique(labels_aligned.values)
     unique_labels = unique_labels[unique_labels != 0]
 
+    if len(unique_labels) == 0:
+        raise ValueError(
+            "labels contains no non-zero values: no regions to extract. "
+            "If you are using draw_napari_labels, make sure you have painted "
+            "at least one label in the napari viewer before calling "
+            "extract_with_labels."
+        )
+
     np_func = _VALID_REDUCTIONS[reduction]
     labels_np = labels_aligned.values.flatten()
 
@@ -161,7 +169,8 @@ def extract_with_labels(
     ------
     ValueError
         If `labels` dimensions don't match `data`'s spatial dimensions, if
-        coordinates don't match, or if `reduction` is not a valid option.
+        coordinates don't match, if `reduction` is not a valid option, or if
+        `labels` contains no non-zero values.
     TypeError
         If `labels` is not integer dtype.
 

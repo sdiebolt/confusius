@@ -147,7 +147,7 @@ try:
     print("Generating napari-overview.png …")
 
     viewer = napari.Viewer(show=False)
-    viewer = mean_vol.fusi.scale.db().fusi.plot.napari(
+    mean_vol.fusi.scale.db().fusi.plot.napari(
         viewer=viewer,
         contrast_limits=(-15, 0),
         colormap="gray",
@@ -199,7 +199,7 @@ except Exception as exc:
     print(f"  Napari screenshot failed: {exc}")
     print(
         "  → Take Napari screenshots manually:\n"
-        "      viewer = mean_vol.fusi.scale.db().fusi.plot.napari(\n"
+        "      mean_vol.fusi.scale.db().fusi.plot.napari(\n"
         "          contrast_limits=(-15, 0), colormap='gray'\n"
         "      )\n"
         "  Then use File > Save Screenshot in the Napari menu."

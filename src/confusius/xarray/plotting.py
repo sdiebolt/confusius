@@ -6,6 +6,8 @@ import xarray as xr
 
 from confusius.plotting import (
     VolumePlotter,
+    draw_napari_labels,
+    labels_from_layer,
     plot_carpet,
     plot_contours,
     plot_napari,
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
     from matplotlib.colors import Colormap, Normalize
     from matplotlib.figure import Figure, SubFigure
     from napari import Viewer
+    from napari.layers import Image, Labels
 
 
 class FUSIPlotAccessor:
@@ -35,13 +38,13 @@ class FUSIPlotAccessor:
     --------
     >>> import xarray as xr
     >>> data = xr.open_zarr("output.zarr")["iq"]
-    >>> viewer = data.fusi.plot.napari()
+    >>> viewer, layer = data.fusi.plot.napari()
     """
 
     def __init__(self, xarray_obj: xr.DataArray) -> None:
         self._obj = xarray_obj
 
-    def __call__(self, **kwargs) -> "Viewer":
+    def __call__(self, **kwargs) -> "tuple[Viewer, Image | Labels]":
         """Call the napari plotting method by default.
 
         Parameters
@@ -59,7 +62,7 @@ class FUSIPlotAccessor:
         viewer: "Viewer | None" = None,
         layer_type: Literal["image", "labels"] = "image",
         **layer_kwargs,
-    ) -> "Viewer":
+    ) -> "tuple[Viewer, Image | Labels]":
         """Display data in napari viewer.
 
         Parameters
@@ -84,8 +87,10 @@ class FUSIPlotAccessor:
 
         Returns
         -------
-        napari.Viewer
+        viewer : napari.Viewer
             The Napari viewer instance with the layer added.
+        layer : napari.layers.Image or napari.layers.Labels
+            The layer added to the viewer.
 
         Notes
         -----
@@ -105,25 +110,25 @@ class FUSIPlotAccessor:
         >>> import xarray as xr
         >>> import confusius  # Register accessor.
         >>> data = xr.open_zarr("output.zarr")["iq"]
-        >>> viewer = data.fusi.plot.napari()
+        >>> viewer, layer = data.fusi.plot.napari()
 
         >>> # Custom contrast limits
-        >>> viewer = data.fusi.plot.napari(contrast_limits=(0, 100))
+        >>> viewer, layer = data.fusi.plot.napari(contrast_limits=(0, 100))
 
         >>> # Different dimension ordering (e.g., depth, elevation, lateral)
-        >>> viewer = data.fusi.plot.napari(dim_order=("y", "z", "x"))
+        >>> viewer, layer = data.fusi.plot.napari(dim_order=("y", "z", "x"))
 
         >>> # Add a second dataset as a new layer in an existing viewer
-        >>> viewer = data1.fusi.plot.napari()
-        >>> viewer = data2.fusi.plot.napari(viewer=viewer)
+        >>> viewer, layer = data1.fusi.plot.napari()
+        >>> viewer, layer = data2.fusi.plot.napari(viewer=viewer)
 
         >>> # Display ROI labels (e.g., segmentation mask)
         >>> roi_mask = xr.open_zarr("output.zarr")["roi_mask"]
-        >>> viewer = roi_mask.fusi.plot.napari(layer_type="labels")
+        >>> viewer, layer = roi_mask.fusi.plot.napari(layer_type="labels")
 
         >>> # Overlay labels on existing image
-        >>> viewer = data.fusi.plot.napari()
-        >>> viewer = roi_mask.fusi.plot.napari(viewer=viewer, layer_type="labels")
+        >>> viewer, layer = data.fusi.plot.napari()
+        >>> viewer, layer = roi_mask.fusi.plot.napari(viewer=viewer, layer_type="labels")
         """
         return plot_napari(
             self._obj,
@@ -134,6 +139,98 @@ class FUSIPlotAccessor:
             layer_type=layer_type,
             **layer_kwargs,
         )
+
+    def draw_napari_labels(
+        self,
+        labels_layer_name: str = "labels",
+        viewer: "Viewer | None" = None,
+        **plot_kwargs,
+    ) -> "tuple[Viewer, Labels]":
+        """Open napari to interactively paint integer labels over fUSI data.
+
+        Displays the data as an image layer and adds an empty Labels layer on
+        top. The user paints integer labels directly on the image using
+        napari's brush tool. After painting, pass the returned Labels layer to
+        [`labels_from_layer`][confusius.plotting.FUSIPlotAccessor.labels_from_layer]
+        to obtain an integer label map in the same spatial coordinates as the
+        data.
+
+        Parameters
+        ----------
+        labels_layer_name : str, default: "labels"
+            Name assigned to the Labels layer added to the viewer.
+        viewer : napari.Viewer, optional
+            Existing Napari viewer to add layers to. If not provided, a new
+            viewer is created.
+        **plot_kwargs
+            Additional keyword arguments forwarded to
+            [`plot_napari`][confusius.plotting.plot_napari] for the image layer
+            (e.g. `colormap`, `contrast_limits`).
+
+        Returns
+        -------
+        viewer : napari.Viewer
+            The Napari viewer instance with the image and Labels layers.
+        labels_layer : napari.layers.Labels
+            The empty Labels layer initialised to zeros. After painting labels
+            in the viewer, pass it to
+            [`labels_from_layer`][confusius.plotting.FUSIPlotAccessor.labels_from_layer]
+            to convert the paintings to an integer label map.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> import confusius  # Register accessor.
+        >>> pwd = xr.open_zarr("output.zarr")["power_doppler"].compute()
+        >>> # Display time-averaged image with an interactive Labels layer.
+        >>> viewer, labels_layer = pwd.mean("time").fusi.plot.draw_napari_labels()
+        >>> # … paint labels in the viewer …
+        >>> # Convert painted labels to an integer label map.
+        >>> label_map = pwd.mean("time").fusi.plot.labels_from_layer(labels_layer)
+        """
+        return draw_napari_labels(
+            self._obj,
+            labels_layer_name=labels_layer_name,
+            viewer=viewer,
+            **plot_kwargs,
+        )
+
+    def labels_from_layer(
+        self,
+        labels_layer: "Labels",
+    ) -> xr.DataArray:
+        """Convert a napari Labels layer to an integer label map DataArray.
+
+        Reads the integer array painted in `labels_layer` and wraps it in an
+        [`xarray.DataArray`][xarray.DataArray] whose spatial dimensions and
+        coordinates match those of the data.
+
+        Parameters
+        ----------
+        labels_layer : napari.layers.Labels
+            A Labels layer populated by the user (e.g. via
+            [`draw_napari_labels`][confusius.plotting.FUSIPlotAccessor.draw_napari_labels]).
+            Integer values identify distinct regions; zero is the background.
+
+        Returns
+        -------
+        xarray.DataArray
+            Integer DataArray with the same spatial dimensions and coordinates
+            as the data. Zero values indicate background (unlabelled) voxels.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> import confusius  # Register accessor.
+        >>> pwd = xr.open_zarr("output.zarr")["power_doppler"].compute()
+        >>> viewer, labels_layer = pwd.mean("time").fusi.plot.draw_napari_labels()
+        >>> # … paint labels in the viewer …
+        >>> label_map = pwd.mean("time").fusi.plot.labels_from_layer(labels_layer)
+        >>> # Use the label map for region-based analysis.
+        >>> from confusius.extract import extract_with_labels
+        >>> signals = extract_with_labels(pwd, label_map)
+        """
+        return labels_from_layer(labels_layer, self._obj)
 
     def carpet(
         self,

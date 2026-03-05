@@ -2,7 +2,7 @@
 
 import warnings
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Sequence, cast
 
 import napari
 import numpy as np
@@ -10,6 +10,7 @@ import xarray as xr
 from napari.utils.colormaps import DirectLabelColormap
 
 from confusius._utils import find_stack_level
+from confusius.atlas._structures import _build_atlas_cmap_and_norm
 from confusius.extract import extract_with_mask
 from confusius.signal import clean
 
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from matplotlib.colors import Colormap, Normalize
     from matplotlib.figure import Figure, SubFigure
     from napari import Viewer
+    from napari.layers import Image, Labels
 
 _BASE_SIZE = 4.0
 """Base subplot size for VolumePlotter when creating new figures.
@@ -790,6 +792,12 @@ class VolumePlotter:
         if "masks" in mask.dims:
             cmap_attr = mask.attrs.get("cmap")
             norm_attr = mask.attrs.get("norm")
+            # cmap/norm are dropped on Zarr save; reconstruct from rgb_lookup when
+            # present so structure colors survive a serialization round-trip.
+            if (cmap_attr is None or norm_attr is None) and "rgb_lookup" in mask.attrs:
+                cmap_attr, norm_attr = _build_atlas_cmap_and_norm(
+                    mask.attrs["rgb_lookup"]
+                )
             acronyms = mask.coords["masks"].values
 
             for i in range(mask.sizes["masks"]):
@@ -804,7 +812,7 @@ class VolumePlotter:
                 if isinstance(colors, str):
                     layer_color: str = colors
                 elif isinstance(colors, dict):
-                    # Accept both acronym-keyed and id-keyed dicts.
+                    # We accept both acronym-keyed and id-keyed dicts for flexibility.
                     layer_color = colors.get(acronym, colors.get(label, "white"))
                 elif cmap_attr is not None and norm_attr is not None:
                     layer_color = mcolors.to_hex(cmap_attr(norm_attr(label)))
@@ -838,6 +846,12 @@ class VolumePlotter:
         if colors is None:
             cmap_attr = mask.attrs.get("cmap")
             norm_attr = mask.attrs.get("norm")
+            # cmap/norm are dropped on Zarr save; reconstruct from rgb_lookup when
+            # present so structure colors survive a serialization round-trip.
+            if (cmap_attr is None or norm_attr is None) and "rgb_lookup" in mask.attrs:
+                cmap_attr, norm_attr = _build_atlas_cmap_and_norm(
+                    mask.attrs["rgb_lookup"]
+                )
             if cmap_attr is not None and norm_attr is not None:
                 color_map = {
                     label: mcolors.to_hex(cmap_attr(norm_attr(label)))
@@ -1289,7 +1303,7 @@ def plot_napari(
     viewer: "Viewer | None" = None,
     layer_type: Literal["image", "labels"] = "image",
     **layer_kwargs,
-) -> "Viewer":
+) -> "tuple[Viewer, Image | Labels]":
     """Display fUSI data using the Napari viewer.
 
     Parameters
@@ -1323,8 +1337,10 @@ def plot_napari(
 
     Returns
     -------
-    napari.Viewer
+    viewer : napari.Viewer
         The Napari viewer instance with the layer added.
+    layer : napari.layers.Image or napari.layers.Labels
+        The layer added to the viewer.
 
     Notes
     -----
@@ -1355,25 +1371,25 @@ def plot_napari(
     >>> import xarray as xr
     >>> from confusius.plotting import plot_napari
     >>> data = xr.open_zarr("output.zarr")["iq"]
-    >>> viewer = plot_napari(data)
+    >>> viewer, layer = plot_napari(data)
 
     >>> # Custom contrast limits
-    >>> viewer = plot_napari(data, contrast_limits=(0, 100))
+    >>> viewer, layer = plot_napari(data, contrast_limits=(0, 100))
 
     >>> # Different dimension ordering (e.g., depth, elevation, lateral)
-    >>> viewer = plot_napari(data, dim_order=("y", "z", "x"))
+    >>> viewer, layer = plot_napari(data, dim_order=("y", "z", "x"))
 
     >>> # Add a second dataset as a new layer in an existing viewer
-    >>> viewer = plot_napari(data1)
-    >>> viewer = plot_napari(data2, viewer=viewer)
+    >>> viewer, layer = plot_napari(data1)
+    >>> viewer, layer = plot_napari(data2, viewer=viewer)
 
     >>> # Display ROI labels (e.g., segmentation mask)
     >>> roi_mask = xr.open_zarr("output.zarr")["roi_mask"]
-    >>> viewer = plot_napari(roi_mask, layer_type="labels")
+    >>> viewer, layer = plot_napari(roi_mask, layer_type="labels")
 
     >>> # Overlay labels on existing image
-    >>> viewer = plot_napari(data)
-    >>> viewer = plot_napari(roi_mask, viewer=viewer, layer_type="labels")
+    >>> viewer, layer = plot_napari(data)
+    >>> viewer, layer = plot_napari(roi_mask, viewer=viewer, layer_type="labels")
     """
     all_dims = list(data.dims)
     time_dim = "time" if "time" in all_dims else None
@@ -1439,12 +1455,15 @@ def plot_napari(
                 layer_kwargs["colormap"] = cmap_attr
 
         layer_kwargs.setdefault("translate", coord_translates)
+        # napari.imshow stubs declare list[Image] but at runtime returns Image
+        # directly — cast to silence the type checker.
         viewer, layer = napari.imshow(
             data,
             scale=scale,
             viewer=viewer,
             **layer_kwargs,
         )
+        layer = cast("Image", layer)
 
         if show_colorbar:
             viewer.layers[0].colorbar.visible = True  # type: ignore[attr-defined]
@@ -1459,9 +1478,13 @@ def plot_napari(
 
         # Build a DirectLabelColormap from attrs when the caller has not already
         # supplied one.  This lets atlas annotations and masks carry their colormap
-        # automatically into the viewer.
+        # automatically into the viewer.  cmap/norm are not serializable, so they
+        # may be absent after a Zarr round-trip; fall back to reconstructing them
+        # from rgb_lookup when that is present.
         cmap_attr = data.attrs.get("cmap")
         norm_attr = data.attrs.get("norm")
+        if (cmap_attr is None or norm_attr is None) and "rgb_lookup" in data.attrs:
+            cmap_attr, norm_attr = _build_atlas_cmap_and_norm(data.attrs["rgb_lookup"])
         if (
             cmap_attr is not None
             and norm_attr is not None
@@ -1480,7 +1503,7 @@ def plot_napari(
                 color_dict=color_dict, background_value=0
             )
 
-        viewer.add_labels(
+        layer = viewer.add_labels(
             values,
             scale=scale,
             **layer_kwargs,
@@ -1496,7 +1519,194 @@ def plot_napari(
         scale_bar_unit = next((u for u in coord_units if u is not None), "mm")
         viewer.scale_bar.unit = scale_bar_unit
 
-    return viewer
+    return viewer, layer
+
+
+def draw_napari_labels(
+    data: xr.DataArray,
+    labels_layer_name: str = "labels",
+    viewer: "Viewer | None" = None,
+    **kwargs,
+) -> "tuple[Viewer, Labels]":
+    """Open a napari viewer to interactively paint integer labels over fUSI data.
+
+    Displays the data as an image layer and adds an empty Labels layer on top. The user
+    can paint integer labels directly on the image using napari's brush tool. After
+    painting, call [`labels_from_layer`][confusius.plotting.labels_from_layer] with the
+    returned Labels layer and the original data to obtain an integer label map as a
+    DataArray with the same spatial coordinates.
+
+    Parameters
+    ----------
+    data : xarray.DataArray
+        Input data array to display as the background image. Typically a time-averaged
+        power Doppler frame, e.g. `data.mean("time")`.
+    labels_layer_name : str, default: "labels"
+        Name assigned to the Labels layer added to the viewer.
+    viewer : napari.Viewer, optional
+        Existing Napari viewer to add layers to. If not provided, a new viewer
+        is created via [`plot_napari`][confusius.plotting.plot_napari].
+    **kwargs
+        Additional keyword arguments forwarded to
+        [`plot_napari`][confusius.plotting.plot_napari] for the image layer
+        (e.g. `colormap`, `contrast_limits`).
+
+    Returns
+    -------
+    viewer : napari.Viewer
+        The Napari viewer instance with the image and Labels layers.
+    labels_layer : napari.layers.Labels
+        The empty Labels layer initialised to zeros. After the user paints
+        labels in the viewer, pass this layer to
+        [`labels_from_layer`][confusius.plotting.labels_from_layer] to obtain
+        an integer label map.
+
+    Notes
+    -----
+    The Labels layer is initialised with the same `scale` and `translate`
+    parameters as the image layer so that the napari canvas shows a consistent
+    physical coordinate frame regardless of voxel spacing or data origin.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> import confusius  # Register accessor.
+    >>> pwd = xr.open_zarr("output.zarr")["power_doppler"].compute()
+    >>> # Display the time-averaged image and add an interactive Labels layer.
+    >>> viewer, labels_layer = draw_napari_labels(pwd.mean("time"))
+    >>> # … paint labels in the viewer …
+    >>> # Convert painted labels to an integer label map DataArray.
+    >>> label_map = labels_from_layer(labels_layer, pwd.mean("time"))
+    """
+    viewer, image_layer = plot_napari(data, viewer=viewer, **kwargs)
+
+    # Reuse the same spatial scale and translate that plot_napari computed for
+    # the image layer so the Labels layer overlays correctly.
+    all_dims = list(data.dims)
+    time_dim = "time" if "time" in all_dims else None
+    spatial_dims = [d for d in all_dims if d != time_dim]
+
+    spacing = data.fusi.spacing
+    spatial_scale = [
+        s if (s := spacing[dim]) is not None else 1.0 for dim in spatial_dims
+    ]
+    spatial_translate = [
+        float(data.coords[dim].values[0]) if dim in data.coords else 0.0
+        for dim in spatial_dims
+    ]
+    spatial_shape = tuple(data.sizes[d] for d in spatial_dims)
+
+    labels_array = np.zeros(spatial_shape, dtype=np.int32)
+    labels_layer = viewer.add_labels(
+        labels_array,
+        scale=spatial_scale,
+        translate=spatial_translate,
+        name=labels_layer_name,
+    )
+
+    return viewer, labels_layer
+
+
+def labels_from_layer(
+    labels_layer: "Labels",
+    data: xr.DataArray,
+) -> xr.DataArray:
+    """Convert a napari Labels layer to an integer label map DataArray.
+
+    Reads the integer array painted in `labels_layer` and wraps it in a DataArray whose
+    spatial dimensions and coordinates match those of `data`. The result is compatible
+    with [`extract_with_labels`][confusius.extract.extract_with_labels],
+    [`plot_contours`][confusius.plotting.plot_contours], and
+    [`VolumePlotter.add_contours`][confusius.plotting.VolumePlotter.add_contours].
+
+    Parameters
+    ----------
+    labels_layer : napari.layers.Labels
+        A Labels layer populated by the user (e.g. via
+        [`draw_napari_labels`][confusius.plotting.draw_napari_labels]). Integer values
+        identify distinct regions; zero is the background and is excluded from
+        downstream analyses.
+    data : xarray.DataArray
+        Reference data array. Its spatial dimensions and coordinates define the shape
+        and labelling of the output. A time dimension, if present, is ignored: the
+        label map is purely spatial.
+
+    Returns
+    -------
+    xarray.DataArray
+        Integer DataArray with the same spatial dimensions and coordinates as
+        `data`. Zero values indicate background (unlabelled) voxels. The
+        `attrs` dict carries:
+
+        - `"long_name"` — human-readable name.
+        - `"labels_layer_name"` — name of the source napari layer.
+        - `"rgb_lookup"` — `dict[int, list[int]]` mapping each non-zero
+          label to its `[r, g, b]` color (0–255) as painted in napari. This
+          is the only serializable color attribute; `cmap` and `norm` are
+          derived from it and are not preserved across zarr save/load.
+        - `"cmap"` — `matplotlib.colors.ListedColormap` built from
+          `rgb_lookup`. Compatible with
+          [`VolumePlotter.add_volume`][confusius.plotting.VolumePlotter.add_volume]
+          and [`plot_napari`][confusius.plotting.plot_napari].
+        - `"norm"` — `matplotlib.colors.BoundaryNorm` built from
+          `rgb_lookup`. Used together with `cmap` so each integer label
+          maps to exactly the color chosen in the napari viewer.
+
+    Notes
+    -----
+    The label array is taken directly from `labels_layer.data`. No
+    rasterisation is performed: this is a direct read of the painted values.
+
+    Per-label colors are read from `labels_layer.get_color(label)`, which works for both
+    the default cyclic colormap and any `DirectLabelColormap` set on the layer.
+
+    Examples
+    --------
+    >>> import xarray as xr
+    >>> import confusius  # Register accessor.
+    >>> pwd = xr.open_zarr("output.zarr")["power_doppler"].compute()
+    >>> viewer, labels_layer = draw_napari_labels(pwd.mean("time"))
+    >>> # … paint labels in the viewer …
+    >>> label_map = labels_from_layer(labels_layer, pwd.mean("time"))
+    >>> # Use the label map for region-based analysis.
+    >>> from confusius.extract import extract_with_labels
+    >>> signals = extract_with_labels(pwd, label_map)
+    """
+    all_dims = list(data.dims)
+    time_dim = "time" if "time" in all_dims else None
+    spatial_dims = [d for d in all_dims if d != time_dim]
+
+    coords = {dim: data.coords[dim] for dim in spatial_dims if dim in data.coords}
+
+    # Build a color lookup from the napari layer so downstream consumers
+    # (plot_napari, VolumePlotter.add_volume, add_contours) can render each
+    # label with exactly the color the user painted in the viewer.
+    # get_color() returns RGBA in [0, 1] for any non-zero label and works for
+    # both the default CyclicLabelColormap and any DirectLabelColormap.
+    label_array = np.asarray(labels_layer.data)
+    unique_labels = np.unique(label_array)
+    unique_labels = unique_labels[unique_labels != 0]
+    rgb_lookup: dict[int, list[int]] = {}
+    for label in unique_labels:
+        rgba = labels_layer.get_color(int(label))
+        if rgba is not None:
+            # Store 0-255 RGB (drop alpha) to match the Atlas convention.
+            rgb_lookup[int(label)] = [int(round(c * 255)) for c in rgba[:3]]
+
+    cmap, norm = _build_atlas_cmap_and_norm(rgb_lookup) if rgb_lookup else (None, None)
+
+    return xr.DataArray(
+        labels_layer.data,
+        dims=spatial_dims,
+        coords=coords,
+        attrs={
+            "long_name": "Drawn label map",
+            "labels_layer_name": labels_layer.name,
+            "rgb_lookup": rgb_lookup,
+            "cmap": cmap,
+            "norm": norm,
+        },
+    )
 
 
 def plot_carpet(
