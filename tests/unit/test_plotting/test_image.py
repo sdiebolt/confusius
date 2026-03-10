@@ -70,6 +70,47 @@ class TestPlotVolume:
 
         np.testing.assert_array_equal(plotted_data.mask, expected_mask)
 
+    def test_threshold_gray_band_applied_with_attrs_norm(
+        self, sample_3d_volume, matplotlib_pyplot
+    ):
+        """Gray band is present in the cmap even when norm comes from data.attrs."""
+        from matplotlib.colors import Normalize
+
+        data = sample_3d_volume.copy()
+        data.attrs["norm"] = Normalize(vmin=-2.0, vmax=2.0)
+        z_coord = data.coords["z"].values[0]
+        plotter = plot_volume(
+            data, slice_mode="z", slice_coords=[z_coord], threshold=0.5
+        )
+        # norm(0) = 0.5, which is inside [-0.5, 0.5] — must map to gray.
+        r, g, b, _ = plotter.axes[0, 0].collections[0].cmap(0.5)
+        assert r == pytest.approx(g, abs=1e-2)
+        assert g == pytest.approx(b, abs=1e-2)
+
+    def test_threshold_gray_band_uses_norm_not_linear_arithmetic(
+        self, sample_3d_volume, matplotlib_pyplot
+    ):
+        """Gray-band boundaries are placed at norm(±threshold), not linearly."""
+        from matplotlib.colors import TwoSlopeNorm
+
+        # norm(1.0) ≈ 0.667; linear formula gives 0.5 — check position 0.55 is gray.
+        norm = TwoSlopeNorm(vcenter=0.0, vmin=-1.0, vmax=3.0)
+        z_coord = sample_3d_volume.coords["z"].values[0]
+        plotter = plot_volume(
+            sample_3d_volume,
+            slice_mode="z",
+            slice_coords=[z_coord],
+            norm=norm,
+            threshold=1.0,
+            threshold_mode="lower",
+            show_colorbar=False,
+        )
+        # Position 0.55 is between the wrong linear boundary (0.5) and the correct
+        # norm boundary (≈0.667), so it must map to gray.
+        r, g, b, _ = plotter.axes[0, 0].collections[0].cmap(0.55)
+        assert r == pytest.approx(g, abs=1e-2)
+        assert g == pytest.approx(b, abs=1e-2)
+
     def test_explicit_vmin_vmax(self, sample_3d_volume, matplotlib_pyplot):
         """plot_volume passes explicit vmin and vmax to pcolormesh."""
         z_coord = sample_3d_volume.coords["z"].values[0]

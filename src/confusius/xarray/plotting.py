@@ -400,11 +400,13 @@ class FUSIPlotAccessor:
             maps). When not provided, falls back to `data.attrs["norm"]` if
             present. When a norm is active, `vmin` and `vmax` are ignored.
         vmin : float, optional
-            Lower bound of the colormap. Defaults to the 2nd percentile.
-            Ignored when a norm is active.
+            Lower bound of the colormap. Defaults to the 2nd percentile. Ignored
+            when `norm` is provided explicitly (that is, not just inherited from data
+            attributes).
         vmax : float, optional
-            Upper bound of the colormap. Defaults to the 98th percentile.
-            Ignored when a norm is active.
+            Upper bound of the colormap. Defaults to the 98th percentile. Ignored
+            when `norm` is provided explicitly (that is, not just inherited from data
+            attributes).
         alpha : float, default: 1.0
             Opacity of the image.
         show_colorbar : bool, default: True

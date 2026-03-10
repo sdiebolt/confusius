@@ -59,75 +59,135 @@ def _centers_to_edges(centers: np.ndarray) -> np.ndarray:
     return np.concatenate([[left], interior, [right]])
 
 
-def _build_threshold_cmap(
-    base_cmap: "Colormap",
-    vmin: float,
-    vmax: float,
-    threshold: float,
+def _resolve_norm(
+    slices: list,
+    norm: "Normalize | None",
+    data_attrs_norm: "Normalize | None",
+    vmin: float | None,
+    vmax: float | None,
+) -> "Normalize":
+    """Determine the colormap normalization.
+
+    Precedence:
+    - If `norm` is passed explicitly, it wins and vmin/vmax are ignored.
+    - Otherwise, vmin/vmax (if given) override whatever is in `data_attrs`.
+    - Otherwise, fall back to the norm stored in `data_attrs["norm"]`, or
+      compute percentile-based limits from the data.
+    """
+    user_set_norm = norm is not None
+    data_has_norm = data_attrs_norm is not None
+    user_set_vmin = vmin is not None
+    user_set_vmax = vmax is not None
+
+    resolved_norm = norm if user_set_norm else data_attrs_norm
+
+    if not user_set_norm:
+        if data_has_norm:
+            assert resolved_norm is not None
+            default_vmin = resolved_norm.vmin
+            default_vmax = resolved_norm.vmax
+        else:
+            all_vals = np.concatenate([s.values.ravel().astype(float) for s in slices])
+            all_vals = all_vals[np.isfinite(all_vals)]
+            default_vmin = (
+                float(np.percentile(all_vals, 2)) if len(all_vals) > 0 else 0.0
+            )
+            default_vmax = (
+                float(np.percentile(all_vals, 98)) if len(all_vals) > 0 else 1.0
+            )
+
+        vmin = vmin if user_set_vmin else default_vmin
+        vmax = vmax if user_set_vmax else default_vmax
+
+        if (not data_has_norm) or user_set_vmin or user_set_vmax:
+            from matplotlib.colors import Normalize
+
+            resolved_norm = Normalize(vmin=vmin, vmax=vmax)
+
+    assert resolved_norm is not None
+
+    return resolved_norm
+
+
+def _threshold_slices(
+    slices: list[xr.DataArray],
+    threshold: float | None,
+    threshold_mode: Literal["lower", "upper"],
+) -> list[np.ndarray]:
+    """Apply thresholding to a list of slices, returning masked arrays."""
+    if threshold is None:
+        return [s.values for s in slices]
+
+    thresholded = []
+    for s in slices:
+        if threshold_mode == "lower":
+            mask = np.abs(s) >= threshold
+        else:
+            mask = np.abs(s) <= threshold
+        thresholded.append(s.where(mask))
+    return thresholded
+
+
+def _resolve_cmap(
+    cmap: "str | Colormap | None",
+    data_attrs_cmap: "str | Colormap | None",
+    norm: "Normalize",
+    threshold: float | None,
     threshold_mode: Literal["lower", "upper"],
 ) -> "Colormap":
-    """Build colormap with grey band indicating thresholded regions.
+    """Build colormap with gray band indicating thresholded regions.
 
-    For `threshold_mode='lower'`: grey between `[-threshold, threshold]`.
-    For `threshold_mode='upper'`: grey outside `[-threshold, threshold]`.
+    For `threshold_mode='lower'`: gray between `[-threshold, threshold]`.
+    For `threshold_mode='upper'`: gray outside `[-threshold, threshold]`.
     """
     import matplotlib.colors as mcolors
+    import matplotlib.pyplot as plt
 
-    grey_rgb = (0.5, 0.5, 0.5, 1.0)
-    value_range = vmax - vmin
+    cmap = (
+        cmap
+        if cmap is not None
+        else data_attrs_cmap
+        if data_attrs_cmap is not None
+        else "gray"
+    )
+    if isinstance(cmap, str):
+        cmap = plt.get_cmap(cmap)
 
-    if value_range <= 0:
-        return base_cmap
+    cmap_colors = [(i / (cmap.N - 1), cmap(i / (cmap.N - 1))) for i in range(cmap.N)]
 
+    threshold = 0.0 if threshold is None else abs(threshold)
+    gray_low = norm(-threshold)
+    gray_high = norm(threshold)
     if threshold_mode == "lower":
-        grey_start = max(0.0, (max(vmin, -threshold) - vmin) / value_range)
-        grey_end = min(1.0, (min(vmax, threshold) - vmin) / value_range)
-    else:
-        grey_start_low = 0.0
-        grey_end_low = min(1.0, (min(vmax, -threshold) - vmin) / value_range)
-        grey_start_high = max(0.0, (max(vmin, threshold) - vmin) / value_range)
-        grey_end_high = 1.0
+        colors_before = [c for c in cmap_colors if c[0] <= gray_low]
+        colors_after = [c for c in cmap_colors if c[0] >= gray_high]
 
-    n_colors = 256
-    cmap_colors = [
-        (i / (n_colors - 1), base_cmap(i / (n_colors - 1))) for i in range(n_colors)
-    ]
-
-    new_colors: list[tuple[float, tuple[float, float, float, float]]]
-    if threshold_mode == "lower":
-        colors_before = [c for c in cmap_colors if c[0] <= grey_start]
-        colors_after = [c for c in cmap_colors if c[0] >= grey_end]
-        if colors_before and colors_after and grey_start < grey_end:
-            grey_colors = [
-                (grey_start, grey_rgb),
-                (grey_end, colors_after[0][1]),
+        if gray_low < gray_high:
+            # We clip the gray low/high points to [0, 1] because Matplotlib expects
+            # colormap values in that range.
+            gray_band = [
+                (max(0, gray_low), "gray"),
+                (min(1.0, gray_high), "gray"),
             ]
         else:
-            grey_colors = []
-        new_colors = colors_before + grey_colors + colors_after
+            gray_band = []
+        new_colors = colors_before + gray_band + colors_after
     else:
-        colors_middle = [
-            c for c in cmap_colors if grey_end_low <= c[0] <= grey_start_high
-        ]
-        if colors_middle:
-            grey_low: list[tuple[float, tuple[float, float, float, float]]] = []
-            grey_high: list[tuple[float, tuple[float, float, float, float]]] = []
-            if grey_start_low < grey_end_low:
-                grey_low = [
-                    (grey_start_low, cmap_colors[0][1]),
-                    (grey_end_low, grey_rgb),
-                ]
-            if grey_start_high < grey_end_high:
-                grey_high = [
-                    (grey_start_high, grey_rgb),
-                    (grey_end_high, cmap_colors[-1][1]),
-                ]
-            new_colors = grey_low + colors_middle + grey_high
+        colors_middle = [c for c in cmap_colors if gray_low <= c[0] <= gray_high]
+
+        if gray_low > 0.0:
+            gray_band_low = [(0.0, "gray"), (gray_low, "gray")]
         else:
-            new_colors = cmap_colors
+            gray_band_low = []
+
+        if gray_high < 1.0:
+            gray_band_high = [(gray_high, "gray"), (1.0, "gray")]
+        else:
+            gray_band_high = []
+        new_colors = gray_band_low + colors_middle + gray_band_high
 
     return mcolors.LinearSegmentedColormap.from_list(
-        f"{base_cmap.name}_thresholded", new_colors
+        f"{cmap.name}_thresholded", new_colors
     )
 
 
@@ -412,10 +472,12 @@ class VolumePlotter:
             is active, `vmin` and `vmax` are ignored.
         vmin : float, optional
             Lower bound of the colormap. Defaults to the 2nd percentile. Ignored
-            when `norm` is provided.
+            when `norm` is provided explicitly (that is, not just inherited from data
+            attributes).
         vmax : float, optional
             Upper bound of the colormap. Defaults to the 98th percentile. Ignored
-            when `norm` is provided.
+            when `norm` is provided explicitly (that is, not just inherited from data
+            attributes).
         threshold : float, optional
             Threshold value for masking.
         threshold_mode : {"lower", "upper"}, default: "lower"
@@ -477,13 +539,6 @@ class VolumePlotter:
                 f"{list(data.dims)}."
             )
 
-        resolved_cmap: str | Colormap = (
-            cmap if cmap is not None else data.attrs.get("cmap", "gray")
-        )
-        resolved_norm: "Normalize | None" = (
-            norm if norm is not None else data.attrs.get("norm")
-        )
-
         display_dims = [str(d) for d in data.dims if d != self.slice_mode]
         dim_row, dim_col = display_dims[0], display_dims[1]
 
@@ -495,53 +550,30 @@ class VolumePlotter:
             else:
                 slice_coords = list(range(data.sizes[self.slice_mode]))
 
-        slices, actual_coords = _extract_slices(data, self.slice_mode, slice_coords)
+        unthresholded_slices, actual_coords = _extract_slices(
+            data, self.slice_mode, slice_coords
+        )
+        n_slices = len(unthresholded_slices)
 
-        n_slices = len(slices)
+        norm = _resolve_norm(
+            slices=unthresholded_slices,
+            norm=norm,
+            data_attrs_norm=data.attrs.get("norm"),
+            vmin=vmin,
+            vmax=vmax,
+        )
 
-        # Compute vmin/vmax from data before thresholding for consistent colormap.
-        if resolved_norm is None:
-            all_vals = np.concatenate([s.values.ravel().astype(float) for s in slices])
-            all_vals = all_vals[np.isfinite(all_vals)]
-            if len(all_vals) > 0:
-                if vmin is None:
-                    vmin = float(np.percentile(all_vals, 2))
-                if vmax is None:
-                    vmax = float(np.percentile(all_vals, 98))
-            else:
-                vmin = vmin if vmin is not None else 0.0
-                vmax = vmax if vmax is not None else 1.0
+        thresholded_slices = _threshold_slices(
+            unthresholded_slices, threshold=threshold, threshold_mode=threshold_mode
+        )
 
-        if threshold is not None:
-            slice_arrays = []
-            for s in slices:
-                arr = s.values.astype(float)
-                mask = (
-                    np.abs(arr) < threshold
-                    if threshold_mode == "lower"
-                    else np.abs(arr) > threshold
-                )
-                arr[mask] = np.nan
-                slice_arrays.append(arr)
-        else:
-            slice_arrays = [s.values for s in slices]
-
-        if threshold is not None and resolved_norm is None:
-            assert vmin is not None and vmax is not None
-            base_cmap = (
-                plt.get_cmap(resolved_cmap)
-                if isinstance(resolved_cmap, str)
-                else resolved_cmap
-            )
-            # Grey values visually indicate which regions were masked.
-            resolved_cmap = _build_threshold_cmap(
-                base_cmap, vmin, vmax, threshold, threshold_mode
-            )
-
-        if resolved_norm is None:
-            from matplotlib.colors import Normalize
-
-            resolved_norm = Normalize(vmin=vmin, vmax=vmax)
+        cmap = _resolve_cmap(
+            cmap=cmap,
+            data_attrs_cmap=data.attrs.get("cmap"),
+            norm=norm,
+            threshold=threshold,
+            threshold_mode=threshold_mode,
+        )
 
         if match_coordinates:
             if self.axes is None:
@@ -599,9 +631,9 @@ class VolumePlotter:
 
         for axis_idx, slice_idx in plot_indices:
             ax = axes_flat[axis_idx]
-            arr = slice_arrays[slice_idx]
+            arr = thresholded_slices[slice_idx]
             coord = actual_coords[slice_idx]
-            slice_da = slices[slice_idx]
+            slice_da = unthresholded_slices[slice_idx]
 
             if dim_col in slice_da.coords:
                 x_vals = _centers_to_edges(
@@ -621,8 +653,8 @@ class VolumePlotter:
                 x_vals,
                 y_vals,
                 np.ma.masked_invalid(arr),
-                cmap=resolved_cmap,
-                norm=resolved_norm,
+                cmap=cmap,
+                norm=norm,
                 alpha=alpha,
             )
             ax.set_aspect("equal")
@@ -677,50 +709,6 @@ class VolumePlotter:
             cbar.outline.set_edgecolor(text_color)  # type: ignore[union-attr]
 
         return self
-
-    def savefig(self, fname: str, **kwargs) -> None:
-        """Save the figure to a file.
-
-        Parameters
-        ----------
-        fname : str
-            Path to save the figure. Extension determines format (e.g., `.png`, `.pdf`).
-        **kwargs
-            Additional arguments passed to
-            [`matplotlib.figure.Figure.savefig`][matplotlib.figure.Figure.savefig].
-
-        Raises
-        ------
-        RuntimeError
-            If called before any data has been plotted.
-        """
-        if self.figure is None:
-            raise RuntimeError("No figure to save.")
-        self.figure.savefig(fname, **kwargs)
-
-    def show(self) -> None:
-        """Display the figure.
-
-        Raises
-        ------
-        RuntimeError
-            If called before any data has been plotted.
-        """
-        if self.figure is None:
-            raise RuntimeError("No figure to show.")
-        self.figure.show()
-
-    def close(self) -> None:
-        """Close the figure and release resources."""
-        import matplotlib.pyplot as plt
-
-        if self.figure is not None:
-            plt.close(self.figure)
-            self.figure = None
-            self.axes = None
-            self._coord_to_axis.clear()
-            self._axis_xlims.clear()
-            self._axis_ylims.clear()
 
     def add_contours(
         self,
@@ -980,6 +968,50 @@ class VolumePlotter:
                 )
 
         return self
+
+    def savefig(self, fname: str, **kwargs) -> None:
+        """Save the figure to a file.
+
+        Parameters
+        ----------
+        fname : str
+            Path to save the figure. Extension determines format (e.g., `.png`, `.pdf`).
+        **kwargs
+            Additional arguments passed to
+            [`matplotlib.figure.Figure.savefig`][matplotlib.figure.Figure.savefig].
+
+        Raises
+        ------
+        RuntimeError
+            If called before any data has been plotted.
+        """
+        if self.figure is None:
+            raise RuntimeError("No figure to save.")
+        self.figure.savefig(fname, **kwargs)
+
+    def show(self) -> None:
+        """Display the figure.
+
+        Raises
+        ------
+        RuntimeError
+            If called before any data has been plotted.
+        """
+        if self.figure is None:
+            raise RuntimeError("No figure to show.")
+        self.figure.show()
+
+    def close(self) -> None:
+        """Close the figure and release resources."""
+        import matplotlib.pyplot as plt
+
+        if self.figure is not None:
+            plt.close(self.figure)
+            self.figure = None
+            self.axes = None
+            self._coord_to_axis.clear()
+            self._axis_xlims.clear()
+            self._axis_ylims.clear()
 
 
 def plot_contours(
