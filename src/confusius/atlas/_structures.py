@@ -73,6 +73,8 @@ def _build_atlas_cmap_and_norm(
     norm : matplotlib.colors.BoundaryNorm
         The norm to use for atlas rendering.
     """
+    # JSON (zarr) round-trips convert int keys to strings; normalize here.
+    rgb_lookup = {int(k): v for k, v in rgb_lookup.items()}
     ordered_ids = sorted(rgb_lookup.keys())
     rgba = [list(np.array(rgb_lookup[sid]) / 255) + [1.0] for sid in ordered_ids]
 

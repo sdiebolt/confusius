@@ -474,6 +474,31 @@ class TestVolumePlotterAddContours:
         assert len(axes_flat[2].lines) == 0
         assert len(axes_flat[3].lines) == 0
 
+    def test_add_contours_string_rgb_lookup_keys(
+        self, sample_3d_volume, matplotlib_pyplot
+    ):
+        """add_contours must not raise when rgb_lookup keys are strings.
+
+        Masks whose rgb_lookup has string keys (e.g. from a user-drawn seed map)
+        should render without error.
+        """
+        plotter = plot_volume(sample_3d_volume, slice_mode="z", show_colorbar=False)
+
+        mask_data = np.zeros(sample_3d_volume.shape, dtype=int)
+        mask_data[:, 1:3, 1:3] = 1
+        mask = xr.DataArray(
+            mask_data,
+            dims=["z", "y", "x"],
+            coords={
+                "z": sample_3d_volume.coords["z"].values,
+                "y": sample_3d_volume.coords["y"].values,
+                "x": sample_3d_volume.coords["x"].values,
+            },
+            attrs={"rgb_lookup": {"1": [255, 0, 0]}},
+        )
+        # Should not raise TypeError about concatenating str and int.
+        plotter.add_contours(mask)
+
     def test_add_contours_warns_on_missing_coords(
         self, sample_3d_volume, matplotlib_pyplot
     ):
