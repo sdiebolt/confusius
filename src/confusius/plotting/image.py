@@ -819,6 +819,12 @@ class VolumePlotter:
                 )
             return self
 
+        squeeze_dims = [
+            d for d in mask.dims if d != self.slice_mode and mask.sizes[d] == 1
+        ]
+        if squeeze_dims:
+            mask = mask.squeeze(dim=squeeze_dims)
+
         if self.slice_mode not in mask.dims:
             raise ValueError(f"slice_mode '{self.slice_mode}' not in mask dimensions")
 
@@ -1433,18 +1439,12 @@ def plot_napari(
             "Ensure 'dim_order' contains all spatial dimension names."
         )
 
-    # Build the Napari scale from coordinate spacing. Warnings for undefined dims are
-    # emitted by .fusi.spacing; fall back to 1.0 so the scale bar still works.
-    scale = None
+    # Warnings for undefined dims are emitted by .fusi.spacing; fall back to 1.0 so the
+    # scale bar still works.
     spacing = data.fusi.spacing
-    coord_scales = [
-        s if (s := spacing[dim]) is not None else 1.0 for dim in spatial_dims
-    ]
-    if coord_scales:
-        scale = coord_scales
+    scale = [s if (s := spacing[dim]) is not None else 1.0 for dim in spatial_dims]
 
-    # Build translate from the first coordinate value per spatial dim (physical origin).
-    # Falls back to 0.0 for dimensions without coordinates.
+    # .origin falls back to 0.0 for dimensions without coordinates.
     coord_translates = [data.fusi.origin[dim] for dim in spatial_dims]
 
     coord_units = [
@@ -1666,23 +1666,20 @@ def labels_from_layer(
     Returns
     -------
     xarray.DataArray
-        Integer DataArray with the same spatial dimensions and coordinates as
-        `data`. Zero values indicate background (unlabelled) voxels. The
-        `attrs` dict carries:
+        Stacked integer DataArray with dims `["masks", *spatial_dims]`, where the
+        `masks` coordinate holds each unique non-zero label integer. Each layer
+        `masks=k` has values `k` where the user painted label `k` and `0` elsewhere.
+        This format is directly compatible with
+        [`extract_with_labels`][confusius.extract.extract_with_labels],
+        [`plot_contours`][confusius.plotting.plot_contours], and
+        [`VolumePlotter.add_contours`][confusius.plotting.VolumePlotter.add_contours],
+        and can be sliced by label (e.g. `label_map.sel(masks=2)`) for per-label
+        display. The `attrs` dict carries:
 
         - `"long_name"` — human-readable name.
         - `"labels_layer_name"` — name of the source napari layer.
         - `"rgb_lookup"` — `dict[int, list[int]]` mapping each non-zero
-          label to its `[r, g, b]` color (0–255) as painted in napari. This
-          is the only serializable color attribute; `cmap` and `norm` are
-          derived from it and are not preserved across zarr save/load.
-        - `"cmap"` — `matplotlib.colors.ListedColormap` built from
-          `rgb_lookup`. Compatible with
-          [`VolumePlotter.add_volume`][confusius.plotting.VolumePlotter.add_volume]
-          and [`plot_napari`][confusius.plotting.plot_napari].
-        - `"norm"` — `matplotlib.colors.BoundaryNorm` built from
-          `rgb_lookup`. Used together with `cmap` so each integer label
-          maps to exactly the color chosen in the napari viewer.
+          label to its `[r, g, b]` color (0–255) as painted in napari.
 
     Notes
     -----
@@ -1700,6 +1697,10 @@ def labels_from_layer(
     >>> viewer, labels_layer = draw_napari_labels(pwd.mean("time"))
     >>> # … paint labels in the viewer …
     >>> label_map = labels_from_layer(labels_layer, pwd.mean("time"))
+    >>> label_map.dims
+    ('masks', 'z', 'y', 'x')
+    >>> # Slice a single label for display alongside a seed map.
+    >>> label_map.sel(masks=2)
     >>> # Use the label map for region-based analysis.
     >>> from confusius.extract import extract_with_labels
     >>> signals = extract_with_labels(pwd, label_map)
@@ -1725,18 +1726,26 @@ def labels_from_layer(
             # Store 0-255 RGB (drop alpha) to match the Atlas convention.
             rgb_lookup[int(label)] = [int(round(c * 255)) for c in rgba[:3]]
 
-    cmap, norm = _build_atlas_cmap_and_norm(rgb_lookup) if rgb_lookup else (None, None)
+    # Build one layer per label so the output matches the stacked mask format
+    # returned by Atlas.get_masks: dims=["masks", *spatial_dims] with the
+    # masks coordinate holding integer label IDs. This allows per-label slicing
+    # (e.g. label_map.sel(masks=2)) and is directly accepted by
+    # extract_with_labels, plot_contours, and add_contours.
+    layers = [np.where(label_array == k, k, 0).astype(np.int32) for k in unique_labels]
+    stacked = (
+        np.stack(layers, axis=0)
+        if len(layers) > 0
+        else np.empty((0, *label_array.shape), dtype=np.int32)
+    )
 
     return xr.DataArray(
-        labels_layer.data,
-        dims=spatial_dims,
-        coords=coords,
+        stacked,
+        dims=["masks", *spatial_dims],
+        coords={"masks": unique_labels.astype(np.int32), **coords},
         attrs={
             "long_name": "Drawn label map",
             "labels_layer_name": labels_layer.name,
             "rgb_lookup": rgb_lookup,
-            "cmap": cmap,
-            "norm": norm,
         },
     )
 
