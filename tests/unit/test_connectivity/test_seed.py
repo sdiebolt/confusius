@@ -498,7 +498,7 @@ class TestAccessor:
         import confusius  # noqa: F401 — registers the accessor
 
         mapper_direct = SeedBasedMaps(seed_masks=flat_labels).fit(data_2d)
-        mapper_accessor = data_2d.fusi.connectivity.seed_map(flat_labels)
+        mapper_accessor = data_2d.fusi.connectivity.seed_map(seed_masks=flat_labels)
 
         np.testing.assert_allclose(
             mapper_accessor.maps_.values, mapper_direct.maps_.values
