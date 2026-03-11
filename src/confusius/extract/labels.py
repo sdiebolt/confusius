@@ -167,7 +167,9 @@ def extract_with_labels(
     if "masks" in labels.dims:
         region_results = []
         for i in range(labels.sizes["masks"]):
-            layer = labels.isel(masks=i)
+            # We drop the "masks" dimension here otherwise xr.concat would complain
+            # about non-identical coordinates across regions.
+            layer = labels.isel(masks=i, drop=True)
             region_result = _extract_with_flat_labels(data, layer, reduction)
             region_results.append(region_result.isel(regions=0))
 

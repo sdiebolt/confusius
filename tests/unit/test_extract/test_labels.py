@@ -153,6 +153,38 @@ class TestWithLabels:
         expected = extract.extract_with_labels(data_eager, labels)
         np.testing.assert_allclose(result.values, expected.values)
 
+    def test_stacked_masks_format(self, sample_4d_volume):
+        """Test extraction with stacked mask format (masks, z, y, x)."""
+        _, nz, ny, nx = sample_4d_volume.shape
+
+        # Build a stacked mask with two named regions.
+        mask_data = np.zeros((2, nz, ny, nx), dtype=int)
+        mask_data[0, 0, :, :] = 1  # Region "VISp": first z-slice.
+        mask_data[1, 1, :, :] = 2  # Region "AUDp": second z-slice.
+        labels = xr.DataArray(
+            mask_data,
+            dims=["masks", "z", "y", "x"],
+            coords={
+                "masks": ["VISp", "AUDp"],
+                "z": sample_4d_volume.coords["z"],
+                "y": sample_4d_volume.coords["y"],
+                "x": sample_4d_volume.coords["x"],
+            },
+        )
+
+        result = extract.extract_with_labels(sample_4d_volume, labels)
+
+        assert set(result.dims) == {"time", "regions"}
+        np.testing.assert_array_equal(result.coords["regions"].values, ["VISp", "AUDp"])
+        np.testing.assert_allclose(
+            result.sel(regions="VISp").values,
+            sample_4d_volume.values[:, 0, :, :].mean(axis=(-2, -1)),
+        )
+        np.testing.assert_allclose(
+            result.sel(regions="AUDp").values,
+            sample_4d_volume.values[:, 1, :, :].mean(axis=(-2, -1)),
+        )
+
     def test_dask_spatial_chunks(self):
         """Test correctness when spatial dims are chunked in the Dask array."""
         rng = np.random.default_rng(42)
