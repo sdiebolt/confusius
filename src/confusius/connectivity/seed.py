@@ -213,13 +213,14 @@ class SeedBasedMaps(BaseEstimator):
         self.clean_kwargs = clean_kwargs
 
     def fit(self, X: xr.DataArray, y: None = None) -> "SeedBasedMaps":
-        """Compute the seed-based correlation map.
+        """Compute the seed-based correlation maps.
 
         Parameters
         ----------
         X : (time, ...) xarray.DataArray
-            fUSI data array.  Must have a `time` dimension.  The spatial dimensions must
-            be compatible with `seed_masks` when using mask-based seeding.
+            A fUSI DataArray to estimate seed-based maps from.  Must have a `time`
+            dimension.  The spatial dimensions must be compatible with `seed_masks` when
+            using mask-based seeding.
 
             !!! warning "Chunking along time"
                 The `time` dimension must NOT be chunked when `clean_kwargs` includes
@@ -294,8 +295,7 @@ class SeedBasedMaps(BaseEstimator):
         if extracted.dims[0] != "time":
             extracted = extracted.transpose("time", ...)
 
-        # Promote a 1-D (time,) signal to (time, regions) so that
-        # _compute_correlation_maps always receives a 2-D input.
+        # _compute_correlation_maps must always receive a 2-D input.
         if extracted.ndim == 1:
             extracted = extracted.expand_dims("regions", axis=1)
 
