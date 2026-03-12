@@ -17,4 +17,7 @@
 *[SNR]: Signal-to-Noise Ratio
 *[CNR]: Contrast-to-Noise Ratio
 *[DOF]: Degrees of Freedom
+*[QC]: Quality Control
+*[tSNR]: Temporal Signal-to-Noise Ratio
+*[CV]: Coefficient of Variation
 
