@@ -226,24 +226,11 @@ class TestInputValidation:
         with pytest.raises(ValueError, match="must have a 'time' dimension"):
             compute_dvars(signals)
 
-    def test_invalid_dimensions_raises(self):
-        """Input with invalid dimensions must raise ValueError."""
-        data = np.random.standard_normal((50, 10, 10))
-        signals = xr.DataArray(
-            data,
-            dims=["time", "x", "y"],
-            coords={"time": np.arange(50) * 0.1},
-        )
+class TestNDInput:
+    """Tests for N-D (3D+t and beyond) input."""
 
-        with pytest.raises(ValueError, match="must be 2D.*or 4D"):
-            compute_dvars(signals)
-
-
-class Test4DInput:
-    """Tests for 4D (3D+t) input."""
-
-    def test_4d_input_matches_flattened_2d(self):
-        """4D input must produce same result as flattened 2D input."""
+    def test_nd_input_matches_flattened_2d(self):
+        """Any spatial shape must produce same result as flattened 2D input."""
         # Generate 4D AR(1) signals
         rng = np.random.default_rng(42)
         n_time = 50
@@ -265,7 +252,7 @@ class Test4DInput:
         signals_2d = signals_4d.stack(voxels=["z", "y", "x"])
 
         # Compute DVARS on both
-        dvars_4d = compute_dvars(
+        dvars_nd = compute_dvars(
             signals_4d,
             standardize=True,
             normalization_factor=None,
@@ -276,4 +263,4 @@ class Test4DInput:
             normalization_factor=None,
         )
 
-        assert_allclose(dvars_4d, dvars_2d, rtol=1e-10)
+        assert_allclose(dvars_nd, dvars_2d, rtol=1e-10)

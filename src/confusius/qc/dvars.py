@@ -71,10 +71,10 @@ def compute_dvars(
 
     Parameters
     ----------
-    signals : (time, voxels) or (time, z, y, x) xarray.DataArray
-        Signals to compute DVARS from. For 2D input, each column is a separate signal
-        (e.g., voxel time series). For 3D+t input, spatial dimensions are flattened
-        to voxels.
+    signals : (time, ...) xarray.DataArray
+        Signals to compute DVARS from. Must have a `time` dimension. Any additional
+        dimensions (e.g., `voxels`, `z`, `y`, `x`) are flattened to a single `voxels`
+        dimension before computation.
     standardize : bool, default: True
         Whether to computed the standardized DVARS. When `True`, the DVARS values are
         standardized by the expected standard deviation given the AR(1) structure of the
@@ -179,13 +179,9 @@ def compute_dvars(
 
     time_coords = signals.coords["time"]
 
-    if signals.ndim == 4:
+    if signals.ndim > 2:
         spatial_dims = [d for d in signals.dims if d != "time"]
         signals = signals.stack(voxels=spatial_dims)
-    elif signals.ndim != 2:
-        raise ValueError(
-            f"signals must be 2D (time, voxels) or 4D (time, z, y, x), got {signals.ndim}D."
-        )
 
     # We are using lower interpolation to match FSL's implementation.
     signals_sd = sp_stats.iqr(
@@ -217,7 +213,12 @@ def compute_dvars(
     dvars_nstd = np.insert(dvars_nstd, 0, dvars_nstd.min())
 
     if not standardize:
-        return xr.DataArray(dvars_nstd, dims=["time"], coords={"time": time_coords})
+        return xr.DataArray(
+            dvars_nstd,
+            dims=["time"],
+            coords={"time": time_coords},
+            attrs={"long_name": "DVARS", "units": "a.u."},
+        )
 
     signals_np = signals.values
     # This isn't a robust estimator of AR(1).
@@ -233,4 +234,9 @@ def compute_dvars(
 
     dvars_stdz = dvars_nstd / np.mean(diff_sdhat)
 
-    return xr.DataArray(dvars_stdz, dims=["time"], coords={"time": time_coords})
+    return xr.DataArray(
+        dvars_stdz,
+        dims=["time"],
+        coords={"time": time_coords},
+        attrs={"long_name": "Standardized DVARS"},
+    )
