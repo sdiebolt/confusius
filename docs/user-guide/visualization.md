@@ -58,12 +58,15 @@ and elevation slices with the sliders or mouse wheel.
 
 !!! tip "Using Napari's annotation tools and plugins"
     Napari's annotation tools let you [draw regions of
-    interest](https://napari.org/dev/howtos/layers/shapes.html) and [place
-    markers](https://napari.org/dev/howtos/layers/points.html). These annotations can be
-    saved and loaded for later analysis. Additionally, the [Napari
-    Hub](https://napari-hub.org/) hosts hundreds of plugins that extend functionality —
-    from segmentation algorithms to integration with other imaging modalities like
-    microscopy or MRI.
+    interest](https://napari.org/dev/howtos/layers/labels.html) and [place
+    markers](https://napari.org/dev/howtos/layers/points.html) on your fUSI volumes.
+    ConfUSIus also provides
+    [`draw_napari_labels`][confusius.plotting.draw_napari_labels] to open a viewer with
+    an empty Labels layer ready for painting (see the [Manual ROI
+    Drawing](#manual-roi-drawing) section below). These annotations can be saved and
+    loaded for later analysis. Additionally, the [Napari Hub](https://napari-hub.org/)
+    hosts hundreds of plugins that extend functionality—from segmentation algorithms to
+    integration with other imaging modalities like microscopy or MRI.
 
 ### Napari's Parameters
 
