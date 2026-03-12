@@ -1,6 +1,7 @@
 *[fUSI]: Functional Ultrasound Imaging
 *[IQ]: In-phase and Quadrature
 *[PRF]: Pulse Repetition Frequency
+*[RCA]: Row-Column-Addressed
 *[AUTC]: Alan Urban Technology & Consulting
 *[BIDS]: Brain Imaging Data Structure
 *[SVD]: Singular Value Decomposition
