@@ -157,7 +157,7 @@ config:
 flowchart LR
     IQ -->|Window 1| F1{{"User Function"}}
     IQ --> ellipsis{{"..."}}
-    IQ -->|Window *n*| F2{{"User Function"}}
+    IQ -->|Window <em>n</em>| F2{{"User Function"}}
 
     F1 -->|"Output Volume(s)"| output
     F2 -->|"Output Volume(s)"| output
@@ -200,15 +200,15 @@ config:
 flowchart LR
     IQ -->|"Outer Window 1"| CF1{{"Clutter Filter"}}
     IQ --> ellipsis{{"..."}}
-    IQ -->|"Outer Window *n*"| CFn{{"Clutter Filter"}}
+    IQ -->|"Outer Window <em>n</em>"| CFn{{"Clutter Filter"}}
 
     CF1 -->|"Inner Window 1"| C1{{"Compute"}}
     CF1 --> e1{{"..."}}
-    CF1 -->|"Inner Window *m*"| C2{{"Compute"}}
+    CF1 -->|"Inner Window <em>m</em>"| C2{{"Compute"}}
 
     CFn -->|"Inner Window 1"| C3{{"Compute"}}
     CFn --> e2{{"..."}}
-    CFn -->|"Inner Window *m*"| C4{{"Compute"}}
+    CFn -->|"Inner Window <em>m</em>"| C4{{"Compute"}}
 
     C1 -->|"Output Volume"| output
     C2 -->|"Output Volume"| output
@@ -526,7 +526,7 @@ Attributes: (11/16)
     pulse_repetition_frequency:   15000.0
     sound_velocity:               1540.0
     units:                        'a.u.'
-    long_name                     'Power Doppler intensity'
+    long_name:                    'Power Doppler intensity'
     clutter_filter_method:        svd_indices
     clutter_window_width:         300
     clutter_window_stride:        300
@@ -664,7 +664,7 @@ volumes, you're ready to:
 
 1. **[Visualization](visualization.md)**: explore your data interactively with Napari
    and generate static figures with Matplotlib.
-2. **[Quality Control](qc.md)**: assess data quality and identify artifacts *(coming
+2. **[Quality Control](quality-control.md)**: assess data quality and identify artifacts *(coming
    soon)*
 3. **[Registration](registration.md)**: correct for motion and align to anatomical
    templates *(coming soon)*

@@ -22,11 +22,11 @@ config:
   layout: elk
 ---
 flowchart LR
-    V["**Voxel space**<br>(integer indices)"]
-    P["**Physical space**<br>(probe-relative)"]
-    W1["**Scanner space**"]
+    V["<b>Voxel space</b><br>(integer indices)"]
+    P["<b>Physical space</b><br>(probe-relative)"]
+    W1["<b>Scanner space</b>"]
     ellipsis{{"..."}}
-    W2["**Atlas space**"]
+    W2["<b>Atlas space</b>"]
 
     V -->|".coords"| P
     P -->|".attrs[affines]"| W1
@@ -52,7 +52,7 @@ Every ConfUSIus DataArray that represents a fUSI recording uses the dimension or
     Users familiar with neuroimaging may be more accustomed to spatiotemporal
     conventions like `(x, y, z, t)`. Thankfully, Xarray makes dimension ordering largely
     transparent in practice: you can always refer to dimensions by name and in any
-    order(e.g. `data.mean("time")`, `data.sel(x=4.54, y=-2.48, z=0.0)`) rather than by
+    order (e.g. `data.mean("time")`, `data.sel(x=4.54, y=-2.48, z=0.0)`) rather than by
     axis index, so you won't have to remember the order of the dimensions.
 
 This ordering is motivated by several considerations.
@@ -87,11 +87,6 @@ Voxel space has its origin at voxel `(0, 0, 0)` and integer indices along each
 spatial axis. It is the natural indexing space of the underlying array: DataArrays can
 be indexed in voxel space using the standard Xarray integer-location indexer (`.isel`).
 
-Moreover, NIfTI files store affine transformations, `qform` and `sform`, that map voxel
-space to world spaces. When a NIfTI file is loaded in ConfUSIus using
-[`load_nifti`][confusius.io.load_nifti], the relevant affine(s) are read and converted
-to physical → world form, then stored in `da.attrs["affines"]`.
-
 ### Physical Space
 
 The physical space is the coordinate system embedded in the DataArray's dimension
@@ -111,6 +106,9 @@ Physical coordinates are set at data-loading time and depend on the source forma
 - **AUTC**: Lateral and axial coordinates are supplied by the user as parameters to the
   conversion function. If coordinates are omitted, ConfUSIus falls back to bare voxel
   indices and emits a warning.
+- **Iconeus SCAN**: Coordinates are derived from the `voxelsToProbe` affine embedded in
+  the SCAN file. The axial coordinate (`y`) is sign-flipped so that it is always
+  positive and increases with depth.
 - **NIfTI**: Coordinates are derived from the translation and scale components of the
   "best" affine transformation found in the file header.
 - **Hand-constructed DataArrays**: The physical space is whatever the user assigns to
@@ -165,10 +163,17 @@ A @ [pz, py, px, 1] = [wz, wy, wx, 1]
 
 where `(pz, py, px)` are the physical coordinates stored in `da.coords`.
 
-When loading a NIfTI file, affines are automatically extracted from the header and
-stored in `da.attrs["affines"]` with keys `"physical_to_sform"` and/or
-`"physical_to_qform"` depending on the presence of valid `sform` and `qform` affines in
-the file header.
+Several loaders populate `da.attrs["affines"]` automatically:
+
+- **NIfTI**: NIfTI files store `qform` and `sform` affines in their header that map
+  voxel indices to world coordinates. [`load_nifti`][confusius.io.load_nifti] reads the
+  relevant affine(s), converts them from voxel → world to physical → world form, and
+  stores them under the keys `"physical_to_sform"` and/or `"physical_to_qform"`
+  depending on which codes are valid in the header.
+- **Iconeus SCAN**: [`load_scan`][confusius.io.load_scan] stores a
+  `"physical_to_lab"` affine mapping ConfUSIus physical coordinates `(z, y, x)` to the
+  Iconeus lab coordinate system. For multi-pose acquisitions (`3Dscan`, `4Dscan`),
+  one affine per pose is stored, with shape `(npose, 4, 4)`.
 
 After registration to an atlas, you would typically store the result yourself:
 

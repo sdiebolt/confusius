@@ -68,8 +68,14 @@ ConfUSIus provides a comprehensive toolkit designed specifically for fUSI data:
     - Extraction of signals using region masking.
     - Denoising and filtering of hemodynamic signals.
 
+=== "Atlas Integration"
+    - Load and resample brain atlases (Allen CCFv3 and others via BrainGlobe).
+    - Generate brain region masks for signal extraction.
+    - Overlay atlas contours on fUSI volumes.
+
 === "Analysis"
-    - Statistical analysis of fUSI data.
+    - Functional connectivity analysis.
+    - General linear modeling (GLM) for task-based fUSI data.
     - Interoperability with other Python scientific libraries (Nilearn, scikit-learn,
       statsmodels, etc.).
 

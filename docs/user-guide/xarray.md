@@ -110,7 +110,7 @@ Reading the output from top to bottom, a `DataArray` has four components:
   calling `.compute()` or accessing `.values`).
 - **Coordinates**: physical values for each dimension, typically timestamps in seconds,
   spatial positions in millimeters. They are what enable `.sel(y=slice(0, 2.5))` to work
-in physical units rather than array indices.
+  in physical units rather than array indices.
 - **Attributes**: acquisition metadata as a flat key-value dictionary. Attributes are
   preserved through most ConfUSIus operations, and some are required for certain
   functions (e.g., `transmit_frequency` is needed for velocity calculations).
@@ -119,6 +119,12 @@ ConfUSIus operates on `DataArray` objects. The `Dataset` is only used as an entr
 when loading data, or to store multiple related variables together (e.g.,
 `power_doppler` for the power Doppler signals and `brain_mask` for a corresponding brain
 mask).
+
+!!! question "New to Xarray?"
+    If you are not yet familiar with Xarray, the [Xarray quick
+    overview](https://docs.xarray.dev/en/stable/getting-started-guide/quick-overview.html)
+    is the best place to start. Understanding indexing, selection, and broadcasting will
+    make working with ConfUSIus much easier.
 
 ## The `.fusi` Accessor
 
@@ -249,11 +255,14 @@ increase `rotation_penalty` to constrain rotations more strongly.
 ### Signal Extraction ([`.fusi.extract`][confusius.xarray.FUSIExtractAccessor])
 
 The [`.fusi.extract`][confusius.xarray.FUSIExtractAccessor] accessor provides access to
-the [`extract_with_mask`][confusius.extract.extract_with_mask] and
-[`unmask`][confusius.extract.unmask] functions for extracting signals from masked voxels
-and reconstructing spatial volumes from extracted signals. This makes it easy to pass
-fUSI data to scikit-learn, pandas, or other tools that expect a 2D matrix of shape
+signal extraction and reconstruction functions, making it easy to pass fUSI data to
+scikit-learn, pandas, or other tools that expect a 2D matrix of shape
 `(samples, features)`.
+
+#### Mask-based extraction
+
+[`extract_with_mask`][confusius.extract.extract_with_mask] flattens all voxels selected
+by a boolean (or single-label integer) mask into a `voxels` dimension:
 
 ```python
 mask = xr.open_zarr("brain_mask.zarr")["mask"]
@@ -270,9 +279,8 @@ the full spatial volume, use
 original mask:
 
 ```python
-# signals has dims (time, voxels).
-reconstructed = signals.fusi.extract.unmask(mask)
 # reconstructed has dims (time, z, y, x).
+reconstructed = signals.fusi.extract.unmask(mask)
 ```
 
 For processed signals that are NumPy arrays (e.g., obtained from scikit-learn), use the
@@ -287,6 +295,28 @@ components = pca.components_  # (5, voxels)
 
 spatial_components = unmask(components, mask, new_dims=["component"])
 # spatial_components has dims (component, z, y, x).
+```
+
+#### Label-based extraction
+
+[`extract_with_labels`][confusius.extract.extract_with_labels] aggregates signals by
+brain region using an integer label map. It accepts two label formats:
+
+- **Flat label map** `(z, y, x)`: each unique non-zero integer identifies a distinct,
+  non-overlapping region (e.g., from an atlas annotation volume).
+- **Stacked mask format** `(masks, z, y, x)`: one layer per region, with values in
+  `{0, region_id}`. Regions may overlap. This is the format returned by
+  [`Atlas.get_masks`][confusius.atlas.Atlas.get_masks].
+
+```python
+# Using a flat label map (e.g., atlas annotations).
+label_map = xr.open_zarr("atlas_labels.zarr")["labels"]
+
+# region_signals has dims (time, regions).
+region_signals = registered.fusi.extract.with_labels(label_map)
+
+# Use a different aggregation (default is "mean").
+region_signals = registered.fusi.extract.with_labels(label_map, reduction="sum")
 ```
 
 ### Visualization ([`.fusi.plot`][confusius.xarray.FUSIPlotAccessor])

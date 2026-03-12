@@ -16,7 +16,7 @@ ConfUSIus uses [Xarray](https://docs.xarray.dev/) as its core data structure for
 representing multi-dimensional fUSI data. Xarray provides several advantages over raw
 NumPy arrays:
 
-- **Named dimensions**: Access data using meaningful names (e.g., `time`, `x`, `y`, `z`)
+- **Named dimensions**: Access data using meaningful names (e.g., `time`, `z`, `y`, `x`)
   instead of remembering axis indices.
 - **Coordinates**: Associate physical coordinates with each dimension (e.g., time
   in seconds, depth in millimeters).
@@ -349,7 +349,7 @@ For **2Dscan** data, save it directly:
 ```python
 from confusius.io import load_scan, save_nifti
 
-da = load_scan("sub-01_task-awake_pwd2d.scan")
+da = load_scan("sub-01_task-awake_pwd.scan")
 save_nifti(da, "sub-01_task-awake_pwd.nii.gz")
 # Or equivalently:
 da.fusi.io.to_nifti("sub-01_task-awake_pwd.nii.gz")
