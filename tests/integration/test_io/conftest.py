@@ -86,64 +86,6 @@ def _create_autc_dat_file(
             f.write(data.tobytes())
 
 
-def _create_autc_metadata(
-    path: Path,
-    n_x: int = 4,
-    n_z: int = 6,
-    transmit_frequency_mhz: float = 3.0,
-    speed_of_sound_mm_us: float = 1.48,
-    n_elements: int = 64,
-    pitch_mm: float = 0.25,
-    angles_deg: list | None = None,
-    dt_bf_s: float = 0.002,
-    dt_single_pw_s: float = 0.002 / 3,
-) -> None:
-    """Create a synthetic AUTC MAT metadata file (HDF5 / MAT v7.3).
-
-    Parameters
-    ----------
-    path : Path
-        Path to create the MAT file.
-    n_x : int, default: 4
-        Number of lateral samples.
-    n_z : int, default: 6
-        Number of axial samples.
-    transmit_frequency_mhz : float, default: 3.0
-        Transmit frequency in MHz (as stored in the MAT file).
-    speed_of_sound_mm_us : float, default: 1.48
-        Speed of sound in mm/µs (as stored in the MAT file).
-    n_elements : int, default: 64
-        Number of probe elements.
-    pitch_mm : float, default: 0.25
-        Inter-element pitch in mm.
-    angles_deg : list, optional
-        Plane wave angles in degrees. Defaults to [-15.0, 0.0, 15.0].
-    dt_bf_s : float, default: 0.002
-        Compound frame period in seconds (CSF = 500 Hz).
-    dt_single_pw_s : float, default: 0.002 / 3
-        Single plane wave period in seconds (PRF = 1500 Hz).
-    """
-    if angles_deg is None:
-        angles_deg = [-15.0, 0.0, 15.0]
-
-    with h5py.File(path, "w") as f:
-        doppler = f.create_group("doppler")
-        doppler["xAxis"] = np.linspace(-10, 10, n_x)
-        doppler["zAxis"] = np.linspace(0, 20, n_z)
-        doppler["dtBF"] = np.array([dt_bf_s])
-        doppler["dtSinglePlanewave"] = np.array([dt_single_pw_s])
-
-        params = doppler.create_group("params")
-        par_seq = params.create_group("parSeq")
-        par_seq["TF"] = np.array([transmit_frequency_mhz])
-        par_seq["Tne"] = np.array([n_elements])  # codespell:ignore
-        par_seq["Tdx"] = np.array([pitch_mm])
-        par_seq["c"] = np.array([speed_of_sound_mm_us])
-
-        hq = par_seq.create_group("HQ")
-        hq["angles"] = np.array(angles_deg)
-
-
 def _create_echoframe_mat_metadata(
     path: Path,
     n_x: int = 4,
@@ -270,13 +212,11 @@ def synthetic_autc_session(tmp_path):
 
     file1 = session_dir / "bf0part000.dat"
     file2 = session_dir / "bf0part001.dat"
-    meta_path = session_dir / "session_fus.mat"
 
     _create_autc_dat_file(file1, n_blocks=2, n_x=4, n_z=6, n_frames=3, start_index=1)
     _create_autc_dat_file(file2, n_blocks=2, n_x=4, n_z=6, n_frames=3, start_index=9)
-    _create_autc_metadata(meta_path, n_x=4, n_z=6)
 
-    return session_dir, meta_path
+    return session_dir
 
 
 @pytest.fixture

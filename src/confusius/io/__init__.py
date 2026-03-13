@@ -3,12 +3,10 @@
 __all__ = [
     "AUTCDAT",
     "AUTCDATsLoader",
-    "AUTCMetadata",
     "check_path",
     "convert_autc_dats_to_zarr",
     "convert_echoframe_dat_to_zarr",
     "EchoFrameMetadata",
-    "load_autc_metadata",
     "load_echoframe_dat",
     "load_echoframe_metadata",
     "load_nifti",
@@ -19,9 +17,7 @@ __all__ = [
 from confusius.io.autc import (
     AUTCDAT,
     AUTCDATsLoader,
-    AUTCMetadata,
     convert_autc_dats_to_zarr,
-    load_autc_metadata,
 )
 from confusius.io.echoframe import (
     EchoFrameMetadata,

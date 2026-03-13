@@ -2,69 +2,10 @@
 
 from pathlib import Path
 
-import h5py
 import numpy as np
 import pytest
 
-from confusius.io.autc import AUTCDAT, AUTCDATsLoader, load_autc_metadata
-
-
-def _create_autc_metadata(
-    path: Path,
-    n_x: int = 4,
-    n_z: int = 6,
-    transmit_frequency_mhz: float = 15.0,
-    speed_of_sound_mm_us: float = 1.54,
-    n_elements: int = 128,
-    pitch_mm: float = 0.3,
-    angles_deg: list | None = None,
-    dt_bf_s: float = 0.002,
-    dt_single_pw_s: float = 0.0002,
-) -> None:
-    """Create a synthetic AUTC MAT metadata file (HDF5 / MAT v7.3).
-
-    Parameters
-    ----------
-    path : Path
-        Path to create the MAT file.
-    n_x : int, default: 4
-        Number of lateral samples.
-    n_z : int, default: 6
-        Number of axial samples.
-    transmit_frequency_mhz : float, default: 15.0
-        Transmit frequency in MHz (as stored in the MAT file).
-    speed_of_sound_mm_us : float, default: 1.54
-        Speed of sound in mm/µs (as stored in the MAT file).
-    n_elements : int, default: 128
-        Number of probe elements.
-    pitch_mm : float, default: 0.3
-        Inter-element pitch in mm.
-    angles_deg : list, optional
-        Plane wave angles in degrees. Defaults to [-10, 0, 10].
-    dt_bf_s : float, default: 0.002
-        Compound frame period in seconds.
-    dt_single_pw_s : float, default: 0.0002
-        Single plane wave period in seconds.
-    """
-    if angles_deg is None:
-        angles_deg = [-10.0, 0.0, 10.0]
-
-    with h5py.File(path, "w") as f:
-        doppler = f.create_group("doppler")
-        doppler["xAxis"] = np.linspace(0, n_x * 0.3, n_x)
-        doppler["zAxis"] = np.linspace(0, n_z * 0.15, n_z)
-        doppler["dtBF"] = np.array([dt_bf_s])
-        doppler["dtSinglePlanewave"] = np.array([dt_single_pw_s])
-
-        params = doppler.create_group("params")
-        par_seq = params.create_group("parSeq")
-        par_seq["TF"] = np.array([transmit_frequency_mhz])
-        par_seq["Tne"] = np.array([n_elements])  # codespell:ignore
-        par_seq["Tdx"] = np.array([pitch_mm])
-        par_seq["c"] = np.array([speed_of_sound_mm_us])
-
-        hq = par_seq.create_group("HQ")
-        hq["angles"] = np.array(angles_deg)
+from confusius.io.autc import AUTCDAT, AUTCDATsLoader
 
 
 def _create_autc_dat_file(
@@ -388,46 +329,3 @@ class TestAUTCDATsLoader:
             loader[[0, 1, 2]]  # type: ignore
 
 
-@pytest.fixture
-def autc_meta_file(tmp_path):
-    """Create a synthetic AUTC MAT metadata file."""
-    meta_path = tmp_path / "session_fus.mat"
-    _create_autc_metadata(meta_path)
-    return meta_path
-
-
-class TestLoadAUTCMetadata:
-    """Tests for `load_autc_metadata` function."""
-
-    def test_unit_conversion_transmit_frequency(self, autc_meta_file):
-        """`load_autc_metadata` converts transmit frequency from MHz to Hz."""
-        meta = load_autc_metadata(autc_meta_file)
-
-        # 15.0 MHz → 15_000_000 Hz.
-        assert meta["transmit_frequency"] == pytest.approx(15.0e6)
-
-    def test_unit_conversion_speed_of_sound(self, autc_meta_file):
-        """`load_autc_metadata` converts speed of sound from mm/µs to m/s."""
-        meta = load_autc_metadata(autc_meta_file)
-
-        # 1.54 mm/µs → 1540 m/s.
-        assert meta["speed_of_sound"] == pytest.approx(1540.0)
-
-    def test_unit_conversion_compound_sampling_frequency(self, autc_meta_file):
-        """`load_autc_metadata` inverts dtBF to get compound sampling frequency."""
-        meta = load_autc_metadata(autc_meta_file)
-
-        # dtBF = 0.002 s → CSF = 500 Hz.
-        assert meta["compound_sampling_frequency"] == pytest.approx(500.0)
-
-    def test_unit_conversion_pulse_repetition_frequency(self, autc_meta_file):
-        """`load_autc_metadata` inverts dtSinglePlanewave to get PRF."""
-        meta = load_autc_metadata(autc_meta_file)
-
-        # dtSinglePlanewave = 0.0002 s → PRF = 5000 Hz.
-        assert meta["pulse_repetition_frequency"] == pytest.approx(5000.0)
-
-    def test_missing_file(self, tmp_path):
-        """`load_autc_metadata` raises `ValueError` for a missing file."""
-        with pytest.raises(ValueError):
-            load_autc_metadata(tmp_path / "nonexistent.mat")

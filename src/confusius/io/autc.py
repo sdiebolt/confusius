@@ -5,7 +5,6 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, TypeAlias, TypedDict
 
-import h5py as h5
 import numpy as np
 import numpy.typing as npt
 import zarr
@@ -481,115 +480,8 @@ class AUTCDATsLoader:
         return list(self.dats.values())[0]._memmap["data"].dtype
 
 
-class AUTCMetadata(TypedDict):
-    """Metadata extracted from an AUTC MAT file.
-
-    Attributes
-    ----------
-    lateral_coords : numpy.ndarray
-        Lateral coordinates in millimeters.
-    axial_coords : numpy.ndarray
-        Axial (depth) coordinates in millimeters.
-    transmit_frequency : float
-        Central frequency of the ultrasound probe in hertz.
-    probe_n_elements : int
-        Number of probe transducer elements.
-    probe_pitch : float
-        Inter-element pitch of the probe in millimeters.
-    speed_of_sound : float
-        Speed of sound in meters per second.
-    plane_wave_angles : numpy.ndarray
-        Angles at which tilted plane waves are emitted in degrees.
-    compound_sampling_frequency : float
-        Sampling frequency of the compounded frames in hertz.
-    pulse_repetition_frequency : float
-        Single plane wave pulse repetition frequency in hertz.
-    """
-
-    lateral_coords: npt.NDArray[np.float64]
-    axial_coords: npt.NDArray[np.float64]
-    transmit_frequency: float
-    probe_n_elements: int
-    probe_pitch: float
-    speed_of_sound: float
-    plane_wave_angles: npt.NDArray[np.float64]
-    compound_sampling_frequency: float
-    pulse_repetition_frequency: float
-
-
-def load_autc_metadata(meta_path: str | Path) -> AUTCMetadata:
-    """Load acquisition metadata from an AUTC MAT file.
-
-    Parameters
-    ----------
-    meta_path : str or pathlib.Path
-        Path to the AUTC sequence parameter file (MAT v7.3 / HDF5 format).
-
-    Returns
-    -------
-    AUTCMATMetadata
-        Dictionary containing the extracted metadata fields.
-
-    Raises
-    ------
-    FileNotFoundError
-        If `meta_path` does not exist or is not a file.
-    """
-    meta_path = check_path(meta_path, label="meta_path", type="file")
-
-    with h5.File(meta_path, "r") as f:
-        doppler = f["doppler"]
-        assert isinstance(doppler, h5.Group)
-        params = doppler["params"]
-        assert isinstance(params, h5.Group)
-        par_seq = params["parSeq"]
-        assert isinstance(par_seq, h5.Group)
-        hq = par_seq["HQ"]
-        assert isinstance(hq, h5.Group)
-
-        # Spatial coordinates, already in millimeters.
-        lateral_coords = np.array(doppler["xAxis"][:]).flatten()
-        axial_coords = np.array(doppler["zAxis"][:]).flatten()
-
-        # Transmit frequency: MAT file stores MHz, convert to Hz.
-        transmit_frequency = float(np.array(par_seq["TF"][:]).item()) * 1e6
-
-        # Number of probe elements and inter-element pitch (mm, no conversion needed).
-        probe_n_elements = int(
-            np.array(par_seq["Tne"][:]).item()  # codespell:ignore
-        )
-        probe_pitch = float(np.array(par_seq["Tdx"][:]).item())
-
-        # Speed of sound: MAT file stores mm/µs, convert to m/s.
-        speed_of_sound = float(np.array(par_seq["c"][:]).item()) * 1e3
-
-        # Plane wave angles in degrees.
-        plane_wave_angles = np.array(hq["angles"][:]).flatten()
-
-        # Compound frame period in seconds, convert to Hz.
-        compound_sampling_frequency = float(1.0 / np.array(doppler["dtBF"][:]).item())
-
-        # Single plane wave period in seconds, convert to Hz.
-        pulse_repetition_frequency = float(
-            1.0 / np.array(doppler["dtSinglePlanewave"][:]).item()
-        )
-
-    return AUTCMetadata(
-        lateral_coords=lateral_coords,
-        axial_coords=axial_coords,
-        transmit_frequency=transmit_frequency,
-        probe_n_elements=probe_n_elements,
-        probe_pitch=probe_pitch,
-        speed_of_sound=speed_of_sound,
-        plane_wave_angles=plane_wave_angles,
-        compound_sampling_frequency=compound_sampling_frequency,
-        pulse_repetition_frequency=pulse_repetition_frequency,
-    )
-
-
 def convert_autc_dats_to_zarr(
     dats_root: str | Path,
-    meta_path: str | Path,
     output_path: str | Path,
     dats_pattern: str = "bf*part*.dat",
     frames_per_chunk: int | None = None,
@@ -597,6 +489,16 @@ def convert_autc_dats_to_zarr(
     batch_size: int = 100,
     overwrite: bool = False,
     zarr_kwargs: dict[str, Any] | None = None,
+    lateral_coords: npt.ArrayLike | None = None,
+    axial_coords: npt.ArrayLike | None = None,
+    transmit_frequency: float | None = None,
+    probe_n_elements: int | None = None,
+    probe_pitch: float | None = None,
+    sound_velocity: float | None = None,
+    plane_wave_angles: npt.ArrayLike | None = None,
+    compound_sampling_frequency: float | None = None,
+    pulse_repetition_frequency: float | None = None,
+    beamforming_method: str | None = None,
     skip_first_blocks: int = 0,
     skip_last_blocks: int = 0,
     block_times: npt.ArrayLike | None = None,
@@ -615,10 +517,6 @@ def convert_autc_dats_to_zarr(
     ----------
     dats_root : str or pathlib.Path
         Path to the directory containing AUTC DAT files.
-    meta_path : str or pathlib.Path
-        Path to the AUTC sequence parameter file (MAT v7.3 / HDF5 format). Spatial
-        coordinates, probe parameters, and acquisition parameters are read from this
-        file.
     output_path : str or pathlib.Path
         Path where the Zarr group will be saved.
     dats_pattern : str, default: "bf*part*.dat"
@@ -637,6 +535,31 @@ def convert_autc_dats_to_zarr(
     zarr_kwargs : dict, optional
         Additional keyword arguments to pass to `zarr.create_array` for the main data
         array.
+    lateral_coords : array_like, optional
+        Lateral coordinates in millimeters in the probe-relative coordinate system, with
+        the origin at the center of the probe face. These define the x-axis positions.
+        If not provided, voxel indices are stored instead and a warning is emitted.
+    axial_coords : array_like, optional
+        Axial (depth) coordinates in millimeters in the probe-relative coordinate
+        system, with the origin at the center of the probe face. These define the y-axis
+        positions. If not provided, voxel indices are stored instead and a warning is
+        emitted.
+    transmit_frequency : float, optional
+        Central frequency of the ultrasound probe in hertz.
+    probe_n_elements : int, optional
+        Number of probe transducers.
+    probe_pitch : float, optional
+        Inter-element pitch of the probe in millimeters.
+    sound_velocity : float, optional
+        Speed of sound in meters per second.
+    plane_wave_angles : array_like, optional
+        Angles at which tilted plane waves are emitted in degrees.
+    compound_sampling_frequency : float, optional
+        Sampling frequency of the compounded frames in hertz.
+    pulse_repetition_frequency : float, optional
+        Pulse repetition frequency in hertz.
+    beamforming_method : str, optional
+        Beamforming method used (e.g. `"DAS"`).
     skip_first_blocks : int, default: 0
         Number of blocks to skip from the beginning of the acquisition. This is useful
         when the first blocks are known to be corrupted or unusable.
@@ -646,8 +569,9 @@ def convert_autc_dats_to_zarr(
     block_times : (n_blocks_after_skip,) array_like, optional
         Start time of each IQ block in seconds, for the retained blocks only. If
         provided, individual volume times will be computed and stored as a time
-        coordinate. If not provided, time coordinate will be computed based on
-        `compound_sampling_frequency` from the metadata file.
+        coordinate. Requires `compound_sampling_frequency` to be provided. If not
+        provided, time coordinate will be computed based on
+        `compound_sampling_frequency` or set to frame indices.
     show_progress : bool, default: True
         Whether to show progress during conversion. If `False`, no progress bars are
         displayed.
@@ -687,12 +611,14 @@ def convert_autc_dats_to_zarr(
     - `y`: Axial (depth) coordinate array in probe-relative mm.
     - `x`: Lateral coordinate array in probe-relative mm.
 
-    Spatial coordinates (`z`, `y`, `x`) and all acquisition parameters follow the
-    ConfUSIus probe-relative coordinate system. All metadata is read from `meta_path`.
+    Spatial coordinates (`z`, `y`, `x`) follow the ConfUSIus probe-relative
+    coordinate system: physical distances in millimeters along each voxel axis, with the
+    origin at the center of the probe face. Unlike EchoFrame data (where coordinates are
+    embedded in the metadata file), AUTC data carries no spatial calibration, so
+    `lateral_coords` and `axial_coords` must be supplied by the caller. Omitting
+    them produces physically meaningless voxel-index coordinates.
     """
     from rich.progress import track
-
-    meta = load_autc_metadata(meta_path)
 
     loader = AUTCDATsLoader(
         root=dats_root,
@@ -756,6 +682,11 @@ def convert_autc_dats_to_zarr(
     zarr_iq = zarr_group.create_array("iq", **create_array_kwargs)
 
     if block_times is not None:
+        if compound_sampling_frequency is None:
+            raise ValueError(
+                "compound_sampling_frequency is required when block_times is provided "
+                "to compute individual volume times."
+            )
         block_times_array = np.asarray(block_times)
         if block_times_array.size != n_blocks_after_skip:
             raise ValueError(
@@ -764,17 +695,18 @@ def convert_autc_dats_to_zarr(
             )
         time_values = np.concatenate(
             [
-                block_start + np.arange(n_frames) / meta["compound_sampling_frequency"]
+                block_start + np.arange(n_frames) / compound_sampling_frequency
                 for block_start in block_times_array
             ]
         )
-    else:
+    elif compound_sampling_frequency is not None:
         skipped_first_frames = skip_first_blocks * n_frames
         time_values = (
-            np.arange(n_total_frames, dtype=np.float64)
-            / meta["compound_sampling_frequency"]
-            + skipped_first_frames / meta["compound_sampling_frequency"]
+            np.arange(n_total_frames, dtype=np.float64) / compound_sampling_frequency
+            + skipped_first_frames / compound_sampling_frequency
         )
+    else:
+        time_values = np.arange(n_total_frames, dtype=np.float64)
 
     zarr_group.create_array("time", data=time_values, dimension_names=["time"])
     zarr_group["time"].attrs["units"] = "s"
@@ -786,18 +718,51 @@ def convert_autc_dats_to_zarr(
     zarr_group["z"].attrs["units"] = "mm"
     zarr_group["z"].attrs["long_name"] = "Elevation"
 
-    y_values = meta["axial_coords"]
+    if axial_coords is None:
+        warnings.warn(
+            "axial_coords not provided: storing voxel indices as y coordinates. "
+            "Provide axial_coords in probe-relative mm for physically meaningful "
+            "coordinates.",
+            UserWarning,
+            stacklevel=find_stack_level(),
+        )
+    if lateral_coords is None:
+        warnings.warn(
+            "lateral_coords not provided: storing voxel indices as x coordinates. "
+            "Provide lateral_coords in probe-relative mm for physically meaningful "
+            "coordinates.",
+            UserWarning,
+            stacklevel=find_stack_level(),
+        )
+
+    y_values = (
+        np.asarray(axial_coords)
+        if axial_coords is not None
+        else np.arange(n_z, dtype=np.float64)
+    )
     zarr_group.create_array("y", data=y_values, dimension_names=["y"])
     zarr_group["y"].attrs["units"] = "mm"
     zarr_group["y"].attrs["long_name"] = "Depth"
 
-    x_values = meta["lateral_coords"]
+    x_values = (
+        np.asarray(lateral_coords)
+        if lateral_coords is not None
+        else np.arange(n_x, dtype=np.float64)
+    )
     zarr_group.create_array("x", data=x_values, dimension_names=["x"])
     zarr_group["x"].attrs["units"] = "mm"
     zarr_group["x"].attrs["long_name"] = "Lateral"
 
-    axial_coords_dim = float(np.diff(y_values).mean())
-    lateral_coords_dim = float(np.diff(x_values).mean())
+    lateral_coords_dim = (
+        float(np.diff(np.asarray(lateral_coords)).mean())
+        if lateral_coords is not None
+        else 0.0
+    )
+    axial_coords_dim = (
+        float(np.diff(np.asarray(axial_coords)).mean())
+        if axial_coords is not None
+        else 0.0
+    )
     # TODO: we should compute the actual z-axis voxdim from the elevation beam width,
     # but we're currently missing some information for that, such as the elevation
     # aperture and elevation focus.
@@ -805,13 +770,29 @@ def convert_autc_dats_to_zarr(
     zarr_group["y"].attrs["voxdim"] = axial_coords_dim
     zarr_group["x"].attrs["voxdim"] = lateral_coords_dim
 
-    zarr_iq.attrs["transmit_frequency"] = meta["transmit_frequency"]
-    zarr_iq.attrs["probe_n_elements"] = meta["probe_n_elements"]
-    zarr_iq.attrs["probe_pitch"] = meta["probe_pitch"]
-    zarr_iq.attrs["sound_velocity"] = meta["speed_of_sound"]
-    zarr_iq.attrs["plane_wave_angles"] = meta["plane_wave_angles"].tolist()
-    zarr_iq.attrs["compound_sampling_frequency"] = meta["compound_sampling_frequency"]
-    zarr_iq.attrs["pulse_repetition_frequency"] = meta["pulse_repetition_frequency"]
+    if transmit_frequency is not None:
+        zarr_iq.attrs["transmit_frequency"] = transmit_frequency
+
+    if probe_n_elements is not None:
+        zarr_iq.attrs["probe_n_elements"] = probe_n_elements
+
+    if probe_pitch is not None:
+        zarr_iq.attrs["probe_pitch"] = probe_pitch
+
+    if sound_velocity is not None:
+        zarr_iq.attrs["sound_velocity"] = sound_velocity
+
+    if plane_wave_angles is not None:
+        zarr_iq.attrs["plane_wave_angles"] = np.asarray(plane_wave_angles).tolist()
+
+    if compound_sampling_frequency is not None:
+        zarr_iq.attrs["compound_sampling_frequency"] = compound_sampling_frequency
+
+    if pulse_repetition_frequency is not None:
+        zarr_iq.attrs["pulse_repetition_frequency"] = pulse_repetition_frequency
+
+    if beamforming_method is not None:
+        zarr_iq.attrs["beamforming_method"] = beamforming_method
 
     first_block = skip_first_blocks
     last_block = n_blocks - skip_last_blocks
