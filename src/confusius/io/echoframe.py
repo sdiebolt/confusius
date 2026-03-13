@@ -3,7 +3,7 @@
 import shutil
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypedDict
 
 import h5py as h5
 import numpy as np
@@ -15,6 +15,136 @@ if TYPE_CHECKING:
 
 from confusius._utils import find_stack_level
 from confusius.io.utils import check_path
+
+
+class EchoFrameMetadata(TypedDict):
+    """Metadata extracted from an EchoFrame MAT file.
+
+    Attributes
+    ----------
+    lateral_coords : numpy.ndarray
+        Lateral coordinates in millimeters, cropped if the sequence uses ROI cropping.
+    axial_coords : numpy.ndarray
+        Axial (depth) coordinates in millimeters, cropped if the sequence uses ROI
+        cropping.
+    transmit_frequency : float
+        Central frequency of the ultrasound probe in hertz.
+    probe_n_elements : int
+        Number of probe transducer elements.
+    probe_pitch : float
+        Inter-element pitch of the probe in millimeters.
+    speed_of_sound : float
+        Speed of sound in meters per second.
+    plane_wave_angles : numpy.ndarray
+        Angles at which tilted plane waves are emitted in degrees.
+    compound_sampling_frequency : float
+        Sampling frequency of the compounded frames in hertz.
+    pulse_repetition_frequency : float
+        Single plane wave pulse repetition frequency in hertz.
+    beamforming_method : str
+        Beamforming method used (e.g. ``"DAS"``).
+    """
+
+    lateral_coords: npt.NDArray[np.float64]
+    axial_coords: npt.NDArray[np.float64]
+    transmit_frequency: float
+    probe_n_elements: int
+    probe_pitch: float
+    speed_of_sound: float
+    plane_wave_angles: npt.NDArray[np.float64]
+    compound_sampling_frequency: float
+    pulse_repetition_frequency: float
+    beamforming_method: str
+
+
+def load_echoframe_metadata(meta_path: str | Path) -> EchoFrameMetadata:
+    """Load acquisition metadata from an EchoFrame MAT file.
+
+    Parameters
+    ----------
+    meta_path : str or pathlib.Path
+        Path to the EchoFrame sequence parameter file (MAT v7.3 / HDF5 format).
+
+    Returns
+    -------
+    EchoFrameMATMetadata
+        Dictionary containing the extracted metadata fields.
+
+    Raises
+    ------
+    FileNotFoundError
+        If `meta_path` does not exist or is not a file.
+    """
+    meta_path = check_path(meta_path, label="meta_path", type="file")
+
+    with h5.File(meta_path, "r") as f:
+        recon_spec = f["ReconSpec"]
+        assert isinstance(recon_spec, h5.Group)
+        receive_spec = f["ReceiveSpec"]
+        assert isinstance(receive_spec, h5.Group)
+        probe_spec = f["ProbeSpec"]
+        assert isinstance(probe_spec, h5.Group)
+        transmit_spec = f["TransmitSpec"]
+        assert isinstance(transmit_spec, h5.Group)
+
+        # Cropping information.
+        crop = (
+            bool(np.array(recon_spec["cropBF"][:])) if "cropBF" in recon_spec else False
+        )
+
+        # Spatial coordinates.
+        # recon_spec["x_axis"] is lateral (x dimension in ConfUSIus).
+        # recon_spec["z_axis"] is depth/axial (y dimension in ConfUSIus).
+        x_axis_full = np.array(recon_spec["x_axis"][:]).flatten()
+        z_axis_full = np.array(recon_spec["z_axis"][:]).flatten()
+
+        if crop:
+            # croppingROI is 1-indexed, convert to 0-indexed.
+            cropping_roi = (
+                np.array(recon_spec["croppingROI"][:]).flatten().astype(int) - 1
+            )
+            z_start, z_end, x_start, x_end = cropping_roi
+            lateral_coords = x_axis_full[x_start : x_end + 1]
+            axial_coords = z_axis_full[z_start : z_end + 1]
+        else:
+            lateral_coords = x_axis_full
+            axial_coords = z_axis_full
+
+        # Probe parameters.
+        transmit_frequency = float(np.array(probe_spec["Fc"][:]).item())
+        probe_n_elements = int(np.array(probe_spec["nElementsX"][:]).item())
+        probe_pitch = float(np.array(probe_spec["pitchX"][:]).item())
+
+        # Sequence parameters.
+        speed_of_sound = float(np.array(recon_spec["c0"][:]).item())
+
+        # Plane wave steering angles.
+        plane_wave_angles = np.array(transmit_spec["steerX"][:]).flatten()
+
+        # Sampling frequencies.
+        pulse_repetition_frequency = float(
+            1 / (receive_spec["transmitReceiveTimeMus"][:].item() * 1e-6)
+        )
+        compound_sampling_frequency = (
+            pulse_repetition_frequency / plane_wave_angles.size
+        )
+
+        # Beamforming method.
+        beamforming_method_bytes = np.array(recon_spec["method"][:]).flatten()
+        beamforming_method = "".join(chr(int(c)) for c in beamforming_method_bytes)
+
+    return EchoFrameMetadata(
+        lateral_coords=lateral_coords,
+        axial_coords=axial_coords,
+        transmit_frequency=transmit_frequency,
+        probe_n_elements=probe_n_elements,
+        probe_pitch=probe_pitch,
+        speed_of_sound=speed_of_sound,
+        plane_wave_angles=plane_wave_angles,
+        compound_sampling_frequency=compound_sampling_frequency,
+        pulse_repetition_frequency=pulse_repetition_frequency,
+        beamforming_method=beamforming_method,
+    )
 
 
 def load_echoframe_dat(
@@ -38,7 +168,7 @@ def load_echoframe_dat(
     dat_path : str or pathlib.Path
         Path to the EchoFrame DAT file containing beamformed IQ data.
     meta_path : str or pathlib.Path
-        Path to the EchoFrame sequence parameter file (MAT format).
+        Path to the EchoFrame sequence parameter file (MAT v7.3 / HDF5 format).
     dat_dtype : dtype_like, default: numpy.complex64
         Data type of the beamformed IQ data in the DAT file.
     header_dtype : dtype_like, default: numpy.uint64
@@ -143,7 +273,7 @@ def convert_echoframe_dat_to_zarr(
     dat_path : str or pathlib.Path
         Path to the EchoFrame DAT file containing beamformed IQ data.
     meta_path : str or pathlib.Path
-        Path to the EchoFrame sequence parameter file (MAT format).
+        Path to the EchoFrame sequence parameter file (MAT v7.3 / HDF5 format).
     output_path : str or pathlib.Path
         Path where the Zarr group will be saved.
     dat_dtype : dtype_like, default: numpy.complex64
@@ -219,6 +349,7 @@ def convert_echoframe_dat_to_zarr(
     """
     from rich.progress import track
 
+    meta = load_echoframe_metadata(meta_path)
     data = load_echoframe_dat(
         dat_path=dat_path,
         meta_path=meta_path,
@@ -226,55 +357,6 @@ def convert_echoframe_dat_to_zarr(
         header_dtype=header_dtype,
         n_header_items=n_header_items,
     )
-
-    with h5.File(meta_path, "r") as f:
-        recon_spec = f["ReconSpec"]
-        receive_spec = f["ReceiveSpec"]
-        probe_spec = f["ProbeSpec"]
-        transmit_spec = f["TransmitSpec"]
-
-        # Cropping information.
-        crop = (
-            bool(np.array(recon_spec["cropBF"][:])) if "cropBF" in recon_spec else False
-        )
-
-        # Spatial coordinates from EchoFrame metadata.
-        # recon_spec["x_axis"] is lateral (x dimension in ConfUSIus).
-        # recon_spec["z_axis"] is depth/axial (y dimension in ConfUSIus).
-        x_axis_full = np.array(recon_spec["x_axis"][:]).flatten()
-        z_axis_full = np.array(recon_spec["z_axis"][:]).flatten()
-
-        if crop:
-            cropping_roi = (
-                np.array(recon_spec["croppingROI"][:]).flatten().astype(int) - 1
-            )
-            z_start, z_end, x_start, x_end = cropping_roi
-            lateral_coords = x_axis_full[x_start : x_end + 1]
-            axial_coords = z_axis_full[z_start : z_end + 1]
-        else:
-            lateral_coords = x_axis_full
-            axial_coords = z_axis_full
-
-        # Probe parameters.
-        transmit_frequency = float(np.array(probe_spec["Fc"][:]).item())
-        probe_n_elements = int(np.array(probe_spec["nElementsX"][:]).item())
-        probe_pitch = float(np.array(probe_spec["pitchX"][:]).item())
-
-        # Sequence parameters.
-        speed_of_sound = float(np.array(recon_spec["c0"][:]).item())
-
-        # Plane wave angles.
-        steer_x = np.array(transmit_spec["steerX"][:]).flatten()
-
-        # Sampling frequencies.
-        pulse_repetition_frequency = float(
-            1 / (receive_spec["transmitReceiveTimeMus"][:].item() * 1e-6)
-        )
-        compound_sampling_frequency = pulse_repetition_frequency / steer_x.size
-
-        # Beamforming method.
-        beamforming_method_bytes = np.array(recon_spec["method"][:]).flatten()
-        beamforming_method = "".join(chr(int(c)) for c in beamforming_method_bytes)
 
     n_blocks, n_volumes, n_x, n_y, n_z = data.shape
 
@@ -334,15 +416,16 @@ def convert_echoframe_dat_to_zarr(
 
         time_values = np.concatenate(
             [
-                block_start + np.arange(n_volumes) / compound_sampling_frequency
+                block_start + np.arange(n_volumes) / meta["compound_sampling_frequency"]
                 for block_start in block_times_array
             ]
         )
     else:
         skipped_volumes = skip_first_blocks * n_volumes
         time_values = (
-            np.arange(n_total_volumes, dtype=np.float64) / compound_sampling_frequency
-            + skipped_volumes / compound_sampling_frequency
+            np.arange(n_total_volumes, dtype=np.float64)
+            / meta["compound_sampling_frequency"]
+            + skipped_volumes / meta["compound_sampling_frequency"]
         )
 
     zarr_group = zarr.open_group(output_path, mode="w" if overwrite else "w-")
@@ -358,11 +441,11 @@ def convert_echoframe_dat_to_zarr(
     zarr_group["z"].attrs["units"] = "mm"
     zarr_group["z"].attrs["long_name"] = "Elevation"
 
-    zarr_group.create_array("y", data=axial_coords, dimension_names=["y"])
+    zarr_group.create_array("y", data=meta["axial_coords"], dimension_names=["y"])
     zarr_group["y"].attrs["units"] = "mm"
     zarr_group["y"].attrs["long_name"] = "Depth"
 
-    zarr_group.create_array("x", data=lateral_coords, dimension_names=["x"])
+    zarr_group.create_array("x", data=meta["lateral_coords"], dimension_names=["x"])
     zarr_group["x"].attrs["units"] = "mm"
     zarr_group["x"].attrs["long_name"] = "Lateral"
 
@@ -370,16 +453,16 @@ def convert_echoframe_dat_to_zarr(
     # but we're currently missing some information for that, such as the elevation
     # aperture and elevation focus.
     zarr_group["z"].attrs["voxdim"] = 0.4
-    zarr_group["y"].attrs["voxdim"] = float(np.diff(axial_coords).mean())
-    zarr_group["x"].attrs["voxdim"] = float(np.diff(lateral_coords).mean())
-    zarr_iq.attrs["transmit_frequency"] = transmit_frequency
-    zarr_iq.attrs["probe_n_elements"] = probe_n_elements
-    zarr_iq.attrs["probe_pitch"] = probe_pitch
-    zarr_iq.attrs["sound_velocity"] = speed_of_sound
-    zarr_iq.attrs["plane_wave_angles"] = steer_x.tolist()
-    zarr_iq.attrs["compound_sampling_frequency"] = compound_sampling_frequency
-    zarr_iq.attrs["pulse_repetition_frequency"] = pulse_repetition_frequency
-    zarr_iq.attrs["beamforming_method"] = beamforming_method
+    zarr_group["y"].attrs["voxdim"] = float(np.diff(meta["axial_coords"]).mean())
+    zarr_group["x"].attrs["voxdim"] = float(np.diff(meta["lateral_coords"]).mean())
+    zarr_iq.attrs["transmit_frequency"] = meta["transmit_frequency"]
+    zarr_iq.attrs["probe_n_elements"] = meta["probe_n_elements"]
+    zarr_iq.attrs["probe_pitch"] = meta["probe_pitch"]
+    zarr_iq.attrs["sound_velocity"] = meta["speed_of_sound"]
+    zarr_iq.attrs["plane_wave_angles"] = meta["plane_wave_angles"].tolist()
+    zarr_iq.attrs["compound_sampling_frequency"] = meta["compound_sampling_frequency"]
+    zarr_iq.attrs["pulse_repetition_frequency"] = meta["pulse_repetition_frequency"]
+    zarr_iq.attrs["beamforming_method"] = meta["beamforming_method"]
 
     first_block = skip_first_blocks
     last_block = n_blocks - skip_last_blocks

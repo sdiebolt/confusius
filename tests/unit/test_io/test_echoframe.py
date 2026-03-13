@@ -6,16 +6,17 @@ import h5py
 import numpy as np
 import pytest
 
-from confusius.io.echoframe import load_echoframe_dat
+from confusius.io.echoframe import load_echoframe_dat, load_echoframe_metadata
 
 
-def _create_echoframe_mat_metadata(
+def _create_echoframe_metadata(
     path: Path,
     n_x: int = 4,
     n_z: int = 6,
     n_volumes: int = 3,
     crop: bool = False,
     cropping_roi: list | None = None,
+    transmit_receive_time_mus: float = 200.0,
 ) -> None:
     """Create a synthetic EchoFrame MAT metadata file.
 
@@ -34,6 +35,8 @@ def _create_echoframe_mat_metadata(
     cropping_roi : list, optional
         Cropping ROI [z_start, z_end, x_start, x_end] (1-indexed).
         Used only if crop=True.
+    transmit_receive_time_mus : float, default: 200.0
+        Transmit-receive period in microseconds.
     """
     with h5py.File(path, "w") as f:
         recon_spec = f.create_group("ReconSpec")
@@ -54,6 +57,7 @@ def _create_echoframe_mat_metadata(
             recon_spec["nx"] = np.array([[x]], dtype=np.int32)
 
         receive_spec["nRepeats"] = np.array([n_volumes], dtype=np.int32)
+        receive_spec["transmitReceiveTimeMus"] = np.array([transmit_receive_time_mus])
 
         recon_spec["x_axis"] = np.linspace(0, x * 0.1, x)
         recon_spec["z_axis"] = np.linspace(0, z * 0.05, z)
@@ -131,7 +135,7 @@ def _create_echoframe_dat_file(
 def echoframe_meta_file(tmp_path):
     """Create a synthetic EchoFrame MAT metadata file."""
     meta_path = tmp_path / "ScanParameters.mat"
-    _create_echoframe_mat_metadata(meta_path, n_x=4, n_z=6, n_volumes=3)
+    _create_echoframe_metadata(meta_path, n_x=4, n_z=6, n_volumes=3)
     return meta_path
 
 
@@ -167,7 +171,7 @@ def echoframe_dat_cropped(tmp_path):
     meta_path = tmp_path / "ScanParameters.mat"
     # Cropping ROI: [z_start=1, z_end=4, x_start=1, x_end=3]
     # This gives z=4, x=3 (smaller than full 6x4).
-    _create_echoframe_mat_metadata(
+    _create_echoframe_metadata(
         meta_path, n_x=6, n_z=6, n_volumes=3, crop=True, cropping_roi=[1, 4, 1, 3]
     )
 
@@ -263,3 +267,69 @@ class TestLoadEchoFrameDat:
         # Known pattern: block 0 → complex(1, 1), block 1 → complex(2, 1).
         assert first_block[0, 0, 0, 0] == complex(1.0, 1.0)
         assert last_block[0, 0, 0, 0] == complex(2.0, 1.0)
+
+
+@pytest.fixture
+def echoframe_meta_file_no_crop(tmp_path):
+    """Create a synthetic EchoFrame metadata file without cropping."""
+    meta_path = tmp_path / "ScanParameters.mat"
+    _create_echoframe_metadata(
+        meta_path,
+        n_x=4,
+        n_z=6,
+        transmit_receive_time_mus=200.0,
+    )
+    return meta_path
+
+
+@pytest.fixture
+def echoframe_meta_file_crop(tmp_path):
+    """Create a synthetic EchoFrame metadata file with cropping enabled."""
+    meta_path = tmp_path / "ScanParameters.mat"
+    # Full grid: 6×6; cropping ROI [z_start=1, z_end=4, x_start=1, x_end=3] (1-indexed)
+    # gives z=4, x=3 after cropping.
+    _create_echoframe_metadata(
+        meta_path,
+        n_x=6,
+        n_z=6,
+        crop=True,
+        cropping_roi=[1, 4, 1, 3],
+    )
+    return meta_path
+
+
+class TestLoadEchoFrameMetadata:
+    """Tests for `load_echoframe_metadata` function."""
+
+    def test_prf_derived_from_transmit_receive_time(self, echoframe_meta_file_no_crop):
+        """`load_echoframe_metadata` converts transmit-receive period to PRF."""
+        meta = load_echoframe_metadata(echoframe_meta_file_no_crop)
+
+        # transmitReceiveTimeMus = 200 µs → PRF = 1 / (200e-6) = 5000 Hz.
+        assert meta["pulse_repetition_frequency"] == pytest.approx(5000.0)
+
+    def test_compound_sampling_frequency(self, echoframe_meta_file_no_crop):
+        """`load_echoframe_metadata` derives CSF as PRF divided by number of angles."""
+        meta = load_echoframe_metadata(echoframe_meta_file_no_crop)
+
+        # 5 angles, PRF = 5000 Hz → CSF = 1000 Hz.
+        assert meta["compound_sampling_frequency"] == pytest.approx(1000.0)
+
+    def test_beamforming_method_decoded(self, echoframe_meta_file_no_crop):
+        """`load_echoframe_metadata` decodes ASCII char codes to a string."""
+        meta = load_echoframe_metadata(echoframe_meta_file_no_crop)
+
+        assert meta["beamforming_method"] == "DAS"
+
+    def test_cropping_applied_to_coords(self, echoframe_meta_file_crop):
+        """`load_echoframe_metadata` applies the cropping ROI to spatial coordinates."""
+        meta = load_echoframe_metadata(echoframe_meta_file_crop)
+
+        # ROI [1, 4, 1, 3] (1-indexed) → z: indices 0–3 (4 points), x: indices 0–2 (3 points).
+        assert meta["axial_coords"].size == 4
+        assert meta["lateral_coords"].size == 3
+
+    def test_missing_file(self, tmp_path):
+        """`load_echoframe_metadata` raises `ValueError` for a missing file."""
+        with pytest.raises(ValueError):
+            load_echoframe_metadata(tmp_path / "nonexistent.mat")

@@ -1,11 +1,10 @@
 """Integration tests for AUTCDAT to Zarr conversion."""
 
-import warnings
-from typing import cast
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+import warnings
 import xarray as xr
 import zarr
 
@@ -16,37 +15,24 @@ class TestAUTCConversion:
     """Integration tests for AUTCDAT conversion to Zarr."""
 
     def test_conversion(self, synthetic_autc_session, tmp_path):
-        """Test all conversion parameters and verification.
+        """Test full round-trip conversion and output verification.
 
         Tests:
         - Conversion of multiple DAT files.
-        - Custom x_axis and z_axis coordinates.
-        - Volume sampling frequency.
+        - Coordinates and metadata read from MAT file.
         - Block times provided by user.
-        - Probe metadata parameters.
         - Output verification using Xarray.
         """
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
-        custom_lateral_coords = np.linspace(-10, 10, 4)
-        custom_axial_coords = np.linspace(0, 20, 6)
-
-        # Block times that would be extracted by rig-specific utilities.
+        # Block times for the 4 acquired blocks.
         block_times = np.array([1.0, 3.0, 5.0, 7.0])
 
         convert_autc_dats_to_zarr(
-            synthetic_autc_session,
+            session_dir,
+            meta_path,
             output_path,
-            lateral_coords=custom_lateral_coords,
-            axial_coords=custom_axial_coords,
-            transmit_frequency=3000000.0,
-            probe_n_elements=64,
-            probe_pitch=0.00025,
-            speed_of_sound=1480.0,
-            plane_wave_angles=np.array([-15.0, 0.0, 15.0]),
-            n_transmissions=3,
-            compound_sampling_frequency=500.0,
-            beamforming_method="MV",
             block_times=block_times,
             show_progress=False,
         )
@@ -60,16 +46,15 @@ class TestAUTCConversion:
             assert np.all(np.isfinite(ds["iq"].values))
 
             iq = ds["iq"].values
-            block1_frame1_value = 1 + 1j
-            block2_frame1_value = 101 + 101j
+            np.testing.assert_allclose(iq[0, 0, 0, 0], 1 + 1j)
+            np.testing.assert_allclose(iq[3, 0, 0, 0], 101 + 101j)
 
-            np.testing.assert_allclose(iq[0, 0, 0, 0], block1_frame1_value)
-            np.testing.assert_allclose(iq[3, 0, 0, 0], block2_frame1_value)
-
-            np.testing.assert_allclose(ds["x"].values, custom_lateral_coords)
+            # Coordinates come from the MAT file (linspace(-10, 10, 4) / linspace(0, 20, 6)).
+            np.testing.assert_allclose(ds["x"].values, np.linspace(-10, 10, 4))
+            np.testing.assert_allclose(ds["y"].values, np.linspace(0, 20, 6))
             np.testing.assert_allclose(ds["z"].values, np.array([0.0]))
-            np.testing.assert_allclose(ds["y"].values, custom_axial_coords)
 
+            # Time computed from block_times + intra-block offset at CSF = 500 Hz.
             expected_times = np.array(
                 [
                     1.0,
@@ -89,58 +74,37 @@ class TestAUTCConversion:
             np.testing.assert_allclose(ds["time"].values, expected_times, rtol=1e-5)
 
             assert ds["time"].attrs["units"] == "s"
-            assert ds["time"].attrs["long_name"] == "Time"
-
             assert ds["z"].attrs["units"] == "mm"
-            assert ds["z"].attrs["long_name"] == "Elevation"
-
             assert ds["y"].attrs["units"] == "mm"
-            assert ds["y"].attrs["long_name"] == "Depth"
-
             assert ds["x"].attrs["units"] == "mm"
-            assert ds["x"].attrs["long_name"] == "Lateral"
 
-            # Verify voxdim is stored as per-coordinate attribute.
-            assert ds["z"].attrs["voxdim"] == pytest.approx(0.4)
-            assert ds["y"].attrs["voxdim"] == pytest.approx(4.0)
-            assert ds["x"].attrs["voxdim"] == pytest.approx(20.0 / 3.0)
-            assert ds["iq"].attrs["transmit_frequency"] == 3000000.0
+            # Metadata attributes from MAT file.
+            assert ds["iq"].attrs["transmit_frequency"] == pytest.approx(3.0e6)
             assert ds["iq"].attrs["probe_n_elements"] == 64
-            assert ds["iq"].attrs["probe_pitch"] == 0.00025
-            assert ds["iq"].attrs["sound_velocity"] == 1480.0
+            assert ds["iq"].attrs["probe_pitch"] == pytest.approx(0.25)
+            assert ds["iq"].attrs["sound_velocity"] == pytest.approx(1480.0)
             assert ds["iq"].attrs["plane_wave_angles"] == [-15.0, 0.0, 15.0]
-            assert ds["iq"].attrs["beamforming_method"] == "MV"
 
     def test_overwrite_existing(self, synthetic_autc_session, tmp_path):
         """Test overwriting existing Zarr output."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
-        with pytest.warns(UserWarning, match="coords not provided"):
-            convert_autc_dats_to_zarr(
-                synthetic_autc_session,
-                output_path,
-                show_progress=False,
-            )
+        convert_autc_dats_to_zarr(
+            session_dir, meta_path, output_path, show_progress=False
+        )
+        first_shape = zarr.open_group(output_path, mode="r")["iq"].shape
 
-        first_shape = cast(
-            zarr.Array, zarr.open_group(output_path, mode="r")["iq"]
-        ).shape
+        convert_autc_dats_to_zarr(
+            session_dir, meta_path, output_path, overwrite=True, show_progress=False
+        )
+        second_shape = zarr.open_group(output_path, mode="r")["iq"].shape
 
-        with pytest.warns(UserWarning, match="coords not provided"):
-            convert_autc_dats_to_zarr(
-                synthetic_autc_session,
-                output_path,
-                overwrite=True,
-                show_progress=False,
-            )
-
-        second_shape = cast(
-            zarr.Array, zarr.open_group(output_path, mode="r")["iq"]
-        ).shape
         assert first_shape == second_shape
 
     def test_frames_per_shard_not_multiple(self, synthetic_autc_session, tmp_path):
         """Raise `ValueError` when `frames_per_shard` is not a multiple of `frames_per_chunk`."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         with pytest.raises(
@@ -148,7 +112,8 @@ class TestAUTCConversion:
             match="frames_per_shard.*must be a multiple of.*frames_per_chunk",
         ):
             convert_autc_dats_to_zarr(
-                synthetic_autc_session,
+                session_dir,
+                meta_path,
                 output_path,
                 frames_per_chunk=3,
                 frames_per_shard=5,
@@ -158,53 +123,51 @@ class TestAUTCConversion:
     def test_block_times_without_frequency_error(
         self, synthetic_autc_session, tmp_path
     ):
-        """Raise `ValueError` when `block_times` provided without `compound_sampling_frequency`."""
+        """Raise `ValueError` when `block_times` length mismatches block count."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         with pytest.raises(
             ValueError,
-            match="compound_sampling_frequency is required when block_times is provided",
+            match="block_times length.*does not match",
         ):
             convert_autc_dats_to_zarr(
-                synthetic_autc_session,
+                session_dir,
+                meta_path,
                 output_path,
-                block_times=[0.0, 1.0, 2.0],
+                block_times=[0.0, 1.0, 2.0],  # 3 times for 4 blocks → mismatch.
                 show_progress=False,
             )
 
-    def test_zarr_kwargs_override_warning(
-        self, synthetic_autc_session, tmp_path, caplog
-    ):
+    def test_zarr_kwargs_override_warning(self, synthetic_autc_session, tmp_path):
         """Warn when `zarr_kwargs` contains keys that are handled by function parameters."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
             convert_autc_dats_to_zarr(
-                synthetic_autc_session,
+                session_dir,
+                meta_path,
                 output_path,
                 zarr_kwargs={"shape": (10, 6, 1, 4)},
                 show_progress=False,
             )
 
-            assert any(
-                "zarr_kwargs contains keys that are handled" in str(warning)
-                for warning in w
-            )
+        assert any(
+            "zarr_kwargs contains keys that are handled" in str(warning.message)
+            for warning in w
+        )
 
     def test_with_sharding(self, synthetic_autc_session, tmp_path):
-        """Test conversion with Zarr sharding enabled.
-
-        Verifies that sharding configuration produces valid output and that
-        shard files are created on disk.
-        """
+        """Test conversion with Zarr sharding enabled."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         convert_autc_dats_to_zarr(
-            synthetic_autc_session,
+            session_dir,
+            meta_path,
             output_path,
-            lateral_coords=np.linspace(-10, 10, 4),
-            axial_coords=np.linspace(0, 20, 6),
             frames_per_chunk=3,
             frames_per_shard=6,
             show_progress=False,
@@ -218,17 +181,13 @@ class TestAUTCConversion:
             assert ds["iq"].dtype == np.complex64
             assert np.all(np.isfinite(ds["iq"].values))
 
-        zarr_group = zarr.open_group(output_path, mode="r")
-        iq_array = zarr_group["iq"]
+        iq_array = zarr.open_group(output_path, mode="r")["iq"]
         iq_metadata = iq_array.metadata
         assert hasattr(iq_metadata, "shards") or "shards" in dir(iq_metadata)
 
     def test_cleanup_on_error(self, synthetic_autc_session, tmp_path):
-        """Test that incomplete zarr store is cleaned up on error.
-
-        Verifies that if an exception occurs during conversion, the incomplete
-        zarr store is removed to avoid leaving corrupted data on disk.
-        """
+        """Test that incomplete zarr store is cleaned up on error."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         mock_array = MagicMock()
@@ -260,10 +219,9 @@ class TestAUTCConversion:
         with patch("confusius.io.autc.zarr.open_group", side_effect=mock_open_group):
             with pytest.raises(Exception, match="Simulated error during conversion"):
                 convert_autc_dats_to_zarr(
-                    synthetic_autc_session,
+                    session_dir,
+                    meta_path,
                     output_path,
-                    lateral_coords=np.linspace(-10, 10, 4),
-                    axial_coords=np.linspace(0, 20, 6),
                     show_progress=False,
                 )
 
@@ -272,131 +230,97 @@ class TestAUTCConversion:
     def test_time_from_sampling_frequency(self, synthetic_autc_session, tmp_path):
         """Test time coordinate computed from compound_sampling_frequency (no block_times).
 
-        When block_times is not provided, time should be computed as:
-        time[i] = i / compound_sampling_frequency
+        When block_times is not provided, time is computed as:
+        time[i] = i / compound_sampling_frequency (from MAT file, 500 Hz).
         """
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         convert_autc_dats_to_zarr(
-            synthetic_autc_session,
-            output_path,
-            lateral_coords=np.linspace(-10, 10, 4),
-            axial_coords=np.linspace(0, 20, 6),
-            compound_sampling_frequency=1000.0,
-            show_progress=False,
+            session_dir, meta_path, output_path, show_progress=False
         )
-
-        assert output_path.exists()
 
         with xr.open_zarr(output_path) as ds:
             assert "time" in ds.coords
-
-            expected_times = np.arange(12) / 1000.0
+            # CSF = 500 Hz from the synthetic MAT file.
+            expected_times = np.arange(12) / 500.0
             np.testing.assert_allclose(ds["time"].values, expected_times)
 
     def test_skip_first_blocks(self, synthetic_autc_session, tmp_path):
-        """Test skipping the first blocks during conversion.
-
-        Verifies that skip_first_blocks correctly removes blocks from the beginning
-        and that time coordinates are properly adjusted.
-        """
+        """Test skipping the first blocks during conversion."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         convert_autc_dats_to_zarr(
-            synthetic_autc_session,
+            session_dir,
+            meta_path,
             output_path,
-            lateral_coords=np.linspace(-10, 10, 4),
-            axial_coords=np.linspace(0, 20, 6),
-            compound_sampling_frequency=500.0,
             skip_first_blocks=1,
             show_progress=False,
         )
 
-        assert output_path.exists()
-
         with xr.open_zarr(output_path) as ds:
-            assert "iq" in ds
-            # Original: 4 blocks * 3 frames = 12, after skipping 1 block = 9 frames.
+            # 4 blocks * 3 frames = 12, after skipping 1 block = 9 frames.
             assert ds["iq"].shape[0] == 9
-
-            # Data should start from block 2 (values 101+101j).
-            iq = ds["iq"].values
-            np.testing.assert_allclose(iq[0, 0, 0, 0], 101 + 101j)
-
-            # Time should still be continuous (frames 3-11).
+            # Data starts from block 2 (values 101+101j).
+            np.testing.assert_allclose(ds["iq"].values[0, 0, 0, 0], 101 + 101j)
+            # Time is continuous starting from frame 3 (CSF = 500 Hz).
             expected_times = np.arange(3, 12) / 500.0
             np.testing.assert_allclose(ds["time"].values, expected_times)
 
     def test_skip_last_blocks(self, synthetic_autc_session, tmp_path):
-        """Test skipping the last blocks during conversion.
-
-        Verifies that skip_last_blocks correctly removes blocks from the end
-        and that time coordinates are properly adjusted.
-        """
+        """Test skipping the last blocks during conversion."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         convert_autc_dats_to_zarr(
-            synthetic_autc_session,
+            session_dir,
+            meta_path,
             output_path,
-            lateral_coords=np.linspace(-10, 10, 4),
-            axial_coords=np.linspace(0, 20, 6),
-            compound_sampling_frequency=500.0,
             skip_last_blocks=1,
             show_progress=False,
         )
 
-        assert output_path.exists()
-
         with xr.open_zarr(output_path) as ds:
-            assert "iq" in ds
-            # Original: 4 blocks * 3 frames = 12, after skipping 1 block = 9 frames.
+            # 4 blocks * 3 frames = 12, after skipping 1 block = 9 frames.
             assert ds["iq"].shape[0] == 9
-
-            # Data should be from first 3 blocks (values 1+1j).
-            iq = ds["iq"].values
-            np.testing.assert_allclose(iq[0, 0, 0, 0], 1 + 1j)
-
-            # Time should be normal starting from 0.
+            np.testing.assert_allclose(ds["iq"].values[0, 0, 0, 0], 1 + 1j)
             expected_times = np.arange(9) / 500.0
             np.testing.assert_allclose(ds["time"].values, expected_times)
 
     def test_skip_both_first_and_last(self, synthetic_autc_session, tmp_path):
         """Test skipping both first and last blocks with block_times."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
-        # block_times for retained blocks only (2 middle blocks).
+        # block_times for the 2 retained middle blocks.
         block_times = np.array([1.0, 2.0])
 
         convert_autc_dats_to_zarr(
-            synthetic_autc_session,
+            session_dir,
+            meta_path,
             output_path,
-            lateral_coords=np.linspace(-10, 10, 4),
-            axial_coords=np.linspace(0, 20, 6),
-            compound_sampling_frequency=500.0,
             block_times=block_times,
             skip_first_blocks=1,
             skip_last_blocks=1,
             show_progress=False,
         )
 
-        assert output_path.exists()
-
         with xr.open_zarr(output_path) as ds:
-            assert "iq" in ds
-            # Original: 4 blocks * 3 frames = 12, after skipping 2 blocks = 6 frames.
+            # 4 blocks * 3 frames = 12, after skipping 2 blocks = 6 frames.
             assert ds["iq"].shape[0] == 6
-
-            # Time should use the provided block_times directly.
             expected_times = np.array([1.0, 1.002, 1.004, 2.0, 2.002, 2.004])
             np.testing.assert_allclose(ds["time"].values, expected_times, rtol=1e-5)
 
     def test_skip_blocks_error(self, synthetic_autc_session, tmp_path):
         """Test error when trying to skip too many blocks."""
+        session_dir, meta_path = synthetic_autc_session
         output_path = tmp_path / "output.zarr"
 
         with pytest.raises(ValueError, match="Cannot skip"):
             convert_autc_dats_to_zarr(
-                synthetic_autc_session,
+                session_dir,
+                meta_path,
                 output_path,
                 skip_first_blocks=2,
                 skip_last_blocks=2,  # Would skip all 4 blocks.

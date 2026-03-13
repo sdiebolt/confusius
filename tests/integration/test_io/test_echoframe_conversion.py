@@ -426,3 +426,19 @@ class TestEchoFrameConversion:
                 skip_last_blocks=1,  # Would skip all 2 blocks.
                 show_progress=False,
             )
+
+    def test_block_times_length_mismatch(self, synthetic_echoframe_session, tmp_path):
+        """Raise ValueError when block_times length does not match number of blocks."""
+        dat_path = synthetic_echoframe_session / "fUSi_BF.dat"
+        meta_path = synthetic_echoframe_session / "ScanParameters.mat"
+        output_path = tmp_path / "output.zarr"
+
+        # Session has 2 blocks; providing 3 block times should raise.
+        with pytest.raises(ValueError, match="block_times length"):
+            convert_echoframe_dat_to_zarr(
+                dat_path,
+                meta_path,
+                output_path,
+                block_times=np.array([1.0, 2.0, 3.0]),
+                show_progress=False,
+            )
