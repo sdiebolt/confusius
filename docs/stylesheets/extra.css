@@ -1,11 +1,23 @@
-:root > * {
-  --md-primary-fg-color: #e53935;
-  --md-primary-fg-color--light: #ffcdd2;
-  --md-primary-fg-color--dark: #b71c1c;
-  --md-accent-fg-color: #e53935;
-  --md-accent-fg-color--transparent: #e539351a;
-  --md-accent-bg-color: #e53935;
-  --md-accent-bg-color--light: #ffcdd2;
+/* Light mode: medium gold — brighter than dark gold, still readable on white. */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #c49a0a;
+  --md-primary-fg-color--light: #ffd33d;
+  --md-primary-fg-color--dark: #a57e08;
+  --md-accent-fg-color: #c49a0a;
+  --md-accent-fg-color--transparent: #c49a0a1a;
+  --md-accent-bg-color: #c49a0a;
+  --md-accent-bg-color--light: #ffd33d;
+}
+
+/* Dark mode: bright yellow pops on the dark slate background. */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #ffd33d;
+  --md-primary-fg-color--light: #fff3b0;
+  --md-primary-fg-color--dark: #a57e08;
+  --md-accent-fg-color: #ffd33d;
+  --md-accent-fg-color--transparent: #ffd33d1a;
+  --md-accent-bg-color: #ffd33d;
+  --md-accent-bg-color--light: #fff3b0;
 }
 
 .md-typeset a {
