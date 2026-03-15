@@ -1498,7 +1498,7 @@ def plot_napari(
         layer = cast("Image", layer)
 
         if show_colorbar:
-            viewer.layers[0].colorbar.visible = True  # type: ignore[attr-defined]
+            layer.colorbar.visible = True
 
     elif layer_type == "labels":
         layer_kwargs.setdefault("translate", coord_translates)
