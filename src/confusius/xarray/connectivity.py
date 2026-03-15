@@ -4,8 +4,6 @@ from typing import Literal
 
 import xarray as xr
 
-__all__ = ["FUSIConnectivityAccessor"]
-
 
 class FUSIConnectivityAccessor:
     """Xarray accessor for seed-based functional connectivity analysis.

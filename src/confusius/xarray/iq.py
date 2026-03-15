@@ -1,6 +1,6 @@
 """Xarray accessor for IQ processing."""
 
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import xarray as xr
 
@@ -8,11 +8,6 @@ from confusius.iq.process import (
     process_iq_to_axial_velocity,
     process_iq_to_power_doppler,
 )
-
-if TYPE_CHECKING:
-    pass
-
-__all__ = ["FUSIIQAccessor"]
 
 
 class FUSIIQAccessor:

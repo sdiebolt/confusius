@@ -249,7 +249,7 @@ anat = cf.io.load_scan("sub-01_acq-anat_pwd.scan")
 volume = cf.multipose.consolidate_poses(anat)
 
 # Save to NIfTI (creates .nii.gz and a JSON sidecar).
-volume.fusi.io.to_nifti("sub-01_acq-anat_pwd.nii.gz")
+volume.fusi.save("sub-01_acq-anat_pwd.nii.gz")
 
 # Or to Zarr.
 volume.to_zarr("sub-01_acq-anat_pwd.zarr")
@@ -261,7 +261,7 @@ Non-consolidated data can be saved to **Zarr** directly, preserving the `pose` d
 and all per-pose affines:
 
 ```python
-fus.to_zarr("sub-01_task-awake_pwd_multipose.zarr")
+data.to_zarr("sub-01_acq-anat_pwd_multipose.zarr")
 ```
 
 Saving non-consolidated data to **NIfTI** is not straightforward because NIfTI stores a
@@ -271,5 +271,5 @@ slice timing correction), save each pose as a separate file:
 ```python
 for i, pose in enumerate(anat.pose.values):
     # The pose entity is defined in the fUSI-BIDS specification.
-    anat.sel(pose=pose).fusi.io.to_nifti(f"sub-01_acq-anat_pose-{i:02d}_pwd.nii.gz")
+    anat.sel(pose=pose).fusi.save(f"sub-01_acq-anat_pose-{i:02d}_pwd.nii.gz")
 ```

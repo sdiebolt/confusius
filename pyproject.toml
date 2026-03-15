@@ -95,6 +95,7 @@ addopts = [
 # These are triggered by pytest plugins during test execution.
 # Ignore SWIG-generated type warnings from SimpleITK.
 filterwarnings = [
+    "error",
     "ignore::DeprecationWarning:copy",
     "ignore:builtin type.*[Ss]wig.*:DeprecationWarning",
     # Under the Agg backend used in tests, RegistrationProgressPlotter correctly

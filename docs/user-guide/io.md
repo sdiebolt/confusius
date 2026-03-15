@@ -94,7 +94,7 @@ fUSI workflows involve two main categories of data:
     (often 10-100x smaller) and are frequently stored in standardized formats like NIfTI for 
     interoperability and BIDS compliance. 
 
-    !!! tip 
+    !!! tip "Zarr for large derived datasets"
         Large-scale derived acquisitions (e.g., long power Doppler recordings) can also
         benefit from storage in Zarr for efficient processing.
 
@@ -103,12 +103,6 @@ fUSI workflows involve two main categories of data:
 Most fUSI acquisition systems output beamformed IQ data in proprietary binary formats.
 ConfUSIus currently provides built-in conversion utilities for **AUTC** and
 **EchoFrame** systems to transform their data into Zarr for efficient processing.
-
-!!! question "Using beamformed IQ data from other sources?"
-    You may convert beamformed IQ data to any Xarray-compatible format (e.g., netCDF,
-    HDF5, or any Dask-compatible array) and use them with ConfUSIus. However, AUTC and
-    EchoFrame formats are currently the only ones with built-in conversion utilities.
-    Other formats may be supported in the future, and contributions are welcome.
 
 === "AUTC DATs"
 
@@ -171,73 +165,11 @@ ConfUSIus currently provides built-in conversion utilities for **AUTC** and
     - Metadata attributes (e.g., `transmit_frequency`, `plane_wave_angles`) as
       extracted from the metadata file.
 
-## Converting Derived Acquisitions
+### Other Systems
 
-Derived acquisitions (power Doppler, velocity, etc.) are often stored in NIfTI format
-for compatibility with neuroimaging standards like BIDS. ConfUSIus provides utilities to
-load NIfTI files into Xarray (see [Loading NIfTI Files](#loading-nifti-files)).
-
-For large derived acquisitions or workflows requiring repeated access to subsets of
-data, converting NIfTI to Zarr provides better performance:
-
-```python
-import confusius as cf
-
-# Convert NIfTI to Zarr for efficient chunked access.
-cf.io.load_nifti("sub-01_task-awake_pwd.nii.gz").to_zarr("sub-01_task-awake_pwd.zarr")
-```
-
-BIDS sidecar metadata will be retained during conversion, ensuring acquisition
-parameters remain accessible.
-
-## Loading Data
-
-### Loading Zarr Files
-
-Once your data is in Zarr format, load it using Xarray's standard interface:
-
-```python
-import xarray as xr
-
-# Load beamformed IQ data.
-ds = xr.open_zarr("sub-01_task-awake_iq.zarr")
-iq_data = ds["iq"]
-
-print(iq_data)
-```
-
-This returns an `xarray.DataArray` lazily loaded from the Zarr store, ready for
-processing:
-
-```text
-<xarray.DataArray 'iq' (time: 1168500, z: 1, y: 118, x: 52)> Size: 57GB
-dask.array<open_dataset-iq, shape=(1168500, 1, 118, 52), dtype=complex64, chunksize=(300, 1, 118, 52), chunktype=numpy.ndarray>
-Coordinates:
-  * time     (time) float64 9MB 5.551 5.553 5.555 ... 2.355e+03 2.355e+03
-  * z        (z) float64 8B 0.0
-  * y        (y) float64 944B 4.656 4.705 4.753 4.802 ... 10.23 10.28 10.33
-  * x        (x) float64 416B -2.671 -2.57 -2.469 -2.369 ... 2.268 2.369 2.469
-Attributes:
-    transmit_frequency:           15625000.0
-    probe_n_elements:             128
-    probe_pitch:                  0.0001
-    sound_velocity:               1510.0
-    plane_wave_angles:            [-10.0, -9.310344696044922, -8.620689392089...
-    compound_sampling_frequency:  500.0
-    pulse_repetition_frequency:   15000.0
-    beamforming_method:           Fourier
-```
-
-Notice that the data remains on disk (shown by `dask.array<...>`) until you explicitly
-compute operations on it.
-
-### Loading IQ Data from Unsupported Formats
-
-If you're working with IQ data from ultrasound manufacturers other than AUTC or
-EchoFrame, you'll need to load the data from their proprietary formats yourself. After
-loading your data as an Xarray DataArray, use
-[`validate_iq`][confusius.validation.validate_iq] to ensure it meets ConfUSIus
-requirements:
+If you're working with IQ data from a system other than AUTC or EchoFrame, load it
+using your own loader and use [`validate_iq`][confusius.validation.validate_iq] to
+ensure it meets ConfUSIus requirements before processing:
 
 ```python
 import xarray as xr
@@ -276,6 +208,72 @@ The [`validate_iq`][confusius.validation.validate_iq] function checks that your 
     - `sound_velocity`: Typically 1540 m/s for brain tissues, but may vary with
       temperature and tissue type.
 
+## Loading Data
+
+All ConfUSIus loaders return **lazy** DataArrays backed by Dask—data stays on disk until
+an operation requires it.
+
+!!! tip "Load into memory when it fits"
+    Lazy loading is essential for datasets larger than available RAM, but it introduces
+    Dask scheduling overhead on every operation. If your data fits comfortably in memory
+    (leaving enough headroom for intermediate results), load it eagerly with
+    [`.compute()`][xarray.DataArray.compute] for better performance:
+
+    ```python
+    da = cf.load("sub-01_task-awake_pwd.nii.gz").compute()
+    ```
+
+### Loading Zarr Files
+
+Once your data is in Zarr format, load it with [`confusius.load`][confusius.load]:
+
+```python
+import confusius as cf
+
+# Load beamformed IQ data (returns the first variable as a DataArray by default).
+iq_data = cf.load("sub-01_task-awake_iq.zarr")
+
+# Or specify the variable name if there are multiple variables in the Zarr store.
+iq_data = cf.load("sub-01_task-awake_iq.zarr", variable="iq")
+
+print(iq_data)
+```
+
+!!! question "Loading a full Dataset"
+    [`confusius.load`][confusius.load] always returns a single DataArray. To load all
+    variables in a Zarr store as a Dataset, use [`xarray.open_zarr`][xarray.open_zarr]
+    directly:
+
+    ```python
+    import xarray as xr
+
+    ds = xr.open_zarr("sub-01_task-awake_iq.zarr")
+    ```
+
+This returns an DataArray lazily loaded from the Zarr store, ready for processing:
+
+```text
+<xarray.DataArray 'iq' (time: 1168500, z: 1, y: 118, x: 52)> Size: 57GB
+dask.array<open_dataset-iq, shape=(1168500, 1, 118, 52), dtype=complex64, chunksize=(300, 1, 118, 52), chunktype=numpy.ndarray>
+Coordinates:
+  * time     (time) float64 9MB 5.551 5.553 5.555 ... 2.355e+03 2.355e+03
+  * z        (z) float64 8B 0.0
+  * y        (y) float64 944B 4.656 4.705 4.753 4.802 ... 10.23 10.28 10.33
+  * x        (x) float64 416B -2.671 -2.57 -2.469 -2.369 ... 2.268 2.369 2.469
+Attributes:
+    transmit_frequency:           15625000.0
+    probe_n_elements:             128
+    probe_pitch:                  0.0001
+    sound_velocity:               1510.0
+    plane_wave_angles:            [-10.0, -9.310344696044922, -8.620689392089...
+    compound_sampling_frequency:  500.0
+    pulse_repetition_frequency:   15000.0
+    beamforming_method:           Fourier
+```
+
+Notice that the data remains on disk (shown by `dask.array<...>`) until you explicitly
+compute operations on it.
+
 ### Loading Iconeus SCAN Files
 
 Use [`load_scan`][confusius.io.load_scan] to load Iconeus `.scan` files (HDF5 files
@@ -293,9 +291,9 @@ All spatial coordinates are in millimeters; the `time` coordinate is in seconds.
 === "2Dscan"
 
     ```python
-    from confusius.io import load_scan
+    import confusius as cf
 
-    da = load_scan("sub-01_task-awake_pwd.source.scan")
+    da = cf.load("sub-01_task-awake_pwd.source.scan")
 
     print(da.dims)
     # Output: ('time', 'z', 'y', 'x')
@@ -304,9 +302,9 @@ All spatial coordinates are in millimeters; the `time` coordinate is in seconds.
 === "3Dscan"
 
     ```python
-    from confusius.io import load_scan
+    import confusius as cf
 
-    da = load_scan("sub-01_acq-anat_pwd.source.scan")
+    da = cf.load("sub-01_acq-anat_pwd.source.scan")
 
     print(da.dims)
     # Output: ('pose', 'z', 'y', 'x')
@@ -319,9 +317,9 @@ All spatial coordinates are in millimeters; the `time` coordinate is in seconds.
 === "4Dscan"
 
     ```python
-    from confusius.io import load_scan
+    import confusius as cf
 
-    da = load_scan("sub-01_task-awake_pwd.source.scan")
+    da = cf.load("sub-01_task-awake_pwd.source.scan")
 
     print(da.dims)
     # Output: ('time', 'pose', 'z', 'y', 'x')
@@ -347,12 +345,12 @@ ConfUSIus-compatible dimensions and coordinates, you can save it directly to NIf
 For **2Dscan** data, save it directly:
 
 ```python
-from confusius.io import load_scan, save_nifti
+import confusius as cf
 
-da = load_scan("sub-01_task-awake_pwd.scan")
-save_nifti(da, "sub-01_task-awake_pwd.nii.gz")
+da = cf.load("sub-01_task-awake_pwd.scan")
+cf.save(da, "sub-01_task-awake_pwd.nii.gz")
 # Or equivalently:
-da.fusi.io.to_nifti("sub-01_task-awake_pwd.nii.gz")
+da.fusi.save("sub-01_task-awake_pwd.nii.gz")
 ```
 
 For **3Dscan** and **4Dscan** data, consolidate the poses into a single volume before
@@ -363,9 +361,9 @@ saving, or save each pose separately if you want to retain the multi-pose struct
     ```python
     import confusius as cf
 
-    anat = cf.io.load_scan("sub-01_acq-anat_pwd.scan")
+    anat = cf.load("sub-01_acq-anat_pwd.scan")
     volume = cf.multipose.consolidate_poses(anat)
-    volume.fusi.io.to_nifti("sub-01_acq-anat_pwd.nii.gz")
+    cf.save(volume, "sub-01_acq-anat_pwd.nii.gz")
     ```
 
 === "Separate pose files"
@@ -373,22 +371,21 @@ saving, or save each pose separately if you want to retain the multi-pose struct
     ```python
     import confusius as cf
 
-    anat = cf.io.load_scan("sub-01_acq-anat_pwd.scan")
+    anat = cf.load("sub-01_acq-anat_pwd.scan")
     for pose in anat.pose:
         pose_da = anat.sel(pose=pose)
-        pose_da.fusi.io.to_nifti(f"sub-01_acq-anat_pose-{pose.values}.nii.gz")
+        cf.save(pose_da, f"sub-01_acq-anat_pose-{pose.values}.nii.gz")
     ```
 
 ### Loading NIfTI Files
 
-Use [`load_nifti`][confusius.io.load_nifti] to load NIfTI files as lazy Xarray
-DataArrays:
+Use [`confusius.load`][confusius.load] to load NIfTI files as lazy Xarray DataArrays:
 
 ```python
-from confusius.io import load_nifti
+import confusius as cf
 
 # Load with automatic BIDS sidecar metadata.
-da = load_nifti("sub-01_task-awake_pwd.nii.gz")
+da = cf.load("sub-01_task-awake_pwd.nii.gz")
 print(da.dims)
 # Output: ('time', 'z', 'y', 'x')
 ```
@@ -399,17 +396,19 @@ metadata.
 
 ## Saving Data
 
-### Saving to NIfTI
+You can save DataArrays to NIfTI and Zarr using [`confusius.save`][confusius.save] or
+the Xarray accessor:
 
-You can save DataArrays to NIfTI using either the module function
-[`save_nifti`][confusius.io.save_nifti] or the Xarray accessor:
-
-=== "Module function"
+=== "`confusius.save`"
 
     ```python
-    from confusius.io import save_nifti
+    import confusius as cf
 
-    save_nifti(data_array, "output.nii.gz")
+    # Save to NIfTI with automatic JSON sidecar creation.
+    cf.save(data_array, "output.nii.gz")
+
+    # Save to Zarr.
+    cf.save(data_array, "output.zarr")
     ```
 
 === "Xarray accessor"
@@ -417,22 +416,17 @@ You can save DataArrays to NIfTI using either the module function
     ```python
     import confusius
 
-    data_array.fusi.io.to_nifti("output.nii.gz")
+    # Save to NIfTI with automatic JSON sidecar creation.
+    data_array.fusi.save("output.nii.gz")
+
+    # Save to Zarr.
+    data_array.fusi.save("output.zarr")
     ```
 
-Both methods always create a JSON sidecar file alongside the NIfTI file. Spatial
-coordinates and units are encoded in the NIfTI header itself; the sidecar stores
-custom attributes and BIDS timing fields (e.g., `RepetitionTime`, `DelayAfterTrigger`, 
+When saving to NIfTI, a JSON sidecar file will be automatically created. Spatial
+coordinates and units are encoded in the NIfTI header itself; the sidecar stores custom
+attributes and BIDS timing fields (e.g., `RepetitionTime`, `DelayAfterTrigger`,
 `VolumeTiming`).
-
-### Saving to Zarr
-
-Use Xarray's built-in Zarr support:
-
-```python
-# Save DataArray to Zarr.
-data_array.to_zarr("output.zarr")
-```
 
 ## Format Conversion Reference
 
@@ -440,9 +434,11 @@ Quick reference for converting between formats:
 
 | From | To | Function |
 |------|-----|----------|
-| AUTC DATs | Zarr | [`convert_autc_dats_to_zarr`][confusius.io.convert_autc_dats_to_zarr] |
-| EchoFrame DAT | Zarr | [`convert_echoframe_dat_to_zarr`][confusius.io.convert_echoframe_dat_to_zarr] |
-| Iconeus SCAN | Xarray DataArray | [`load_scan`][confusius.io.load_scan] |
-| NIfTI | Xarray DataArray | [`load_nifti`][confusius.io.load_nifti] |
-| Xarray DataArray | NIfTI | [`save_nifti`][confusius.io.save_nifti] or [`.fusi.io.to_nifti`][confusius.xarray.FUSIIOAccessor.to_nifti] |
+| AUTC DATs | Zarr | [`confusius.io.convert_autc_dats_to_zarr`][confusius.io.convert_autc_dats_to_zarr] |
+| EchoFrame DAT | Zarr | [`confusius.io.convert_echoframe_dat_to_zarr`][confusius.io.convert_echoframe_dat_to_zarr] |
+| Iconeus SCAN | Xarray DataArray | [`confusius.load`][confusius.load] |
+| NIfTI | Xarray DataArray | [`confusius.load`][confusius.load] |
+| Zarr | Xarray DataArray | [`confusius.load`][confusius.load] / [`xarray.open_zarr`][xarray.open_zarr] (Dataset) |
+| Xarray DataArray | NIfTI | [`confusius.save`][confusius.save] / [`.fusi.save`][confusius.xarray.FUSIAccessor.save] |
+| Xarray DataArray | Zarr | [`confusius.save`][confusius.save] / [`.fusi.save`][confusius.xarray.FUSIAccessor.save] / [`.to_zarr`][xarray.DataArray.to_zarr] |
 

@@ -19,6 +19,7 @@ SVD
 SimpleITK
 Xarray
 Zarr
+affines
 analyses
 angiography
 beamformed

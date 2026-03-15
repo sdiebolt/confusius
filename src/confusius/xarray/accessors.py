@@ -1,18 +1,18 @@
 """Xarray accessor for fUSI-specific operations."""
 
+from pathlib import Path
+from typing import Any
+
 import xarray as xr
 
 from confusius._utils import _compute_origin, _compute_spacing
 from confusius.xarray.affine import FUSIAffineAccessor
 from confusius.xarray.connectivity import FUSIConnectivityAccessor
 from confusius.xarray.extract import FUSIExtractAccessor
-from confusius.xarray.io import FUSIIOAccessor
 from confusius.xarray.iq import FUSIIQAccessor
 from confusius.xarray.plotting import FUSIPlotAccessor
 from confusius.xarray.registration import FUSIRegistrationAccessor
 from confusius.xarray.scale import FUSIScaleAccessor
-
-__all__ = ["FUSIAccessor"]
 
 
 @xr.register_dataarray_accessor("fusi")
@@ -111,23 +111,6 @@ class FUSIAccessor:
         >>> registered = data.fusi.register.volumewise(reference_time=0)
         """
         return FUSIRegistrationAccessor(self._obj)
-
-    @property
-    def io(self) -> FUSIIOAccessor:
-        """Access IO operations.
-
-        Returns
-        -------
-        FUSIIOAccessor
-            Accessor for IO methods (to_nii, etc.).
-
-        Examples
-        --------
-        >>> import xarray as xr
-        >>> data = xr.open_zarr("output.zarr")["power_doppler"]
-        >>> data.fusi.io.to_nii("recording.nii.gz")
-        """
-        return FUSIIOAccessor(self._obj)
 
     @property
     def iq(self) -> FUSIIQAccessor:
@@ -247,3 +230,34 @@ class FUSIAccessor:
         True
         """
         return FUSIAffineAccessor(self._obj)
+
+    def save(self, path: str | Path, **kwargs: Any) -> None:
+        """Save the DataArray to file, dispatching by extension.
+
+        Supported formats:
+
+        - **NIfTI** (`.nii`, `.nii.gz`): saved via
+          [`save_nifti`][confusius.io.save_nifti].
+        - **Zarr** (`.zarr`): saved via
+          [`xarray.DataArray.to_zarr`][xarray.DataArray.to_zarr].
+
+        Parameters
+        ----------
+        path : str or pathlib.Path
+            Output path. The extension determines the format.
+        **kwargs
+            Additional keyword arguments forwarded to the underlying saver.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> import numpy as np
+        >>> import confusius  # noqa: F401
+        >>> data = xr.DataArray(
+        ...     np.zeros((10, 32, 1, 64)), dims=["time", "z", "y", "x"]
+        ... )
+        >>> data.fusi.save("recording.nii.gz")
+        """
+        from confusius.io.loadsave import save
+
+        save(self._obj, path, **kwargs)

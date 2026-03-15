@@ -145,7 +145,7 @@ properties:
 | [`.fusi.register`][confusius.xarray.FUSIRegistrationAccessor] | Motion correction via volumewise image registration. |
 | [`.fusi.extract`][confusius.xarray.FUSIExtractAccessor] | Extract and reconstruct signals using spatial masks. |
 | [`.fusi.plot`][confusius.xarray.FUSIPlotAccessor] | Visualization with Napari and carpet plots. |
-| [`.fusi.io`][confusius.xarray.FUSIIOAccessor] | Save data to NIfTI with a JSON sidecar. |
+| [`.fusi.save`][confusius.xarray.FUSIAccessor.save] | Save data to file (NIfTI or Zarr), dispatching by extension. |
 
 The sub-accessors offer the same functions as the module-level API, but with an
 intuitive syntax that allows quick operations directly on `DataArray` objects. They are
@@ -336,13 +336,13 @@ Carpet plots show voxel time-series as a raster image, useful for quality contro
 fig, ax = registered.fusi.plot.carpet(mask=mask)
 ```
 
-### Saving to Files ([`.fusi.io`][confusius.xarray.FUSIIOAccessor])
+### Saving to Files ([`.fusi.save`][confusius.xarray.FUSIAccessor.save])
 
-Save to NIfTI with an accompanying JSON sidecar that stores custom attributes and
-BIDS timing fields:
+Save to NIfTI or Zarr by extension. For NIfTI, an accompanying JSON sidecar is always
+written alongside, storing custom attributes and BIDS timing fields:
 
 ```python
-registered.fusi.io.to_nifti("sub-01_task-awake_pwd.nii.gz")
+registered.fusi.save("sub-01_task-awake_pwd.nii.gz")
 # Creates: sub-01_task-awake_pwd.nii.gz and sub-01_task-awake_pwd.json
 ```
 
@@ -378,7 +378,7 @@ registered = pwd.fusi.register.volumewise(reference_time=0)
 fig, ax = registered.fusi.plot.carpet(mask=brain_mask)
 
 # 6. Save registered power Doppler to NIfTI with JSON sidecar.
-registered.fusi.io.to_nifti("sub-01_task-awake_pwd.nii.gz")
+registered.fusi.save("sub-01_task-awake_pwd.nii.gz")
 
 # 7. Extract brain voxel time-series.
 signals = registered.fusi.extract.with_mask(brain_mask)

@@ -3,8 +3,6 @@
 import numpy as np
 import xarray as xr
 
-__all__ = ["FUSIScaleAccessor", "db_scale", "log_scale", "power_scale"]
-
 
 def db_scale(data: xr.DataArray, factor: int = 10) -> xr.DataArray:
     """Convert data to decibel scale relative to maximum value.
