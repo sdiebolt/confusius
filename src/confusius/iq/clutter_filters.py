@@ -5,8 +5,11 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 import numpy.typing as npt
 
+from confusius.validation import validate_iq, validate_mask
+
 if TYPE_CHECKING:
-    pass
+    import dask.array as da
+    import xarray as xr
 
 
 def _check_frequency(freq: float, nyquist: float) -> float:
@@ -670,3 +673,142 @@ def clutter_filter_butterworth(
 
     sos = sp_signal.butter(order, critical_freq_param, btype=btype, fs=fs, output="sos")
     return clutter_filter_sosfiltfilt(block, sos=sos)
+
+
+def compute_svd_cumulative_energy_threshold(
+    iq: "xr.DataArray",
+    singular_value_index: int,
+    clutter_mask: "xr.DataArray | None" = None,
+    window_width: int | None = None,
+    window_stride: int | None = None,
+) -> "da.Array":
+    """Compute the high cutoff threshold for the cumulative-energy SVD clutter filter.
+
+    Iterates over sliding temporal windows of an IQ acquisition and computes the
+    cumulative eigenvalue spectrum for each window. The threshold is defined as the
+    minimum cumulative energy at a given singular-value index across all windows,
+    ensuring that the chosen cutoff does not over-filter any window.
+
+    The result is returned as a lazy scalar [`dask.array.Array`][dask.array.Array]. Call
+    [`.compute`][dask.array.Array.compute] on it to obtain the concrete `float` value
+    when needed.
+
+    Parameters
+    ----------
+    iq : (time, z, y, x) xarray.DataArray
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
+    singular_value_index : int
+        Number of high-energy components to remove. Must satisfy
+        `1 <= singular_value_index <= window_width - 1`.
+    clutter_mask : (z, y, x) xarray.DataArray, optional
+        Boolean spatial mask. Eigendecomposition is computed only from masked voxels.
+        If not provided, all voxels are used.
+    window_width : int, optional
+        Width of the sliding temporal window, in volumes. If not provided, defaults
+        to the total number of volumes.
+    window_stride : int, optional
+        Stride of the sliding temporal window, in volumes. If not provided, defaults
+        to `window_width`.
+
+    Returns
+    -------
+    dask.array.Array
+        Lazy scalar array containing the minimum cumulative energy at
+        `singular_value_index` across all sliding windows. Call `.compute()` to
+        materialise the value. It can be passed directly as `high_cutoff` to
+        [`clutter_filter_svd_from_cumulative_energy`][confusius.iq.clutter_filters.clutter_filter_svd_from_cumulative_energy]
+        after computing.
+
+    Raises
+    ------
+    ValueError
+        If `singular_value_index` is less than 1 or greater than `window_width - 1`.
+
+    Notes
+    -----
+    For efficiency, this function computes the eigendecomposition of the temporal Gram
+    matrix rather than full SVD of the data matrix, avoiding computation of the large
+    spatial covariance matrix.
+
+    Eigenvalues are sorted in ascending order, so the cumulative sum accumulates from
+    the lowest-energy (noise/blood) component to the highest-energy (tissue/clutter)
+    component. The threshold is set to the cumulative energy just *below* the top
+    `singular_value_index` components, so that when used as `high_cutoff` in
+    [`clutter_filter_svd_from_cumulative_energy`][confusius.iq.clutter_filters.clutter_filter_svd_from_cumulative_energy],
+    exactly those `singular_value_index` high-energy (tissue/clutter) components have
+    cumulative energy that exceeds the threshold and are removed.
+
+    Windows are processed in parallel using
+    [`process_iq_blocks`][confusius.iq.process_iq_blocks].
+
+    References
+    ----------
+    [^1]:
+        Demene, Charlie, et al. "Spatiotemporal Clutter Filtering of Ultrafast
+        Ultrasound Data Highly Increases Doppler and fUltrasound Sensitivity." IEEE
+        Transactions on Medical Imaging, vol. 34, no. 11, Nov. 2015, pp. 2271–85.
+        DOI.org (Crossref), <https://doi.org/10.1109/TMI.2015.2428634>.
+
+    [^2]:
+        Baranger, Jerome, et al. "Adaptive Spatiotemporal SVD Clutter Filtering for
+        Ultrafast Doppler Imaging Using Similarity of Spatial Singular Vectors." IEEE
+        Transactions on Medical Imaging, vol. 37, no. 7, July 2018, pp. 1574–86. DOI.org
+        (Crossref), <https://doi.org/10.1109/TMI.2018.2789499>.
+
+    [^3]:
+        Le Meur-Diebolt, Samuel, et al. "Robust Functional Ultrasound Imaging in the
+        Awake and Behaving Brain: A Systematic Framework for Motion Artifact Removal."
+        17 June 2025. Neuroscience, <https://doi.org/10.1101/2025.06.16.659882>.
+    """
+    import dask.array as da
+    from scipy import linalg as sp_linalg
+
+    # Deferred to avoid circular import: clutter_filters <- process <- clutter_filters.
+    from confusius.iq.process import process_iq_blocks
+
+    validate_iq(iq, require_attrs=False)
+
+    mask_array: npt.NDArray[np.bool_] | None = None
+    if clutter_mask is not None:
+        validate_mask(clutter_mask, iq, "clutter_mask")
+        mask_array = clutter_mask.values.astype(bool)
+
+    dask_iq = iq.data
+    if not isinstance(dask_iq, da.Array):
+        dask_iq = da.from_array(dask_iq)
+
+    effective_window_width = (
+        window_width if window_width is not None else cast(int, dask_iq.chunksize[0])
+    )
+
+    if not 1 <= singular_value_index <= effective_window_width - 1:
+        raise ValueError(
+            f"singular_value_index ({singular_value_index}) must be between 1 and "
+            f"window_width - 1 ({effective_window_width - 1})."
+        )
+
+    def _window_energy(block: npt.NDArray) -> npt.NDArray:
+        """Return shape-(1,) array with cumulative energy for one window."""
+        window_width_local = block.shape[0]
+        signals = block.reshape(window_width_local, -1).astype(np.cdouble, copy=False)
+        if mask_array is not None:
+            signals = signals[:, mask_array.ravel()]
+
+        # Eigenvalues are in ascending order; cumsum accumulates from lowest to highest
+        # energy. Indexing at -(singular_value_index + 1) gives the cumulative energy
+        # just below the top singular_value_index components, so that components with
+        # cumsum strictly greater than this threshold are exactly those top components.
+        gram_matrix = signals @ signals.conj().T
+        eigenvalues = sp_linalg.eigvalsh(gram_matrix)
+        return np.array([np.cumsum(eigenvalues)[-(singular_value_index + 1)].real])
+
+    energies = process_iq_blocks(
+        dask_iq,
+        _window_energy,
+        window_width=window_width,
+        window_stride=window_stride,
+        drop_axis=(1, 2, 3),
+    )
+
+    return energies.min()

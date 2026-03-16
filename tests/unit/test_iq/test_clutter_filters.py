@@ -11,6 +11,7 @@ from confusius.iq.clutter_filters import (
     clutter_filter_svd_from_cumulative_energy,
     clutter_filter_svd_from_energy,
     clutter_filter_svd_from_indices,
+    compute_svd_cumulative_energy_threshold,
 )
 
 
@@ -366,3 +367,127 @@ class TestClutterFilterButterworth:
         )
 
         assert_allclose(result, expected)
+
+
+class TestComputeSvdCumulativeEnergyThreshold:
+    """Tests for compute_svd_cumulative_energy_threshold."""
+
+    def test_returns_dask_array(self, sample_iq_dataarray):
+        """Return value is a lazy dask array (not yet computed)."""
+        import dask.array as da
+
+        result = compute_svd_cumulative_energy_threshold(
+            sample_iq_dataarray, singular_value_index=1
+        )
+        assert isinstance(result, da.Array)
+
+    def test_singular_value_index_zero_raises(self, sample_iq_dataarray):
+        """singular_value_index=0 raises ValueError."""
+        with pytest.raises(ValueError, match="singular_value_index"):
+            compute_svd_cumulative_energy_threshold(
+                sample_iq_dataarray, singular_value_index=0
+            )
+
+    def test_singular_value_index_exceeds_window_minus_one_raises(
+        self, sample_iq_dataarray
+    ):
+        """singular_value_index > window_width - 1 raises ValueError."""
+        with pytest.raises(ValueError, match="singular_value_index"):
+            compute_svd_cumulative_energy_threshold(
+                sample_iq_dataarray, singular_value_index=10, window_width=10
+            )
+
+    def test_single_window_matches_reference(
+        self, sample_iq_dataarray, sample_spatial_mask_xarray
+    ):
+        """Single-window result matches direct eigendecomposition of the full data."""
+        singular_value_index = 3
+        n_volumes = sample_iq_dataarray.sizes["time"]
+
+        signals = sample_iq_dataarray.values.reshape(n_volumes, -1).astype(np.cdouble)
+        mask_flat = sample_spatial_mask_xarray.values.ravel()
+        signals = signals[:, mask_flat]
+
+        gram = signals @ signals.conj().T
+        eigenvalues = np.linalg.eigvalsh(gram)
+        expected = float(np.cumsum(eigenvalues)[-(singular_value_index + 1)].real)
+
+        result = compute_svd_cumulative_energy_threshold(
+            sample_iq_dataarray,
+            singular_value_index=singular_value_index,
+            clutter_mask=sample_spatial_mask_xarray,
+            window_width=n_volumes,
+        ).compute()
+
+        assert_allclose(result, expected, rtol=1e-10)
+
+    def test_multiple_windows_returns_minimum(
+        self, sample_iq_dataarray, sample_spatial_mask_xarray
+    ):
+        """Result equals the minimum cumulative energy across all windows."""
+        singular_value_index = 2
+        window_width = 10
+        window_stride = 5
+        n_volumes = sample_iq_dataarray.sizes["time"]
+        mask_flat = sample_spatial_mask_xarray.values.ravel()
+
+        # Compute per-window cumulative energies with the same logic as the function.
+        window_thresholds = []
+        for start in range(0, n_volumes - window_width + 1, window_stride):
+            signals = (
+                sample_iq_dataarray.isel(time=slice(start, start + window_width))
+                .values.reshape(window_width, -1)
+                .astype(np.cdouble)
+            )
+            signals = signals[:, mask_flat]
+            gram = signals @ signals.conj().T
+            eigenvalues = np.linalg.eigvalsh(gram)
+            window_thresholds.append(
+                float(np.cumsum(eigenvalues)[-(singular_value_index + 1)].real)
+            )
+
+        expected = min(window_thresholds)
+        result = compute_svd_cumulative_energy_threshold(
+            sample_iq_dataarray,
+            singular_value_index=singular_value_index,
+            clutter_mask=sample_spatial_mask_xarray,
+            window_width=window_width,
+            window_stride=window_stride,
+        ).compute()
+
+        assert_allclose(result, expected, rtol=1e-10)
+
+    def test_threshold_as_high_cutoff_removes_correct_components(
+        self, sample_iq_dataarray, sample_spatial_mask_xarray
+    ):
+        """Threshold used as high_cutoff removes exactly singular_value_index components."""
+        singular_value_index = 3
+        n_volumes = sample_iq_dataarray.sizes["time"]
+        mask = sample_spatial_mask_xarray.values
+
+        threshold = compute_svd_cumulative_energy_threshold(
+            sample_iq_dataarray,
+            singular_value_index=singular_value_index,
+            clutter_mask=sample_spatial_mask_xarray,
+            window_width=n_volumes,
+        ).compute()
+
+        block = sample_iq_dataarray.values
+        filtered = clutter_filter_svd_from_cumulative_energy(
+            block, mask=mask, high_cutoff=float(threshold)
+        )
+
+        # Compute the top singular_value_index eigenvectors from the same data.
+        signals = block.reshape(n_volumes, -1).astype(np.cdouble)
+        masked_signals = signals[:, mask.ravel()]
+        gram = masked_signals @ masked_signals.conj().T
+        _, eigenvectors = np.linalg.eigh(gram)
+
+        # The top singular_value_index eigenvectors (last N in ascending order).
+        clutter_vecs = eigenvectors[:, -singular_value_index:]
+
+        # Their projection onto the filtered signal should be zero.
+        filtered_signals = filtered.reshape(n_volumes, -1)
+        assert_allclose(
+            np.abs(clutter_vecs.conj().T @ filtered_signals), 0, atol=1e-8
+        )

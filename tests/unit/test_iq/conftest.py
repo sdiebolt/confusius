@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+import xarray as xr
 
 
 @pytest.fixture
@@ -78,3 +79,32 @@ def sample_iq_dataset(rng):
     )
 
     return xr.Dataset({"iq": iq_data})
+
+
+@pytest.fixture
+def sample_iq_dataarray(sample_iq_dataset):
+    """Return the IQ DataArray from sample_iq_dataset.
+
+    Shape: (20, 4, 6, 8) with proper coordinates and required attributes.
+    """
+    return sample_iq_dataset["iq"]
+
+
+@pytest.fixture
+def sample_spatial_mask_xarray(rng, sample_iq_dataarray):
+    """Create a boolean spatial mask matching sample_iq_dataarray.
+
+    Shape: (z=4, y=6, x=8) with coordinates matching sample_iq_dataarray.
+    """
+    z = sample_iq_dataarray.sizes["z"]
+    y = sample_iq_dataarray.sizes["y"]
+    x = sample_iq_dataarray.sizes["x"]
+    return xr.DataArray(
+        rng.random((z, y, x)) > 0.5,
+        dims=("z", "y", "x"),
+        coords={
+            "z": sample_iq_dataarray.coords["z"],
+            "y": sample_iq_dataarray.coords["y"],
+            "x": sample_iq_dataarray.coords["x"],
+        },
+    )
