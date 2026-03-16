@@ -30,6 +30,7 @@ detrending
 fUSI
 hemodynamic
 netCDF
+non-trivial
 pulsatility
 scikit
 spatiotemporal

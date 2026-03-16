@@ -739,9 +739,6 @@ def compute_svd_cumulative_energy_threshold(
     exactly those `singular_value_index` high-energy (tissue/clutter) components have
     cumulative energy that exceeds the threshold and are removed.
 
-    Windows are processed in parallel using
-    [`process_iq_blocks`][confusius.iq.process_iq_blocks].
-
     References
     ----------
     [^1]:

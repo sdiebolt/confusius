@@ -405,7 +405,41 @@ The interpretation of cutoff parameters depends on the filter method:
 | `svd_cumulative_energy` | Remove components with cumulative energy < `low_cutoff` (low-energy noise). | Remove components with cumulative energy > `high_cutoff` (high-energy tissue). |
 | `butterworth` | Remove frequencies below this value (Hz). | Remove frequencies above this value (Hz). |
 
-### Clutter masks for SVD filters
+### Computing the Cumulative Energy Threshold
+
+Setting `high_cutoff` for `svd_cumulative_energy` is non-trivial because cumulative
+energy values depend on the amount of tissue motion and change from window to window.
+[`compute_svd_cumulative_energy_threshold`][confusius.iq.compute_svd_cumulative_energy_threshold]
+automates this: it iterates over sliding temporal windows, computes the cumulative
+eigenvalue spectrum for each window (accumulating from low-energy to high-energy
+components), and returns the minimum cumulative energy at a given singular-value index
+across all windows. Using the minimum ensures that the chosen cutoff does not
+over-filter any window.
+
+```python
+import confusius as cf
+
+iq = cf.load("recording.zarr")["iq"]
+brain_mask = cf.load("brain_mask.zarr")["mask"]
+
+# Compute the minimum cumulative energy at singular value index 40 across all windows.
+threshold = cf.iq.compute_svd_cumulative_energy_threshold(
+    iq,
+    singular_value_index=40,
+    clutter_mask=brain_mask,
+    window_width=200,
+).compute()
+
+# Apply the cumulative energy filter using the computed threshold.
+pwd = iq.fusi.iq.process_to_power_doppler(
+    filter_method="svd_cumulative_energy",
+    clutter_mask=brain_mask,
+    high_cutoff=threshold,
+    clutter_window_width=200,
+)
+```
+
+### Clutter Masks for SVD Filters
 
 For SVD-based filters, you can provide a spatial mask identifying tissue regions. This
 improves filter performance by computing tissue subspaces only from masked
