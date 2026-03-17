@@ -8,8 +8,8 @@ icon: lucide/audio-waveform
 
 After [loading your beamformed IQ data](io.md#loading-data), the next step in most fUSI
 workflows is processing it to extract hemodynamic signals. This guide explains how to
-use ConfUSIus to transform beamformed IQ data into measures like power Doppler and
-axial velocity.
+use ConfUSIus to transform beamformed IQ data into measures like B-mode, power Doppler,
+and axial velocity.
 
 ## Why Process IQ Data?
 
@@ -105,8 +105,7 @@ Additionally, ConfUSIus expects certain metadata attributes to be present:
 ```python
 import xarray as xr
 
-ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
-iq = ds["iq"]
+iq = cf.load("sub-01_task-rest_iq.zarr")
 
 print(iq)
 ```
@@ -181,7 +180,8 @@ flowchart LR
 The specialized functions [`process_iq_to_power_doppler`][confusius.iq.process_iq_to_power_doppler]
 and [`process_iq_to_axial_velocity`][confusius.iq.process_iq_to_axial_velocity] wrap
 [`process_iq_blocks`][confusius.iq.process_iq_blocks] to implement a **nested sliding
-window** approach:
+window** approach. [`process_iq_to_bmode`][confusius.iq.process_iq_to_bmode] is
+similar but uses a single window level since no clutter filtering is involved:
 
 1. **Outer windows (clutter filtering)**: A first sliding window is used for clutter
    filtering. Within each window, the clutter filter is applied to separate blood from
@@ -254,7 +254,7 @@ client = Client()
 # Example: http://127.0.0.1:8787/status
 
 # Load IQ data (metadata only, no data in memory yet).
-iq = xr.open_zarr("large_iq_data.zarr")["iq"]
+iq = cf.load("large_iq_data.zarr")
 
 # Build computation graph (still no execution).
 pwd = iq.fusi.iq.process_to_power_doppler(low_cutoff=40)
@@ -279,8 +279,8 @@ pwd.to_zarr("power_doppler.zarr")
     options.
 
 !!! tip "Computing multiple measures in a single pass"
-    Since both `process_to_power_doppler` and `process_to_axial_velocity` return lazy
-    Dask-backed arrays, you can compute them **simultaneously** using
+    Since `process_to_power_doppler`, `process_to_axial_velocity`, and `process_to_bmode`
+    all return lazy Dask-backed arrays, you can compute them **simultaneously** using
     [`dask.compute`](https://docs.dask.org/en/stable/base.html#dask.compute):
 
     ```python
@@ -289,14 +289,15 @@ pwd.to_zarr("power_doppler.zarr")
 
     pwd = iq.fusi.iq.process_to_power_doppler(...)
     velocity = iq.fusi.iq.process_to_axial_velocity(...)
+    bmode = iq.fusi.iq.process_to_bmode(...)
 
-    # Compute both with a single pass over the IQ data.
-    pwd, velocity = dask.compute(pwd, velocity)
+    # Compute all three with a single pass over the IQ data.
+    pwd, velocity, bmode = dask.compute(pwd, velocity, bmode)
     ```
 
-    Calling `pwd.compute()` and `velocity.compute()` separately would scan through the
-    IQ file twice. `dask.compute` merges the two task graphs and reads the data only
-    once, which can significantly cut processing time for large datasets.
+    Calling `.compute()` on each separately would scan through the IQ file multiple
+    times. `dask.compute` merges the task graphs and reads the data only once, which can
+    significantly cut processing time for large datasets.
 
 ## Clutter Filtering
 
@@ -449,7 +450,7 @@ voxels[^lemeurdiebolt2025]:
 import xarray as xr
 
 # Load a brain mask (e.g., from an anatomical atlas or segmentation).
-brain_mask = xr.open_zarr("brain_mask.zarr")["mask"]
+brain_mask = cf.load("brain_mask.zarr")
 
 # Use the mask for clutter filtering.
 pwd = iq.fusi.iq.process_to_power_doppler(
@@ -461,10 +462,9 @@ pwd = iq.fusi.iq.process_to_power_doppler(
 
 ## Computing Derived Measures
 
-Once tissue clutter has been removed from IQ signals, derived measures can be computed
-to quantify hemodynamic properties. In fUSI, the two primary measures are **power
-Doppler** (cerebral blood volume changes) and **axial velocity** (blood flow speed and
-direction).
+ConfUSIus can compute several derived measures from beamformed IQ data. In fUSI, the
+primary measures are **B-mode** (tissue anatomy), **power Doppler** (cerebral blood
+volume changes), and **axial velocity** (blood flow speed and direction).
 
 !!! info "When clutter filtering is not needed"
 
@@ -503,8 +503,7 @@ function or the corresponding Xarray accessor method.
     client = Client()
 
     # Load IQ data.
-    ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
-    iq = ds["iq"]
+    iq = cf.load("sub-01_task-rest_iq.zarr")
 
     # Process to power Doppler using SVD filtering.
     pwd = cf.iq.process_iq_to_power_doppler(
@@ -527,8 +526,7 @@ function or the corresponding Xarray accessor method.
     client = Client()
 
     # Load IQ data.
-    ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
-    iq = ds["iq"]
+    iq = cf.load("sub-01_task-rest_iq.zarr")
 
     # Process to power Doppler using SVD filtering.
     pwd = iq.fusi.iq.process_to_power_doppler(
@@ -614,8 +612,7 @@ function or the corresponding Xarray accessor method.
     client = Client()
 
     # Load IQ data.
-    ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
-    iq = ds["iq"]
+    iq = cf.load("sub-01_task-rest_iq.zarr")
 
     # Process to axial velocity using SVD filtering.
     velocity = cf.iq.process_iq_to_axial_velocity(
@@ -640,8 +637,7 @@ function or the corresponding Xarray accessor method.
     client = Client()
 
     # Load IQ data.
-    ds = xr.open_zarr("sub-01_task-rest_iq.zarr")
-    iq = ds["iq"]
+    iq = cf.load("sub-01_task-rest_iq.zarr")
 
     # Process to axial velocity using SVD filtering.
     velocity = iq.fusi.iq.process_to_axial_velocity(
@@ -690,6 +686,56 @@ Velocity values are returned in **meters per second** with sign indicating direc
     Very high velocities may exceed the Nyquist limit and cause aliasing (wrapping). If
     you observe sudden sign reversals in high-flow regions, reduce the `lag` parameter or
     increase the pulse repetition frequency during acquisition.
+
+### B-mode
+
+B-mode imaging visualizes tissue anatomy by averaging the IQ signal magnitude over time.
+Unlike power Doppler, no clutter filtering is applied and the mean magnitude (not squared
+magnitude) is computed within each temporal window.
+
+#### Computing B-mode
+
+To compute B-mode volumes from beamformed IQ data, you may use either the
+[`confusius.iq.process_iq_to_bmode`][confusius.iq.process_iq_to_bmode] function or the
+corresponding Xarray accessor method.
+
+=== "Function API"
+
+    ```python
+    from dask.distributed import Client
+    import xarray as xr
+    import confusius as cf
+
+    # Start a local Dask cluster for optimal performance.
+    client = Client()
+
+    # Load IQ data.
+    iq = cf.load("sub-01_task-rest_iq.zarr")
+
+    # Process to B-mode using a sliding window of 200 volumes.
+    bmode = cf.iq.process_iq_to_bmode(iq, bmode_window_width=200)
+    ```
+
+=== "Xarray accessor"
+
+    ```python
+    from dask.distributed import Client
+    import xarray as xr
+    import confusius
+
+    # Start a local Dask cluster for optimal performance.
+    client = Client()
+
+    # Load IQ data.
+    iq = cf.load("sub-01_task-rest_iq.zarr")
+
+    # Process to B-mode using a sliding window of 200 volumes.
+    bmode = iq.fusi.iq.process_to_bmode(bmode_window_width=200)
+    ```
+
+!!! info "Processing parameters"
+    For detailed documentation of all parameters, see the API reference for
+    [`process_iq_to_bmode`][confusius.iq.process_iq_to_bmode].
 
 ## Next Steps
 

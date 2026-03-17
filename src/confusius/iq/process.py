@@ -373,6 +373,32 @@ def compute_power_doppler_volume(
     )
 
 
+def compute_bmode_volume(
+    block: npt.NDArray,
+    **_: Any,
+) -> npt.NDArray:
+    """Compute a B-mode volume from beamformed IQ data.
+
+    This function computes a B-mode volume by averaging the magnitude of the IQ data
+    across the temporal dimension. Unlike power Doppler, no clutter filtering is applied
+    and the magnitude (not squared magnitude) is averaged.
+
+    Parameters
+    ----------
+    block : (time, z, y, x) numpy.ndarray
+        Complex beamformed IQ data, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
+    **_
+        Additional unused keyword arguments (absorbed and ignored).
+
+    Returns
+    -------
+    (1, z, y, x) numpy.ndarray
+        B-mode volume, computed as the mean magnitude of the IQ data across time.
+    """
+    return np.mean(np.abs(block), axis=0)[np.newaxis]
+
+
 def compute_axial_velocity_volume(
     block: npt.NDArray,
     fs: float,
@@ -842,6 +868,93 @@ def process_iq_to_power_doppler(
     return xr.DataArray(
         result,
         name="power_doppler",
+        dims=iq.dims,
+        coords={
+            "time": output_times,
+            "z": iq.coords["z"],
+            "y": iq.coords["y"],
+            "x": iq.coords["x"],
+        },
+        attrs={**iq.attrs, **output_attrs},
+    )
+
+
+def process_iq_to_bmode(
+    iq: xr.DataArray,
+    bmode_window_width: int | None = None,
+    bmode_window_stride: int | None = None,
+) -> xr.DataArray:
+    """Process blocks of beamformed IQ into B-mode volumes using sliding windows.
+
+    This function computes B-mode volumes from beamformed IQ data using a single sliding
+    temporal window. Unlike power Doppler, no clutter filtering is applied; the mean
+    magnitude (not squared magnitude) of the IQ data within each window is computed.
+
+    Parameters
+    ----------
+    iq : xarray.DataArray
+        Xarray DataArray containing complex beamformed IQ data with dimensions
+        `(time, z, y, x)`, where `time` is the temporal dimension and
+        `(z, y, x)` are spatial dimensions.
+    bmode_window_width : int, optional
+        Width of the sliding temporal window for B-mode integration, in volumes. If not
+        provided, uses the chunk size of the IQ data along the temporal dimension.
+    bmode_window_stride : int, optional
+        Stride of the sliding temporal window, in volumes. If not provided, equals
+        `bmode_window_width`.
+
+    Returns
+    -------
+    (windows, z, y, x) xarray.DataArray
+        B-mode volumes as an Xarray DataArray with updated time coordinates, where
+        `windows` is the number of sliding windows.
+    """
+    import dask.array as da
+    from dask.array import Array
+
+    validate_iq(iq)
+
+    dask_iq: Array = iq.data
+    if not isinstance(dask_iq, Array):
+        dask_iq = da.from_array(dask_iq)
+
+    if bmode_window_width is None:
+        bmode_window_width = cast(int, dask_iq.chunksize[0])
+    if bmode_window_stride is None:
+        bmode_window_stride = bmode_window_width
+
+    result = process_iq_blocks(
+        dask_iq,
+        process_func=compute_bmode_volume,
+        window_width=bmode_window_width,
+        window_stride=bmode_window_stride,
+    )
+
+    output_times_values = compute_processed_volume_times(
+        volume_times=iq.coords["time"].values,
+        n_input_volumes=dask_iq.shape[0],
+        clutter_window_width=bmode_window_width,
+        clutter_window_stride=bmode_window_stride,
+        inner_window_width=bmode_window_width,
+        inner_window_stride=bmode_window_width,
+    )
+    output_times = xr.DataArray(
+        output_times_values,
+        dims="time",
+        attrs=iq.coords["time"].attrs,
+    )
+
+    output_attrs: dict[str, str | int | float] = {
+        "units": "a.u.",
+        "long_name": "B-mode intensity",
+        "cmap": "gray",
+        "bmode_window_width": bmode_window_width,
+        "bmode_window_stride": bmode_window_stride,
+    }
+
+    return xr.DataArray(
+        result,
+        name="bmode",
         dims=iq.dims,
         coords={
             "time": output_times,

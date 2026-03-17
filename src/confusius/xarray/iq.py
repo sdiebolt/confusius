@@ -6,6 +6,7 @@ import xarray as xr
 
 from confusius.iq.process import (
     process_iq_to_axial_velocity,
+    process_iq_to_bmode,
     process_iq_to_power_doppler,
 )
 
@@ -235,4 +236,45 @@ class FUSIIQAccessor:
             absolute_velocity=absolute_velocity,
             spatial_kernel=spatial_kernel,
             estimation_method=estimation_method,
+        )
+
+    def process_to_bmode(
+        self,
+        bmode_window_width: int | None = None,
+        bmode_window_stride: int | None = None,
+    ) -> xr.DataArray:
+        """Process beamformed IQ into B-mode volumes.
+
+        This method computes B-mode volumes from beamformed IQ data using a single
+        sliding temporal window. Unlike power Doppler, no clutter filtering is applied;
+        the mean magnitude (not squared magnitude) of the IQ data within each window
+        is computed.
+
+        Parameters
+        ----------
+        bmode_window_width : int, optional
+            Width of the sliding temporal window for B-mode integration, in volumes.
+            If not provided, uses the chunk size of the IQ data along the temporal
+            dimension.
+        bmode_window_stride : int, optional
+            Stride of the sliding temporal window, in volumes. If not provided, equals
+            `bmode_window_width`.
+
+        Returns
+        -------
+        (windows, z, y, x) xarray.DataArray
+            B-mode volumes with updated time coordinates, where `windows` is the number
+            of sliding windows.
+
+        Examples
+        --------
+        >>> import xarray as xr
+        >>> ds = xr.open_zarr("iq_data.zarr")
+        >>> iq = ds["iq"]
+        >>> bmode = iq.fusi.iq.process_to_bmode(bmode_window_width=50)
+        """
+        return process_iq_to_bmode(
+            self._obj,
+            bmode_window_width=bmode_window_width,
+            bmode_window_stride=bmode_window_stride,
         )

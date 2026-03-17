@@ -8,10 +8,12 @@ from numpy.testing import assert_allclose, assert_array_equal
 
 from confusius.iq.process import (
     compute_axial_velocity_volume,
+    compute_bmode_volume,
     compute_power_doppler_volume,
     compute_processed_volume_times,
     process_iq_blocks,
     process_iq_to_axial_velocity,
+    process_iq_to_bmode,
     process_iq_to_power_doppler,
 )
 
@@ -321,6 +323,42 @@ class TestProcessIqToPowerDoppler:
         )
         assert result is not None
 
+    def test_accessor_delegates_to_process_iq_to_power_doppler(
+        self, sample_iq_dataset
+    ):
+        """Xarray accessor calls process_iq_to_power_doppler with the correct arguments."""
+        from unittest.mock import patch
+
+        import confusius  # noqa: F401 — registers the fusi accessor.
+
+        iq = sample_iq_dataset["iq"]
+
+        with patch("confusius.xarray.iq.process_iq_to_power_doppler") as mock_fn:
+            iq.fusi.iq.process_to_power_doppler(
+                clutter_window_width=20,
+                clutter_window_stride=10,
+                filter_method="svd_indices",
+                clutter_mask=None,
+                low_cutoff=2,
+                high_cutoff=8,
+                butterworth_order=4,
+                doppler_window_width=10,
+                doppler_window_stride=5,
+            )
+
+        mock_fn.assert_called_once_with(
+            iq,
+            clutter_window_width=20,
+            clutter_window_stride=10,
+            filter_method="svd_indices",
+            clutter_mask=None,
+            low_cutoff=2,
+            high_cutoff=8,
+            butterworth_order=4,
+            doppler_window_width=10,
+            doppler_window_stride=5,
+        )
+
 
 class TestProcessIqToAxialVelocity:
     """Tests for process_iq_to_axial_velocity function."""
@@ -359,6 +397,50 @@ class TestProcessIqToAxialVelocity:
 
         assert result.attrs["ultrasound_frequency"] == 10e6
         assert result.attrs["sound_velocity"] == 1500.0
+
+    def test_accessor_delegates_to_process_iq_to_axial_velocity(
+        self, sample_iq_dataset
+    ):
+        """Xarray accessor calls process_iq_to_axial_velocity with the correct arguments."""
+        from unittest.mock import patch
+
+        import confusius  # noqa: F401 — registers the fusi accessor.
+
+        iq = sample_iq_dataset["iq"]
+
+        with patch("confusius.xarray.iq.process_iq_to_axial_velocity") as mock_fn:
+            iq.fusi.iq.process_to_axial_velocity(
+                clutter_window_width=20,
+                clutter_window_stride=10,
+                filter_method="svd_indices",
+                clutter_mask=None,
+                low_cutoff=2,
+                high_cutoff=8,
+                butterworth_order=4,
+                velocity_window_width=10,
+                velocity_window_stride=5,
+                lag=2,
+                absolute_velocity=True,
+                spatial_kernel=3,
+                estimation_method="angle_average",
+            )
+
+        mock_fn.assert_called_once_with(
+            iq,
+            clutter_window_width=20,
+            clutter_window_stride=10,
+            filter_method="svd_indices",
+            clutter_mask=None,
+            low_cutoff=2,
+            high_cutoff=8,
+            butterworth_order=4,
+            velocity_window_width=10,
+            velocity_window_stride=5,
+            lag=2,
+            absolute_velocity=True,
+            spatial_kernel=3,
+            estimation_method="angle_average",
+        )
 
 
 class TestDataArrayClutterMask:
@@ -517,3 +599,118 @@ class TestDataArrayClutterMask:
                 low_cutoff=2,
                 high_cutoff=8,
             )
+
+
+class TestComputeBmodeVolume:
+    """Tests for compute_bmode_volume function."""
+
+    def test_matches_reference_implementation(self, sample_iq_block_4d):
+        """Result matches reference: mean(|block|)."""
+        result = compute_bmode_volume(sample_iq_block_4d)
+
+        expected = np.mean(np.abs(sample_iq_block_4d), axis=0)
+        # Result has shape (1, z, y, x) due to single window.
+        assert_allclose(result[0], expected)
+
+    def test_output_shape(self, sample_iq_block_4d):
+        """Output has shape (1, z, y, x)."""
+        time, z, y, x = sample_iq_block_4d.shape
+        result = compute_bmode_volume(sample_iq_block_4d)
+
+        assert result.shape == (1, z, y, x)
+
+    def test_output_is_real(self, sample_iq_block_4d):
+        """Output is real-valued (magnitude, not complex)."""
+        result = compute_bmode_volume(sample_iq_block_4d)
+
+        assert np.isrealobj(result)
+
+
+class TestProcessIqToBmode:
+    """Tests for process_iq_to_bmode function."""
+
+    def test_wrong_dimensions_raises(self, rng):
+        """DataArray with wrong dimensions raises ValueError."""
+        data = rng.random((10, 4, 6)) + 1j * rng.random((10, 4, 6))
+        iq = xr.DataArray(
+            data,
+            dims=("time", "z", "y"),  # Missing x dimension.
+            coords={
+                "time": np.arange(10),
+                "z": np.arange(4),
+                "y": np.arange(6),
+            },
+        )
+        with pytest.raises(ValueError, match="Expected dimensions"):
+            process_iq_to_bmode(iq)
+
+    def test_non_complex_data_raises(self, rng):
+        """Non-complex data raises TypeError."""
+        data = rng.random((10, 4, 6, 8))  # Real, not complex.
+        iq = xr.DataArray(
+            data,
+            dims=("time", "z", "y", "x"),
+            coords={
+                "time": np.arange(10),
+                "z": np.arange(4),
+                "y": np.arange(6),
+                "x": np.arange(8),
+            },
+        )
+        with pytest.raises(TypeError, match="complex-valued"):
+            process_iq_to_bmode(iq)
+
+    def test_output_has_correct_attributes(self, sample_iq_dataset):
+        """Output DataArray has expected attributes."""
+        result = process_iq_to_bmode(
+            sample_iq_dataset["iq"],
+            bmode_window_width=10,
+            bmode_window_stride=10,
+        )
+
+        assert result.name == "bmode"
+        assert result.attrs["units"] == "a.u."
+        assert result.attrs["bmode_window_width"] == 10
+        assert result.attrs["bmode_window_stride"] == 10
+
+    def test_matches_reference_implementation(self, sample_iq_dataset):
+        """Output matches reference mean magnitude computation."""
+        iq = sample_iq_dataset["iq"]
+        n_time = iq.sizes["time"]
+
+        result = process_iq_to_bmode(
+            iq,
+            bmode_window_width=n_time,
+            bmode_window_stride=n_time,
+        )
+
+        expected = np.mean(np.abs(iq.values), axis=0)
+        assert_allclose(result.values[0], expected)
+
+    def test_default_window_uses_chunk_size(self, sample_iq_dataset):
+        """Default window width falls back to the IQ chunk size."""
+        iq = sample_iq_dataset["iq"]
+        n_time = iq.sizes["time"]
+
+        # Chunk along time so chunksize[0] is known.
+        dask_iq = da.from_array(iq.values, chunks=(n_time, -1, -1, -1))
+        iq_chunked = iq.copy(data=dask_iq)
+
+        result = process_iq_to_bmode(iq_chunked)
+
+        assert result.sizes["time"] == 1
+
+    def test_accessor_delegates_to_process_iq_to_bmode(self, sample_iq_dataset):
+        """Xarray accessor calls process_iq_to_bmode with the correct arguments."""
+        from unittest.mock import patch
+
+        import confusius  # noqa: F401 — registers the fusi accessor.
+
+        iq = sample_iq_dataset["iq"]
+
+        with patch("confusius.xarray.iq.process_iq_to_bmode") as mock_fn:
+            iq.fusi.iq.process_to_bmode(bmode_window_width=10, bmode_window_stride=5)
+
+        mock_fn.assert_called_once_with(
+            iq, bmode_window_width=10, bmode_window_stride=5
+        )
