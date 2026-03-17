@@ -185,6 +185,38 @@ class TestWithLabels:
             sample_4d_volume.values[:, 1, :, :].mean(axis=(-2, -1)),
         )
 
+    def test_stacked_masks_overlapping(self, sample_4d_volume):
+        """Test extraction with overlapping stacked masks."""
+        _, nz, ny, nx = sample_4d_volume.shape
+
+        # Region "A": z-slices 0 and 1; Region "B": z-slices 1 and 2 — z=1 overlaps.
+        mask_data = np.zeros((2, nz, ny, nx), dtype=int)
+        mask_data[0, 0:2, :, :] = 1  # Region "A": slices 0–1.
+        mask_data[1, 1:3, :, :] = 2  # Region "B": slices 1–2.
+        labels = xr.DataArray(
+            mask_data,
+            dims=["mask", "z", "y", "x"],
+            coords={
+                "mask": ["A", "B"],
+                "z": sample_4d_volume.coords["z"],
+                "y": sample_4d_volume.coords["y"],
+                "x": sample_4d_volume.coords["x"],
+            },
+        )
+
+        result = extract.extract_with_labels(sample_4d_volume, labels)
+
+        assert set(result.dims) == {"time", "region"}
+        np.testing.assert_array_equal(result.coords["region"].values, ["A", "B"])
+        np.testing.assert_allclose(
+            result.sel(region="A").values,
+            sample_4d_volume.values[:, 0:2, :, :].mean(axis=(-3, -2, -1)),
+        )
+        np.testing.assert_allclose(
+            result.sel(region="B").values,
+            sample_4d_volume.values[:, 1:3, :, :].mean(axis=(-3, -2, -1)),
+        )
+
     def test_dask_spatial_chunks(self):
         """Test correctness when spatial dims are chunked in the Dask array."""
         rng = np.random.default_rng(42)
