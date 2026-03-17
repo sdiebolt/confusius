@@ -17,3 +17,8 @@ transforms3d
 Copyright (c) 2009-2024, Matthew Brett and transforms3d contributors
 Licensed under the BSD-2-Clause License
 Source: https://github.com/matthew-brett/transforms3d
+
+pandas
+Copyright (c) 2008-2011, AQR Capital Management, LLC, Lambda Foundry, Inc. and PyData Development Team
+Licensed under the BSD-3-Clause License
+Source: https://github.com/pandas-dev/pandas
