@@ -144,6 +144,31 @@ class TestReaderLayerData:
         npt.assert_allclose(kwargs["translate"], [0.0, 0.0, 0.0, 0.0], atol=1e-10)
         assert kwargs["axis_labels"] == ["time", "z", "y", "x"]
 
+    def test_time_last_dim_order(self, tmp_path: Path) -> None:
+        """scale/translate/units follow the actual dim order when time is last (e.g. NIfTI)."""
+        da = xr.DataArray(
+            np.zeros((8, 6, 4, 10), dtype=np.float32),
+            dims=["x", "y", "z", "time"],
+            coords={
+                "x": xr.DataArray(np.arange(8) * 0.05, dims=["x"], attrs={"units": "mm"}),
+                "y": xr.DataArray(np.arange(6) * 0.05, dims=["y"], attrs={"units": "mm"}),
+                "z": xr.DataArray(np.arange(4) * 0.1, dims=["z"], attrs={"units": "mm"}),
+                "time": xr.DataArray(np.arange(10) * 0.1, dims=["time"], attrs={"units": "s"}),
+            },
+        )
+        path = tmp_path / "time_last.zarr"
+        xr.Dataset({"data": da}).to_zarr(path, zarr_format=2)
+
+        reader = read_zarr(str(path))
+        assert reader is not None
+        _, kwargs, _ = reader(str(path))[0]
+
+        # scale and translate must be in (x, y, z, time) order, not time-prepended.
+        npt.assert_allclose(kwargs["scale"], [0.05, 0.05, 0.1, 1.0], rtol=1e-5)
+        npt.assert_allclose(kwargs["translate"], [0.0, 0.0, 0.0, 0.0], atol=1e-10)
+        assert kwargs["axis_labels"] == ["x", "y", "z", "time"]
+        assert kwargs["units"] == ["mm", "mm", "mm", "s"]
+
     def test_units_from_coord_attrs(self, zarr_3d_path: Path) -> None:
         """Units are read from coordinate attrs and passed to napari."""
         reader = read_zarr(str(zarr_3d_path))

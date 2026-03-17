@@ -1439,30 +1439,28 @@ def plot_napari(
             "Ensure 'dim_order' contains all spatial dimension names."
         )
 
+    # Build scale, translate, and units in all_dims order so that each value
+    # is aligned with its corresponding dimension regardless of where the time
+    # axis appears (e.g. last for NIfTI vs first for Zarr).
     # Warnings for undefined dims are emitted by .fusi.spacing; fall back to 1.0 so the
     # scale bar still works.
     spacing = data.fusi.spacing
-    scale = [s if (s := spacing[dim]) is not None else 1.0 for dim in spatial_dims]
-
-    # .origin falls back to 0.0 for dimensions without coordinates.
-    coord_translates = [data.fusi.origin[dim] for dim in spatial_dims]
-
-    coord_units = [
-        data.coords[dim].attrs.get("units") if dim in data.coords else None
-        for dim in spatial_dims
+    scale = [
+        1.0 if dim == time_dim else (s if (s := spacing[dim]) is not None else 1.0)
+        for dim in all_dims
     ]
 
-    # Napari requires units to cover ALL dims (including time). Prepend time unit so
-    # that the list length matches ndim; passing None is accepted for unlabelled axes.
-    if time_dim is not None:
-        time_unit = (
-            data.coords[time_dim].attrs.get("units")
-            if time_dim in data.coords
-            else None
-        )
-        all_units: list[str | None] = [time_unit, *coord_units]
-    else:
-        all_units = coord_units
+    # .origin falls back to 0.0 for dimensions without coordinates.
+    origin = data.fusi.origin
+    coord_translates = [0.0 if dim == time_dim else origin[dim] for dim in all_dims]
+
+    # Napari requires units to cover ALL dims. Build in all_dims order so each
+    # unit aligns with the correct dimension; passing None is accepted for
+    # unlabelled axes.
+    all_units: list[str | None] = [
+        data.coords[dim].attrs.get("units") if dim in data.coords else None
+        for dim in all_dims
+    ]
 
     layer_kwargs.setdefault("name", data.name)
     if any(u is not None for u in all_units):
@@ -1548,7 +1546,10 @@ def plot_napari(
 
     if show_scale_bar:
         viewer.scale_bar.visible = True
-        scale_bar_unit = next((u for u in coord_units if u is not None), "mm")
+        scale_bar_unit = next(
+            (u for d, u in zip(all_dims, all_units) if d != time_dim and u is not None),
+            "mm",
+        )
         viewer.scale_bar.unit = scale_bar_unit
 
     return viewer, layer

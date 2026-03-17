@@ -29,8 +29,9 @@ def _da_to_layer_data(da: xr.DataArray, name: str) -> FullLayerData:
     * Includes [`origin`][confusius.xarray.FUSIAccessor.origin] as `translate`
       so the layer is positioned correctly in physical space.
     * Reads `"cmap"` from `da.attrs` for the colormap when present.
-    * Passes `axis_labels` from the DataArray dimensions.
-    * Passes `units` from coordinate attributes when available.
+    * Passes `axis_labels` and `units` from the DataArray dimensions and coordinate
+      attributes. These are stored on the layer but napari does not yet propagate them
+      to `viewer.dims.axis_labels` when loading via a reader plugin.
     """
     from typing import Any
 
@@ -38,32 +39,21 @@ def _da_to_layer_data(da: xr.DataArray, name: str) -> FullLayerData:
 
     all_dims = list(da.dims)
     time_dim = "time" if "time" in all_dims else None
-    spatial_dims = [d for d in all_dims if d != time_dim]
 
     spacing = da.fusi.spacing
     origin = da.fusi.origin
 
-    # Napari expects one scale value per array dimension.
-    # Use 1.0 for the time axis (frames are discrete slider steps).
-    spatial_scale = [
-        spacing[d] if spacing[d] is not None else 1.0 for d in spatial_dims
+    # Build scale, translate, and units in all_dims order so that each value
+    # is aligned with its corresponding dimension regardless of where the time
+    # axis appears (e.g. last for NIfTI vs first for Zarr).
+    scale: list[float] = [
+        1.0 if d == time_dim else (spacing[d] if spacing[d] is not None else 1.0)
+        for d in all_dims
     ]
-    scale = ([1.0] if time_dim else []) + spatial_scale
-
-    spatial_translate = [origin[d] for d in spatial_dims]
-    translate = ([0.0] if time_dim else []) + spatial_translate
-
-    coord_units: list[str | None] = [
-        da.coords[d].attrs.get("units") if d in da.coords else None
-        for d in spatial_dims
+    translate: list[float] = [0.0 if d == time_dim else origin[d] for d in all_dims]
+    all_units: list[str | None] = [
+        da.coords[d].attrs.get("units") if d in da.coords else None for d in all_dims
     ]
-    if time_dim is not None:
-        time_unit = (
-            da.coords[time_dim].attrs.get("units") if time_dim in da.coords else None
-        )
-        all_units: list[str | None] = [time_unit, *coord_units]
-    else:
-        all_units = coord_units
 
     kwargs: dict[str, Any] = {
         "name": name,
