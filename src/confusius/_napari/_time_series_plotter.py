@@ -41,6 +41,14 @@ class TimeSeriesPlotter(QWidget):
         # Whether at least one time series has been plotted (used to decide whether to
         # restore the zoom state on the next _update_plot call).
         self._has_plot: bool = False
+        # Whether the previous _update_plot call had valid data. Used to avoid
+        # restoring the default [0, 1] xlim that matplotlib sets when axes are cleared
+        # with no data (e.g. when the cursor leaves the image).
+        self._prev_ts_valid: bool = False
+
+        # Time coordinate values for the current layer, used to map frame indices to
+        # real time values on the x-axis.
+        self._time_coords: np.ndarray | None = None
 
         # Time cursor blitting state
         self._show_cursor: bool = False
@@ -193,12 +201,25 @@ class TimeSeriesPlotter(QWidget):
         if not self._cursor_timer.isActive():
             self._cursor_timer.start()
 
+    def _frame_to_x(self, frame: float) -> float:
+        """Convert a napari frame index to the x-axis value used for plotting.
+
+        When time coordinates are available the frame index is mapped to the
+        corresponding time value; otherwise the frame index is returned as-is.
+        """
+        if self._time_coords is not None:
+            idx = int(round(frame))
+            if 0 <= idx < len(self._time_coords):
+                return float(self._time_coords[idx])
+        return frame
+
     def _flush_cursor(self) -> None:
         """Perform the actual blit for the current cursor position."""
         if self._vline is not None and self._bg is not None:
             try:
+                x_cursor = self._frame_to_x(self._cursor_frame)
                 self._canvas.restore_region(self._bg)
-                self._vline.set_xdata([self._cursor_frame, self._cursor_frame])
+                self._vline.set_xdata([x_cursor, x_cursor])
                 self._axes.draw_artist(self._vline)
                 self._canvas.blit(self._figure.bbox)
             except Exception:  # noqa: BLE001
@@ -288,15 +309,22 @@ class TimeSeriesPlotter(QWidget):
         # restored so the user can zoom in and keep exploring. Y limits are only
         # restored when autoscale is off, so the axis still adjusts to the new voxel's
         # amplitude when autoscale is on.
-        saved_xlim = self._axes.get_xlim() if self._has_plot else None
+        #
+        # Only save limits when the previous call had valid data. If the cursor left
+        # the image, the axes were cleared with no data and matplotlib reset xlim to
+        # [0, 1]; restoring that would permanently constrain the axis.
+        save_zoom = self._has_plot and self._prev_ts_valid
+        saved_xlim = self._axes.get_xlim() if save_zoom else None
         saved_ylim = (
-            self._axes.get_ylim() if self._has_plot and not self._autoscale else None
+            self._axes.get_ylim() if save_zoom and not self._autoscale else None
         )
 
         colors = self._get_colors()
         self._axes.clear()
 
         ts = self._extract_time_series(self._current_layer, self._cursor_pos)
+        # Update stored time coordinates for cursor mapping.
+        self._time_coords = self._get_time_coords(self._current_layer)
         if ts is not None:
             if self._zscore:
                 ts_mean = np.mean(ts)
@@ -306,9 +334,14 @@ class TimeSeriesPlotter(QWidget):
                 else:
                     ts = ts - ts_mean
 
-            time_points = np.arange(len(ts))
+            if self._time_coords is not None and len(self._time_coords) == len(ts):
+                x_values = self._time_coords
+            else:
+                x_values = np.arange(len(ts))
+            xlabel = self._get_time_xlabel(self._current_layer)
+
             self._axes.plot(
-                time_points,
+                x_values,
                 ts,
                 linewidth=1.5,
                 color=colors["accent"],
@@ -321,7 +354,7 @@ class TimeSeriesPlotter(QWidget):
             spatial_coords = [c for i, c in enumerate(self._cursor_pos) if i != t_idx]
             coord_str = ", ".join(f"{c:.1f}" for c in spatial_coords)
 
-            self._axes.set_xlabel("Time Frame", color=colors["fg"], fontsize=9)
+            self._axes.set_xlabel(xlabel, color=colors["fg"], fontsize=9)
             if self._zscore:
                 self._axes.set_ylabel("Z-score", color=colors["fg"], fontsize=9)
             else:
@@ -351,10 +384,11 @@ class TimeSeriesPlotter(QWidget):
                 self._axes.set_ylim(saved_ylim)
 
             self._has_plot = True
+            self._prev_ts_valid = True
 
             if self._show_cursor:
                 self._vline = self._axes.axvline(
-                    self._cursor_frame,
+                    self._frame_to_x(self._cursor_frame),
                     color=colors["cursor"],
                     linewidth=1.2,
                     alpha=0.85,
@@ -364,6 +398,7 @@ class TimeSeriesPlotter(QWidget):
             else:
                 self._vline = None
         else:
+            self._prev_ts_valid = False
             self._vline = None
             # No valid data at the cursor position
             self._axes.text(
@@ -393,6 +428,31 @@ class TimeSeriesPlotter(QWidget):
         if da is not None and "time" in da.dims:
             return list(da.dims).index("time")
         return 0
+
+    def _get_time_coords(self, layer) -> np.ndarray | None:
+        """Return the time coordinate array from the layer's xarray metadata.
+
+        Returns None when no xarray metadata is present or the DataArray has no
+        "time" coordinate.
+        """
+        da = layer.metadata.get("xarray")
+        if da is not None and "time" in da.coords:
+            return np.asarray(da.coords["time"])
+        return None
+
+    def _get_time_xlabel(self, layer) -> str:
+        """Return the x-axis label for the time axis.
+
+        Reads ``long_name`` and ``units`` from the time coordinate attributes
+        when available. Falls back to ``"Time"`` and no units.
+        """
+        da = layer.metadata.get("xarray")
+        if da is not None and "time" in da.coords:
+            attrs = da.coords["time"].attrs
+            name = attrs.get("long_name", "Time")
+            units = attrs.get("units", "")
+            return f"{name} ({units})" if units else name
+        return "Time Frame"
 
     def _extract_time_series(self, layer, cursor_pos: np.ndarray) -> np.ndarray | None:
         """Extract time series at cursor position from layer.

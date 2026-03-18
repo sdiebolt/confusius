@@ -148,3 +148,126 @@ class TestOnMouseMove:
         viewer.add_image(np.zeros((10, 4, 6, 8)))
         plotter._on_mouse_move(viewer, _FakeEventNoShift())
         assert plotter._cursor_pos is None
+
+
+# ---------------------------------------------------------------------------
+# _get_time_coords
+# ---------------------------------------------------------------------------
+
+
+class TestGetTimeCoords:
+    def test_returns_none_without_xarray_metadata(self, plotter):
+        layer = _Layer(np.zeros((10, 4, 6, 8)))
+        assert plotter._get_time_coords(layer) is None
+
+    def test_returns_none_when_no_time_coord(self, plotter):
+        da = xr.DataArray(np.zeros((4, 6, 8)), dims=["z", "y", "x"])
+        layer = _Layer(np.zeros((4, 6, 8)), metadata={"xarray": da})
+        assert plotter._get_time_coords(layer) is None
+
+    def test_returns_correct_coords(self, plotter, sample_4d_volume):
+        layer = _Layer(np.zeros((10, 4, 6, 8)), metadata={"xarray": sample_4d_volume})
+        coords = plotter._get_time_coords(layer)
+        npt.assert_array_equal(coords, sample_4d_volume.coords["time"].values)
+
+
+# ---------------------------------------------------------------------------
+# _get_time_xlabel
+# ---------------------------------------------------------------------------
+
+
+class TestGetTimeXlabel:
+    def test_returns_time_frame_without_xarray_metadata(self, plotter):
+        layer = _Layer(np.zeros((10, 4, 6, 8)))
+        assert plotter._get_time_xlabel(layer) == "Time Frame"
+
+    def test_returns_time_frame_when_no_time_coord(self, plotter):
+        da = xr.DataArray(np.zeros((4, 6, 8)), dims=["z", "y", "x"])
+        layer = _Layer(np.zeros((4, 6, 8)), metadata={"xarray": da})
+        assert plotter._get_time_xlabel(layer) == "Time Frame"
+
+    def test_uses_units_from_time_coord(self, plotter, sample_4d_volume):
+        # sample_4d_volume has time attrs={"units": "s"}, no long_name.
+        layer = _Layer(np.zeros((10, 4, 6, 8)), metadata={"xarray": sample_4d_volume})
+        assert plotter._get_time_xlabel(layer) == "Time (s)"
+
+    def test_uses_long_name_and_units(self, plotter):
+        da = xr.DataArray(
+            np.zeros((5, 4)),
+            dims=["time", "x"],
+            coords={
+                "time": xr.DataArray(
+                    np.arange(5) * 0.5,
+                    dims=["time"],
+                    attrs={"long_name": "Elapsed time", "units": "s"},
+                )
+            },
+        )
+        layer = _Layer(np.zeros((5, 4)), metadata={"xarray": da})
+        assert plotter._get_time_xlabel(layer) == "Elapsed time (s)"
+
+    def test_omits_parentheses_when_no_units(self, plotter):
+        da = xr.DataArray(
+            np.zeros((5, 4)),
+            dims=["time", "x"],
+            coords={
+                "time": xr.DataArray(
+                    np.arange(5),
+                    dims=["time"],
+                    attrs={"long_name": "Frame index"},
+                )
+            },
+        )
+        layer = _Layer(np.zeros((5, 4)), metadata={"xarray": da})
+        assert plotter._get_time_xlabel(layer) == "Frame index"
+
+
+# ---------------------------------------------------------------------------
+# _frame_to_x
+# ---------------------------------------------------------------------------
+
+
+class TestFrameToX:
+    def test_returns_frame_when_no_time_coords(self, plotter):
+        plotter._time_coords = None
+        assert plotter._frame_to_x(3.0) == 3.0
+
+    def test_maps_frame_index_to_time_value(self, plotter):
+        plotter._time_coords = np.array([10.0, 10.5, 11.0, 11.5])
+        assert plotter._frame_to_x(2.0) == 11.0
+
+    def test_out_of_bounds_frame_falls_back_to_frame_value(self, plotter):
+        plotter._time_coords = np.array([10.0, 10.5, 11.0])
+        assert plotter._frame_to_x(99.0) == 99.0
+
+
+# ---------------------------------------------------------------------------
+# _update_plot — xlim regression
+# ---------------------------------------------------------------------------
+
+
+class TestUpdatePlotXlim:
+    def test_xlim_recovers_after_leaving_image(self, plotter, rng):
+        """Regression: xlim must not stay at matplotlib default [0, 1] after the
+        cursor briefly leaves the image and then returns.
+        """
+        data = rng.random((10, 4, 6, 8))
+        layer = _Layer(data)
+        plotter._current_layer = layer
+
+        # First valid plot — establishes the correct x range.
+        plotter._cursor_pos = np.array([0, 1, 2, 3])
+        plotter._update_plot()
+        xlim_first = plotter._axes.get_xlim()
+
+        # Cursor leaves the image (out-of-bounds → ts is None).
+        plotter._cursor_pos = np.array([0, 99, 99, 99])
+        plotter._update_plot()
+
+        # Cursor returns to the same valid position.
+        plotter._cursor_pos = np.array([0, 1, 2, 3])
+        plotter._update_plot()
+        xlim_recovered = plotter._axes.get_xlim()
+
+        # The recovered xlim must match the original, not be stuck at [0, 1].
+        npt.assert_allclose(xlim_recovered, xlim_first)
