@@ -1445,14 +1445,11 @@ def plot_napari(
     # Warnings for undefined dims are emitted by .fusi.spacing; fall back to 1.0 so the
     # scale bar still works.
     spacing = data.fusi.spacing
-    scale = [
-        1.0 if dim == time_dim else (s if (s := spacing[dim]) is not None else 1.0)
-        for dim in all_dims
-    ]
+    scale = [s if (s := spacing[dim]) is not None else 1.0 for dim in all_dims]
 
     # .origin falls back to 0.0 for dimensions without coordinates.
     origin = data.fusi.origin
-    coord_translates = [0.0 if dim == time_dim else origin[dim] for dim in all_dims]
+    coord_translates = [origin[dim] for dim in all_dims]
 
     # Napari requires units to cover ALL dims. Build in all_dims order so each
     # unit aligns with the correct dimension; passing None is accepted for

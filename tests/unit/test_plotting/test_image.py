@@ -5,10 +5,11 @@ See conftest.py for the matplotlib_pyplot fixture setup.
 """
 
 import numpy as np
+import numpy.testing as npt
 import pytest
 import xarray as xr
 
-from confusius.plotting import VolumePlotter, plot_contours, plot_volume
+from confusius.plotting import VolumePlotter, plot_contours, plot_napari, plot_volume
 
 
 class TestPlotVolume:
@@ -365,9 +366,10 @@ class TestVolumePlotterAddVolume:
             slice_coords=[sample_3d_volume.coords["z"].values[2]],
         )
 
+        z_vals = sample_3d_volume.coords["z"].values
         with pytest.warns(UserWarning, match="Could not find matching axes"):
             plotter.add_volume(
-                sample_3d_volume.sel(z=[0.0, 0.1, 0.3], method="nearest"),
+                sample_3d_volume.sel(z=z_vals[[0, 1, 3]], method="nearest"),
                 cmap="viridis",
             )
 
@@ -513,6 +515,49 @@ class TestVolumePlotterAddContours:
         mask = self._make_mask(sample_3d_volume, [0, 1])
         with pytest.warns(UserWarning, match="Could not find matching axes"):
             plotter.add_contours(mask, colors="red")
+
+
+class TestPlotNapari:
+    """Tests for plot_napari scale and translate parameters."""
+
+    def test_3d_scale_and_translate(self, sample_3d_volume, make_napari_viewer) -> None:
+        """3D layer scale matches fusi.spacing; translate matches fusi.origin."""
+        viewer = make_napari_viewer()
+        _, layer = plot_napari(
+            sample_3d_volume, viewer=viewer, show_colorbar=False, show_scale_bar=False
+        )
+
+        # z: origin=1.0 spacing=0.2; y: origin=2.0 spacing=0.1; x: origin=3.0 spacing=0.05
+        npt.assert_allclose(layer.scale, [0.2, 0.1, 0.05], rtol=1e-5)
+        npt.assert_allclose(layer.translate, [1.0, 2.0, 3.0], rtol=1e-5)
+        viewer.close()
+
+    def test_4d_scale_uses_time_spacing(
+        self, sample_4d_volume, make_napari_viewer
+    ) -> None:
+        """4D layer scale uses fusi.spacing for all dims, including time."""
+        viewer = make_napari_viewer()
+        _, layer = plot_napari(
+            sample_4d_volume, viewer=viewer, show_colorbar=False, show_scale_bar=False
+        )
+
+        # time: origin=10.0 spacing=0.5; z: origin=1.0 spacing=0.2;
+        # y: origin=2.0 spacing=0.1; x: origin=3.0 spacing=0.05
+        npt.assert_allclose(layer.scale, [0.5, 0.2, 0.1, 0.05], rtol=1e-5)
+        npt.assert_allclose(layer.translate, [10.0, 1.0, 2.0, 3.0], rtol=1e-5)
+        viewer.close()
+
+    def test_scale_falls_back_to_1_when_no_coords(self, make_napari_viewer) -> None:
+        """Dims without coordinates use scale=1.0 and translate=0.0."""
+        da = xr.DataArray(np.zeros((4, 6, 8), dtype=np.float32), dims=["z", "y", "x"])
+        viewer = make_napari_viewer()
+        with pytest.warns(UserWarning):
+            _, layer = plot_napari(
+                da, viewer=viewer, show_colorbar=False, show_scale_bar=False
+            )
+
+        npt.assert_allclose(layer.scale, [1.0, 1.0, 1.0], rtol=1e-5)
+        viewer.close()
 
 
 # Image comparison tests with pytest-mpl

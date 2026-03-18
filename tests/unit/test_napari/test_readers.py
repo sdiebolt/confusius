@@ -129,19 +129,21 @@ class TestReaderLayerData:
 
         assert layer_type == "image"
 
-        # Coords: z=[0, 0.1, 0.2, 0.3], y=[0..0.25 step 0.05], x=[0..0.35 step 0.05]
-        npt.assert_allclose(kwargs["scale"], [0.1, 0.05, 0.05], rtol=1e-5)
-        npt.assert_allclose(kwargs["translate"], [0.0, 0.0, 0.0], atol=1e-10)
+        # Coords: z=[1.0..1.6 step 0.2], y=[2.0..2.5 step 0.1], x=[3.0..3.35 step 0.05]
+        npt.assert_allclose(kwargs["scale"], [0.2, 0.1, 0.05], rtol=1e-5)
+        npt.assert_allclose(kwargs["translate"], [1.0, 2.0, 3.0], rtol=1e-5)
         assert kwargs["axis_labels"] == ["z", "y", "x"]
 
-    def test_4d_scale_uses_1_for_time(self, zarr_4d_path: Path) -> None:
-        """4D scale uses 1.0 for the time axis (frames are discrete steps)."""
+    def test_4d_scale_uses_time_spacing(self, zarr_4d_path: Path) -> None:
+        """4D scale uses fusi.spacing for all dims, including time."""
         reader = read_zarr(str(zarr_4d_path))
         assert reader is not None
         _, kwargs, _ = reader(str(zarr_4d_path))[0]
 
-        npt.assert_allclose(kwargs["scale"], [1.0, 0.1, 0.05, 0.05], rtol=1e-5)
-        npt.assert_allclose(kwargs["translate"], [0.0, 0.0, 0.0, 0.0], atol=1e-10)
+        # time: origin=10.0 spacing=0.5; z: origin=1.0 spacing=0.2;
+        # y: origin=2.0 spacing=0.1; x: origin=3.0 spacing=0.05
+        npt.assert_allclose(kwargs["scale"], [0.5, 0.2, 0.1, 0.05], rtol=1e-5)
+        npt.assert_allclose(kwargs["translate"], [10.0, 1.0, 2.0, 3.0], rtol=1e-5)
         assert kwargs["axis_labels"] == ["time", "z", "y", "x"]
 
     def test_time_last_dim_order(self, tmp_path: Path) -> None:
@@ -150,10 +152,10 @@ class TestReaderLayerData:
             np.zeros((8, 6, 4, 10), dtype=np.float32),
             dims=["x", "y", "z", "time"],
             coords={
-                "x": xr.DataArray(np.arange(8) * 0.05, dims=["x"], attrs={"units": "mm"}),
-                "y": xr.DataArray(np.arange(6) * 0.05, dims=["y"], attrs={"units": "mm"}),
-                "z": xr.DataArray(np.arange(4) * 0.1, dims=["z"], attrs={"units": "mm"}),
-                "time": xr.DataArray(np.arange(10) * 0.1, dims=["time"], attrs={"units": "s"}),
+                "x": xr.DataArray(1.0 + np.arange(8) * 0.05, dims=["x"], attrs={"units": "mm"}),
+                "y": xr.DataArray(2.0 + np.arange(6) * 0.10, dims=["y"], attrs={"units": "mm"}),
+                "z": xr.DataArray(3.0 + np.arange(4) * 0.20, dims=["z"], attrs={"units": "mm"}),
+                "time": xr.DataArray(10.0 + np.arange(10) * 0.5, dims=["time"], attrs={"units": "s"}),
             },
         )
         path = tmp_path / "time_last.zarr"
@@ -164,8 +166,8 @@ class TestReaderLayerData:
         _, kwargs, _ = reader(str(path))[0]
 
         # scale and translate must be in (x, y, z, time) order, not time-prepended.
-        npt.assert_allclose(kwargs["scale"], [0.05, 0.05, 0.1, 1.0], rtol=1e-5)
-        npt.assert_allclose(kwargs["translate"], [0.0, 0.0, 0.0, 0.0], atol=1e-10)
+        npt.assert_allclose(kwargs["scale"], [0.05, 0.10, 0.20, 0.5], rtol=1e-5)
+        npt.assert_allclose(kwargs["translate"], [1.0, 2.0, 3.0, 10.0], rtol=1e-5)
         assert kwargs["axis_labels"] == ["x", "y", "z", "time"]
         assert kwargs["units"] == ["mm", "mm", "mm", "s"]
 

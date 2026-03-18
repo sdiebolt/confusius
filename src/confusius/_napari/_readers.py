@@ -38,7 +38,6 @@ def _da_to_layer_data(da: xr.DataArray, name: str) -> FullLayerData:
     import confusius  # noqa: F401 — registers the .fusi accessor
 
     all_dims = list(da.dims)
-    time_dim = "time" if "time" in all_dims else None
 
     spacing = da.fusi.spacing
     origin = da.fusi.origin
@@ -47,10 +46,9 @@ def _da_to_layer_data(da: xr.DataArray, name: str) -> FullLayerData:
     # is aligned with its corresponding dimension regardless of where the time
     # axis appears (e.g. last for NIfTI vs first for Zarr).
     scale: list[float] = [
-        1.0 if d == time_dim else (spacing[d] if spacing[d] is not None else 1.0)
-        for d in all_dims
+        spacing[d] if spacing[d] is not None else 1.0 for d in all_dims
     ]
-    translate: list[float] = [0.0 if d == time_dim else origin[d] for d in all_dims]
+    translate: list[float] = [origin[d] for d in all_dims]
     all_units: list[str | None] = [
         da.coords[d].attrs.get("units") if d in da.coords else None for d in all_dims
     ]
