@@ -22,3 +22,25 @@ Or in BibTeX format:
   url       = {https://doi.org/10.5281/zenodo.18611124}
 }
 ```
+
+## Citing napari
+
+The ConfUSIus GUI is built on top of [napari](https://napari.org), a powerful
+multi-dimensional image viewer for Python. If you use the ConfUSIus GUI in your
+research, please also cite napari:
+
+> napari contributors (2019). napari: a multi-dimensional image viewer for
+> Python. Zenodo. https://doi.org/10.5281/zenodo.3555620
+
+Or in BibTeX format:
+
+```bibtex
+@software{napari,
+  author    = {{napari contributors}},
+  title     = {napari: a multi-dimensional image viewer for {Python}},
+  year      = {2019},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.3555620},
+  url       = {https://doi.org/10.5281/zenodo.3555620}
+}
+```
