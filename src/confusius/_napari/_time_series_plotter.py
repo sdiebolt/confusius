@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 import napari
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -55,7 +57,7 @@ class TimeSeriesPlotter(QWidget):
         self._time_coords: np.ndarray | None = None
 
         # Source mode: "mouse" | "points" | "labels".
-        self._source_mode: str = "mouse"
+        self._source_mode: Literal["mouse", "points", "labels"] = "mouse"
         self._points_layer = None
         self._labels_layer = None
         self._ref_layers: list | None = None  # None = all image layers with time dim
@@ -139,7 +141,7 @@ class TimeSeriesPlotter(QWidget):
         self._axes.yaxis.label.set_color(colors["fg"])
         self._axes.title.set_color(colors["fg"])
 
-        self._canvas.draw()
+        self._canvas.draw_idle()
 
     def set_ylim(self, min_val: float | None, max_val: float | None) -> None:
         """Set Y-axis limits.
@@ -317,7 +319,7 @@ class TimeSeriesPlotter(QWidget):
         for spine in self._axes.spines.values():
             spine.set_visible(False)
         self._vline = None
-        self._canvas.draw()
+        self._canvas.draw_idle()
 
     def _show_instructions(self) -> None:
         """Show initial instructions appropriate for the current source mode."""
@@ -467,7 +469,7 @@ class TimeSeriesPlotter(QWidget):
             for spine in self._axes.spines.values():
                 spine.set_visible(False)
 
-        self._canvas.draw()
+        self._canvas.draw_idle()
 
     def _time_dim_index(self, layer) -> int:
         """Return the data dimension index that corresponds to time.
@@ -530,7 +532,7 @@ class TimeSeriesPlotter(QWidget):
     # Source mode — public setters
     # ------------------------------------------------------------------
 
-    def set_source_mode(self, mode: str) -> None:
+    def set_source_mode(self, mode: Literal["mouse", "points", "labels"]) -> None:
         """Switch the active plotting source.
 
         Parameters
@@ -540,8 +542,8 @@ class TimeSeriesPlotter(QWidget):
         """
         self._source_mode = mode
         if mode == "mouse":
-            # Invalidate the saved zoom state so the first mouse-hover plot
-            # does not restore the [0, 1] xlim left by the cleared axes.
+            # Invalidate the saved zoom state so the first mouse-hover plot does not
+            # restore the [0, 1] xlim left by the cleared axes.
             self._has_plot = False
             self._prev_ts_valid = False
             self._show_instructions()
@@ -846,7 +848,7 @@ class TimeSeriesPlotter(QWidget):
             self._show_message("No valid data at the point positions.\n")
             return
 
-        self._canvas.draw()
+        self._canvas.draw_idle()
 
     def _update_plot_from_labels(self) -> None:
         """Plot mean time series for each unique label in the Labels layer."""
@@ -881,8 +883,8 @@ class TimeSeriesPlotter(QWidget):
             img_data = img_layer.data
             img_spatial = tuple(s for i, s in enumerate(img_data.shape) if i != t_idx)
 
-            # Labels can have the full image shape (T, Z, Y, X) — napari creates labels
-            # with the same shape as the reference image — or the spatial shape only (Z,
+            # Labels can have the full image shape (T, Z, Y, X) (napari creates labels
+            # with the same shape as the reference image) or the spatial shape only (Z,
             # Y, X). Collapse the time axis in the former case.
             if labels_data.shape == img_data.shape:
                 labels_spatial = np.max(labels_data, axis=t_idx)
@@ -947,7 +949,7 @@ class TimeSeriesPlotter(QWidget):
             self._show_message("No valid data extracted from the Labels layer.")
             return
 
-        self._canvas.draw()
+        self._canvas.draw_idle()
 
     def closeEvent(self, a0) -> None:
         """Clean up when widget is closed.

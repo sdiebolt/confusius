@@ -13,6 +13,7 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
     QVBoxLayout,
     QWidget,
@@ -326,8 +327,24 @@ class ConfUSIusWidget(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        root.addWidget(self._make_header())
-        root.addWidget(self._make_accordion(), stretch=1)
+        # Wrap header + accordion in a scroll area so the sidebar dock can be
+        # made arbitrarily short without forcing a tall minimum on the middle
+        # band of the main window layout (which would cap how high the bottom
+        # dock can grow). Content scrolls vertically when the dock is short.
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        content_layout.setSpacing(0)
+        content_layout.addWidget(self._make_header())
+        content_layout.addWidget(self._make_accordion(), stretch=1)
+
+        scroll = QScrollArea()
+        scroll.setWidget(content)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+
+        root.addWidget(scroll)
 
     def _make_header(self) -> QWidget:
         header = QWidget()

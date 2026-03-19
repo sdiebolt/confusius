@@ -186,15 +186,14 @@ class TimeSeriesPanel(QWidget):
         self._cursor_check = QCheckBox("Show time cursor")
         self._cursor_check.setChecked(False)
         self._cursor_check.setToolTip(
-            "Draw a vertical cursor on the plot tracking the napari time slider.\n"
-            "Uses blitting for low overhead, but keep disabled if you notice lag."
+            "Draw a vertical cursor on the plot tracking the napari time slider."
         )
         self._cursor_check.toggled.connect(self._on_cursor_toggled)
         display_layout.addWidget(self._cursor_check)
 
         layout.addWidget(display_group)
 
-        # Show plot button — disabled while the dock is visible.
+        # Show plot button, disabled while the dock is visible.
         self._show_btn = QPushButton("Show Time Series Plot")
         self._show_btn.setObjectName("primary_btn")
         self._show_btn.clicked.connect(self._show_plot)
@@ -212,8 +211,8 @@ class TimeSeriesPanel(QWidget):
         """Return the bottom-dock TimeSeriesPlotter.
 
         Creates and docks the widget on first call. If the dock was closed (the
-        plotter's parent becomes None after napari removes it), re-docks it.
-        When the plotter is already in a live dock this is a no-op.
+        plotter's parent becomes None after napari removes it), re-docks it. When the
+        plotter is already in a live dock this is a no-op.
         """
         from confusius._napari._time_series_plotter import TimeSeriesPlotter
 
@@ -221,13 +220,10 @@ class TimeSeriesPanel(QWidget):
             self._plotter = TimeSeriesPlotter(self._viewer)
 
         if self._plotter.parent() is None:
-            # Widget is not docked — create (or re-create) the dock.
+            # Widget is not docked, create (or re-create) the dock.
             dock = self._viewer.window.add_dock_widget(
                 self._plotter, name="Time Series Plot", area="bottom"
             )
-            # NOTE: do NOT call dock.setFloating(False) here — the dock is
-            # already non-floating, and calling it triggers an extra layout
-            # recalculation that can corrupt Qt's HiDPI coordinate mapping.
 
             # Disable the button while the dock is visible; re-enable on hide/close.
             self._show_btn.setEnabled(False)
@@ -267,7 +263,7 @@ class TimeSeriesPanel(QWidget):
                             side_dock.widget().setMinimumSize(QSize(0, 0))
                 main_win.resizeDocks([dock], [200], Qt.Orientation.Vertical)
 
-            QTimer.singleShot(200, _settle_layout)
+            QTimer.singleShot(500, _settle_layout)
 
         # Always sync panel settings to the plotter (covers the case where settings like
         # the time cursor were configured before the plotter was first created).
@@ -402,10 +398,10 @@ class TimeSeriesPanel(QWidget):
         self._labels_combo.blockSignals(False)
         self._ref_combo.blockSignals(False)
 
-        # Defer the plotter sync to the next event-loop iteration. When called
-        # from an `inserted` event, this ensures napari has finished setting up
-        # the new layer (including computing contrast limits via its async slice
-        # worker) before we trigger a canvas redraw in the plotter.
+        # Defer the plotter sync to the next event-loop iteration. When called from an
+        # `inserted` event, this ensures napari has finished setting up the new layer
+        # (including computing contrast limits via its async slice worker) before we
+        # trigger a canvas redraw in the plotter.
         QTimer.singleShot(0, self._sync_source_to_plotter)
 
     def _on_source_mode_changed(self, btn_id: int, checked: bool) -> None:
@@ -488,7 +484,7 @@ class TimeSeriesPanel(QWidget):
                     float(t) for i, t in enumerate(layer.translate) if i != t_idx
                 )
                 return shape, scale, translate
-            # Fallback: treat dim 0 as time for 4-D+ layers without xarray metadata.
+            # Fallback: treat dim 0 as time for 4D+ layers without xarray metadata.
             if layer.data.ndim >= 4:
                 return (
                     layer.data.shape[1:],
@@ -513,7 +509,7 @@ class TimeSeriesPanel(QWidget):
         if scale is not None:
             kwargs["scale"] = scale
             # napari's default point size is 10 world-units, which is enormous for
-            # mm-scale data. Use 3 voxels in the finest direction instead.
+            # mm-scale data.
             kwargs["size"] = 2.0
         if translate is not None:
             kwargs["translate"] = translate

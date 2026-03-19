@@ -245,9 +245,8 @@ class QCPanel(QWidget):
                 for side_dock in main_win.findChildren(QDockWidget):
                     if side_dock is not dock:
                         side_dock.setMinimumHeight(0)
-                        side_dock.widget().setMinimumSize(
-                            QSize(0, 0)
-                        ) if side_dock.widget() else None
+                        if side_dock.widget() is not None:
+                            side_dock.widget().setMinimumSize(QSize(0, 0))
 
                 # Ensure the window is tall enough that the initial dock height leaves
                 # room for the user to resize upward.
