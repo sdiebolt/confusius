@@ -5,14 +5,19 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import napari
-from qtpy.QtCore import Qt
+from qtpy.QtCore import Qt, QTimer
 from qtpy.QtWidgets import (
+    QButtonGroup,
     QCheckBox,
+    QComboBox,
+    QDockWidget,
     QDoubleSpinBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMainWindow,
     QPushButton,
+    QRadioButton,
     QVBoxLayout,
     QWidget,
 )
@@ -47,7 +52,78 @@ class TimeSeriesPanel(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        # Axis limits group
+        # Source group.
+        source_group = QGroupBox("Source")
+        source_layout = QVBoxLayout(source_group)
+        source_layout.setSpacing(4)
+
+        self._source_btn_group = QButtonGroup(self)
+
+        # Mouse row.
+        self._radio_mouse = QRadioButton("Mouse (Shift + hover)")
+        self._radio_mouse.setChecked(True)
+        self._source_btn_group.addButton(self._radio_mouse, 0)
+        source_layout.addWidget(self._radio_mouse)
+
+        # Points row — text is part of the radio button (same pattern as the
+        # Mouse row) so the indicator and label are always flush with no gap.
+        points_row = QHBoxLayout()
+        self._radio_points = QRadioButton("Points:")
+        self._source_btn_group.addButton(self._radio_points, 1)
+        points_row.addWidget(self._radio_points)
+        self._points_combo = QComboBox()
+        self._points_combo.setEnabled(False)
+        points_row.addWidget(self._points_combo, stretch=1)
+        self._new_points_btn = QPushButton("+")
+        self._new_points_btn.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self._new_points_btn.setToolTip(
+            "Create a new 3-D Points layer (no time axis).\n"
+            "Points will be visible at all time steps."
+        )
+        self._new_points_btn.clicked.connect(self._create_points_layer)
+        points_row.addWidget(self._new_points_btn)
+        source_layout.addLayout(points_row)
+
+        # Labels row.
+        labels_row = QHBoxLayout()
+        self._radio_labels = QRadioButton("Labels:")
+        self._source_btn_group.addButton(self._radio_labels, 2)
+        labels_row.addWidget(self._radio_labels)
+        self._labels_combo = QComboBox()
+        self._labels_combo.setEnabled(False)
+        labels_row.addWidget(self._labels_combo, stretch=1)
+        self._new_labels_btn = QPushButton("+")
+        self._new_labels_btn.setStyleSheet("font-weight: bold; font-size: 14px;")
+        self._new_labels_btn.setToolTip(
+            "Create a new 3-D Labels layer (no time axis).\n"
+            "Labels will be visible at all time steps."
+        )
+        self._new_labels_btn.clicked.connect(self._create_labels_layer)
+        labels_row.addWidget(self._new_labels_btn)
+        source_layout.addLayout(labels_row)
+
+        # Reference image (enabled in points/labels mode).
+        ref_row = QHBoxLayout()
+        self._ref_label = QLabel("Reference:")
+        self._ref_label.setEnabled(False)
+        ref_row.addWidget(self._ref_label)
+        self._ref_combo = QComboBox()
+        self._ref_combo.setEnabled(False)
+        ref_row.addWidget(self._ref_combo, stretch=1)
+        source_layout.addLayout(ref_row)
+
+        layout.addWidget(source_group)
+
+        self._source_btn_group.idToggled.connect(self._on_source_mode_changed)
+        self._points_combo.currentTextChanged.connect(self._on_source_selection_changed)
+        self._labels_combo.currentTextChanged.connect(self._on_source_selection_changed)
+        self._ref_combo.currentTextChanged.connect(self._on_source_selection_changed)
+
+        self._viewer.layers.events.inserted.connect(self._refresh_source_combos)
+        self._viewer.layers.events.removed.connect(self._refresh_source_combos)
+        self._refresh_source_combos()
+
+        # Axis limits group.
         limits_group = QGroupBox("Axis Limits")
         limits_layout = QVBoxLayout(limits_group)
         limits_layout.setSpacing(4)
@@ -66,7 +142,7 @@ class TimeSeriesPanel(QWidget):
         autoscale_row.addStretch()
         limits_layout.addLayout(autoscale_row)
 
-        # Y-axis limits
+        # Y-axis limits.
         y_layout = QHBoxLayout()
         ymin_label = QLabel("<i>y</i> min:")
         ymin_label.setTextFormat(Qt.TextFormat.RichText)
@@ -93,7 +169,7 @@ class TimeSeriesPanel(QWidget):
 
         layout.addWidget(limits_group)
 
-        # Display options
+        # Display options.
         display_group = QGroupBox("Display Options")
         display_layout = QVBoxLayout(display_group)
         display_layout.setSpacing(4)
@@ -150,7 +226,9 @@ class TimeSeriesPanel(QWidget):
             dock = self._viewer.window.add_dock_widget(
                 self._plotter, name="Time Series Plot", area="bottom"
             )
-            dock.setFloating(False)
+            # NOTE: do NOT call dock.setFloating(False) here — the dock is
+            # already non-floating, and calling it triggers an extra layout
+            # recalculation that can corrupt Qt's HiDPI coordinate mapping.
 
             # Disable the button while the dock is visible; re-enable on hide/close.
             self._show_btn.setEnabled(False)
@@ -158,9 +236,44 @@ class TimeSeriesPanel(QWidget):
                 lambda visible: self._show_btn.setEnabled(not visible)
             )
 
-        # Always sync panel settings to the plotter (covers the case where settings
-        # like the time cursor were configured before the plotter was first created).
+            # Defer a resizeDocks call so Qt can settle the layout at the correct DPI
+            # before the canvas first paints. This mirrors the pattern used in the QC
+            # panel and prevents the HiDPI click-offset bug.
+            def _settle_layout() -> None:
+                main_win: QMainWindow | None = None
+                p = dock.parent()
+                while p is not None:
+                    if isinstance(p, QMainWindow):
+                        main_win = p
+                        break
+                    p = p.parent()
+                if main_win is None:
+                    return
+                # Zero minimum sizes on the central widget and all its children so the
+                # bottom dock splitter can be dragged freely.  This also forces Qt to
+                # recompute the window's device-pixel geometry, which fixes the HiDPI
+                # click-offset bug triggered by adding a dock widget (mirrors the fix in
+                # _ensure_qc_plots).
+                from qtpy.QtCore import QSize
+
+                central = main_win.centralWidget()
+                if central is not None:
+                    central.setMinimumSize(QSize(0, 0))
+                    for w in central.findChildren(QWidget):
+                        w.setMinimumSize(QSize(0, 0))
+                for side_dock in main_win.findChildren(QDockWidget):
+                    if side_dock is not dock:
+                        side_dock.setMinimumHeight(0)
+                        if side_dock.widget() is not None:
+                            side_dock.widget().setMinimumSize(QSize(0, 0))
+                main_win.resizeDocks([dock], [200], Qt.Orientation.Vertical)
+
+            QTimer.singleShot(200, _settle_layout)
+
+        # Always sync panel settings to the plotter (covers the case where settings like
+        # the time cursor were configured before the plotter was first created).
         self._apply_settings()
+        self._sync_source_to_plotter()
         if self._cursor_check.isChecked():
             self._plotter.set_time_cursor(self._current_frame())
 
@@ -200,7 +313,7 @@ class TimeSeriesPanel(QWidget):
     def _time_dim_index(self) -> int:
         """Return the viewer dimension index for time.
 
-        Reads xarray metadata from the first layer that has a ``"time"`` dim;
+        Reads xarray metadata from the first layer that has a `"time"` dim;
         falls back to 0.
         """
         for layer in self._viewer.layers:
@@ -239,3 +352,194 @@ class TimeSeriesPanel(QWidget):
         """Handle napari theme change."""
         if self._plotter is not None:
             self._plotter.on_theme_changed()
+
+    # ------------------------------------------------------------------
+    # Source management
+    # ------------------------------------------------------------------
+
+    def _refresh_source_combos(self, _event=None) -> None:
+        """Repopulate all source combo boxes from the current viewer layers."""
+        # Preserve current selections.
+        cur_points = self._points_combo.currentText()
+        cur_labels = self._labels_combo.currentText()
+        cur_ref = self._ref_combo.currentText()
+
+        self._points_combo.blockSignals(True)
+        self._labels_combo.blockSignals(True)
+        self._ref_combo.blockSignals(True)
+
+        self._points_combo.clear()
+        self._labels_combo.clear()
+        self._ref_combo.clear()
+
+        self._ref_combo.addItem("All image layers")
+
+        for layer in self._viewer.layers:
+            t = layer._type_string
+            if t == "points":
+                self._points_combo.addItem(layer.name)
+            elif t == "labels":
+                self._labels_combo.addItem(layer.name)
+            elif t == "image" and not getattr(layer, "rgb", False):
+                # Only show layers that have a time dimension so spatial maps (tSNR, CV,
+                # ...) are not offered as reference images.
+                da = layer.metadata.get("xarray")
+                has_time = (
+                    ("time" in da.dims) if da is not None else layer.data.ndim >= 4
+                )
+                if has_time:
+                    self._ref_combo.addItem(layer.name)
+
+        for combo, prev in (
+            (self._points_combo, cur_points),
+            (self._labels_combo, cur_labels),
+            (self._ref_combo, cur_ref),
+        ):
+            idx = combo.findText(prev)
+            if idx >= 0:
+                combo.setCurrentIndex(idx)
+
+        self._points_combo.blockSignals(False)
+        self._labels_combo.blockSignals(False)
+        self._ref_combo.blockSignals(False)
+
+        self._sync_source_to_plotter()
+
+    def _on_source_mode_changed(self, btn_id: int, checked: bool) -> None:
+        """Handle radio button toggling between source modes."""
+        if not checked:
+            return
+        is_mouse = btn_id == 0
+        self._points_combo.setEnabled(btn_id == 1)
+        self._labels_combo.setEnabled(btn_id == 2)
+        self._ref_combo.setEnabled(not is_mouse)
+        self._ref_label.setEnabled(not is_mouse)
+        self._sync_source_to_plotter()
+
+    def _on_source_selection_changed(self) -> None:
+        """Handle combo box selection changes."""
+        self._sync_source_to_plotter()
+
+    def _sync_source_to_plotter(self) -> None:
+        """Push the current source mode and layer selections to the plotter."""
+        plotter = self._plotter
+        if plotter is None:
+            return
+
+        btn_id = self._source_btn_group.checkedId()
+        mode = {0: "mouse", 1: "points", 2: "labels"}.get(btn_id, "mouse")
+
+        # Reference layers.
+        ref_text = self._ref_combo.currentText()
+        if ref_text == "All image layers" or not ref_text:
+            plotter.set_ref_layers(None)
+        else:
+            try:
+                plotter.set_ref_layers([self._viewer.layers[ref_text]])
+            except KeyError:
+                plotter.set_ref_layers(None)
+
+        # Points layer.
+        points_text = self._points_combo.currentText()
+        if points_text:
+            try:
+                plotter.set_points_layer(self._viewer.layers[points_text])
+            except KeyError:
+                plotter.set_points_layer(None)
+        else:
+            plotter.set_points_layer(None)
+
+        # Labels layer.
+        labels_text = self._labels_combo.currentText()
+        if labels_text:
+            try:
+                plotter.set_labels_layer(self._viewer.layers[labels_text])
+            except KeyError:
+                plotter.set_labels_layer(None)
+        else:
+            plotter.set_labels_layer(None)
+
+        # Mode last, triggers a replot with the already-updated layers.
+        plotter.set_source_mode(mode)
+
+    def _spatial_info(
+        self,
+    ) -> tuple[
+        tuple[int, ...] | None, tuple[float, ...] | None, tuple[float, ...] | None
+    ]:
+        """Return (shape, scale, translate) for the first temporal image layer.
+
+        All three values come from the *same* layer so they are guaranteed to
+        be consistent.  Returns `(None, None, None)` when no suitable layer
+        is found.
+        """
+        for layer in self._viewer.layers:
+            if layer._type_string != "image":
+                continue
+            da = layer.metadata.get("xarray")
+            if da is not None and "time" in da.dims:
+                t_idx = list(da.dims).index("time")
+                shape = tuple(s for dim, s in zip(da.dims, da.shape) if dim != "time")
+                scale = tuple(float(s) for i, s in enumerate(layer.scale) if i != t_idx)
+                translate = tuple(
+                    float(t) for i, t in enumerate(layer.translate) if i != t_idx
+                )
+                return shape, scale, translate
+            # Fallback: treat dim 0 as time for 4-D+ layers without xarray metadata.
+            if layer.data.ndim >= 4:
+                return (
+                    layer.data.shape[1:],
+                    tuple(float(s) for s in layer.scale[1:]),
+                    tuple(float(t) for t in layer.translate[1:]),
+                )
+        return None, None, None
+
+    def _create_points_layer(self) -> None:
+        """Add a new 3-D Points layer (no time axis) to the viewer.
+
+        The layer is initialised with no points and `out_of_slice_display` enabled so
+        that added points are always visible regardless of the current time step. Scale
+        and translate are copied from the reference image so the layer is aligned and
+        brush/point sizes match the data.
+        """
+        import numpy as np
+
+        shape, scale, translate = self._spatial_info()
+        ndim = len(shape) if shape is not None else 3
+        kwargs: dict = {}
+        if scale is not None:
+            kwargs["scale"] = scale
+            # napari's default point size is 10 world-units, which is enormous for
+            # mm-scale data. Use 3 voxels in the finest direction instead.
+            kwargs["size"] = 2.0
+        if translate is not None:
+            kwargs["translate"] = translate
+        layer = self._viewer.add_points(
+            np.empty((0, ndim)),
+            name="Points (3D)",
+            ndim=ndim,
+            **kwargs,
+        )
+        layer.out_of_slice_display = True
+
+    def _create_labels_layer(self) -> None:
+        """Add a new 3-D Labels layer (no time axis) to the viewer.
+
+        Shape, scale, and translate are derived from the first image layer with
+        xarray metadata so the labels are pixel-aligned with the image and the
+        paint brush maps to the correct voxel positions.
+        """
+        import numpy as np
+
+        shape, scale, translate = self._spatial_info()
+        shape = shape or (64, 64, 64)
+        kwargs: dict = {}
+        if scale is not None:
+            kwargs["scale"] = scale
+        if translate is not None:
+            kwargs["translate"] = translate
+        self._viewer.add_labels(
+            np.zeros(shape, dtype=np.int32),
+            name="Labels (3D)",
+            **kwargs,
+        )

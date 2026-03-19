@@ -12,6 +12,10 @@ from qtpy.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
 
 from confusius._napari._utils import napari_colors, recolor_toolbar_icons
 
+# Line styles cycled across reference layers so multi-layer plots are distinguishable
+# even when point/label colors are the same.
+_LAYER_LINESTYLES = ["-", "--", "-.", ":"]
+
 
 class TimeSeriesPlotter(QWidget):
     """Bottom dock widget for live time series plotting.
@@ -31,7 +35,7 @@ class TimeSeriesPlotter(QWidget):
         self._cursor_pos: np.ndarray | None = None
         self._current_layer = None
 
-        # Plot settings
+        # Plot settings.
         self._ylim_min: float | None = None
         self._ylim_max: float | None = None
         self._autoscale: bool = True
@@ -50,7 +54,19 @@ class TimeSeriesPlotter(QWidget):
         # real time values on the x-axis.
         self._time_coords: np.ndarray | None = None
 
-        # Time cursor blitting state
+        # Source mode: "mouse" | "points" | "labels".
+        self._source_mode: str = "mouse"
+        self._points_layer = None
+        self._labels_layer = None
+        self._ref_layers: list | None = None  # None = all image layers with time dim
+
+        # Debounce timer for labels data changes (painting is fast, replot is slow).
+        self._labels_debounce = QTimer(self)
+        self._labels_debounce.setSingleShot(True)
+        self._labels_debounce.setInterval(500)
+        self._labels_debounce.timeout.connect(self._update_plot_from_labels)
+
+        # Time cursor blitting state.
         self._show_cursor: bool = False
         self._vline = None
         self._bg = None  # Saved pixel buffer (without vline).
@@ -137,7 +153,7 @@ class TimeSeriesPlotter(QWidget):
         """
         self._ylim_min = min_val
         self._ylim_max = max_val
-        self._update_plot()
+        self._refresh_plot()
 
     def set_autoscale(self, enabled: bool) -> None:
         """Enable or disable Y-axis autoscaling.
@@ -148,7 +164,7 @@ class TimeSeriesPlotter(QWidget):
             Whether to autoscale the Y-axis.
         """
         self._autoscale = enabled
-        self._update_plot()
+        self._refresh_plot()
 
     def set_show_grid(self, enabled: bool) -> None:
         """Enable or disable grid display.
@@ -159,7 +175,7 @@ class TimeSeriesPlotter(QWidget):
             Whether to show the grid.
         """
         self._show_grid = enabled
-        self._update_plot()
+        self._refresh_plot()
 
     def set_zscore(self, enabled: bool) -> None:
         """Enable or disable Z-scoring of time series.
@@ -170,7 +186,7 @@ class TimeSeriesPlotter(QWidget):
             Whether to Z-score the time series.
         """
         self._zscore = enabled
-        self._update_plot()
+        self._refresh_plot()
 
     def set_show_cursor(self, enabled: bool) -> None:
         """Enable or disable the time cursor.
@@ -183,7 +199,7 @@ class TimeSeriesPlotter(QWidget):
         self._show_cursor = enabled
         self._vline = None
         self._bg = None
-        self._update_plot()
+        self._refresh_plot()
 
     def set_time_cursor(self, frame_idx: float) -> None:
         """Schedule a blitted time-cursor update.
@@ -244,6 +260,8 @@ class TimeSeriesPlotter(QWidget):
 
     def _on_mouse_move(self, viewer, event) -> None:
         """Handle mouse move events."""
+        if self._source_mode != "mouse":
+            return
         if "Shift" not in event.modifiers:
             return
 
@@ -258,6 +276,8 @@ class TimeSeriesPlotter(QWidget):
 
     def _on_layer_change(self, event) -> None:
         """Handle layer insertion/removal or active-layer change events."""
+        if self._source_mode != "mouse":
+            return
         self._current_layer = self._active_layer()
         if self._cursor_pos is not None and self._current_layer is not None:
             self._update_plot()
@@ -277,16 +297,14 @@ class TimeSeriesPlotter(QWidget):
             return layer
         return None
 
-    def _show_instructions(self) -> None:
-        """Show initial instructions."""
+    def _show_message(self, text: str) -> None:
+        """Show a centered message in the plot area with no axes or data."""
         self._axes.clear()
         colors = self._get_colors()
         self._axes.text(
             0.5,
             0.5,
-            'Hold "Shift" while moving the cursor\n'
-            "over an image layer to plot\n"
-            "voxel time series.",
+            text,
             ha="center",
             va="center",
             transform=self._axes.transAxes,
@@ -298,7 +316,36 @@ class TimeSeriesPlotter(QWidget):
         self._axes.set_yticks([])
         for spine in self._axes.spines.values():
             spine.set_visible(False)
+        self._vline = None
         self._canvas.draw()
+
+    def _show_instructions(self) -> None:
+        """Show initial instructions appropriate for the current source mode."""
+        if self._source_mode == "points":
+            self._show_message(
+                "Select a Points layer and a reference\n"
+                "image layer in the panel to the right."
+            )
+        elif self._source_mode == "labels":
+            self._show_message(
+                "Select a Labels layer and a reference\n"
+                "image layer in the panel to the right."
+            )
+        else:
+            self._show_message(
+                'Hold "Shift" while moving the cursor\n'
+                "over an image layer to plot\n"
+                "voxel time series."
+            )
+
+    def _refresh_plot(self) -> None:
+        """Re-render the plot for the current source mode."""
+        if self._source_mode == "points":
+            self._update_plot_from_points()
+        elif self._source_mode == "labels":
+            self._update_plot_from_labels()
+        else:
+            self._update_plot()
 
     def _update_plot(self) -> None:
         """Update the time series plot with current data."""
@@ -380,6 +427,10 @@ class TimeSeriesPlotter(QWidget):
 
             if saved_xlim is not None:
                 self._axes.set_xlim(saved_xlim)
+            else:
+                # First plot in this session: remove matplotlib's default 5 % margin so
+                # there is no dead space before/after the data.
+                self._axes.set_xlim(x_values[0], x_values[-1])
             if saved_ylim is not None:
                 self._axes.set_ylim(saved_ylim)
 
@@ -400,7 +451,6 @@ class TimeSeriesPlotter(QWidget):
         else:
             self._prev_ts_valid = False
             self._vline = None
-            # No valid data at the cursor position
             self._axes.text(
                 0.5,
                 0.5,
@@ -443,8 +493,8 @@ class TimeSeriesPlotter(QWidget):
     def _get_time_xlabel(self, layer) -> str:
         """Return the x-axis label for the time axis.
 
-        Reads ``long_name`` and ``units`` from the time coordinate attributes
-        when available. Falls back to ``"Time"`` and no units.
+        Reads `long_name` and `units` from the time coordinate attributes
+        when available. Falls back to `"Time"` and no units.
         """
         da = layer.metadata.get("xarray")
         if da is not None and "time" in da.coords:
@@ -462,12 +512,442 @@ class TimeSeriesPlotter(QWidget):
         data = layer.data
         ind = list(int(round(x)) for x in layer.world_to_data(cursor_pos))
 
-        if not all(0 <= i < max_i for i, max_i in zip(ind, data.shape)):
+        t_idx = self._time_dim_index(layer)
+        # Replace the time index before bounds-checking: the injected time world
+        # coordinate (typically 0) may fall outside the image's time range (e.g. when
+        # time starts at a non-zero offset), which would cause the check to reject valid
+        # spatial positions.
+        ind[t_idx] = slice(None)  # type: ignore[call-overload]
+
+        if not all(
+            0 <= i < max_i for i, max_i in zip(ind, data.shape) if isinstance(i, int)
+        ):
             return None
 
-        t_idx = self._time_dim_index(layer)
-        ind[t_idx] = slice(None)  # type: ignore[call-overload]
         return data[tuple(ind)]
+
+    # ------------------------------------------------------------------
+    # Source mode — public setters
+    # ------------------------------------------------------------------
+
+    def set_source_mode(self, mode: str) -> None:
+        """Switch the active plotting source.
+
+        Parameters
+        ----------
+        mode : str
+            One of `"mouse"`, `"points"`, or `"labels"`.
+        """
+        self._source_mode = mode
+        if mode == "mouse":
+            # Invalidate the saved zoom state so the first mouse-hover plot
+            # does not restore the [0, 1] xlim left by the cleared axes.
+            self._has_plot = False
+            self._prev_ts_valid = False
+            self._show_instructions()
+        elif mode == "points":
+            self._update_plot_from_points()
+        else:
+            self._update_plot_from_labels()
+
+    def set_points_layer(self, layer) -> None:
+        """Set the Points layer used in points mode.
+
+        Parameters
+        ----------
+        layer : napari.layers.Points or None
+            The Points layer to use, or None to clear.
+        """
+        if self._points_layer is not None:
+            try:
+                self._points_layer.events.data.disconnect(self._on_points_data_changed)
+            except Exception:  # noqa: BLE001
+                pass
+        self._points_layer = layer
+        if layer is not None:
+            layer.events.data.connect(self._on_points_data_changed)
+        if self._source_mode == "points":
+            self._update_plot_from_points()
+
+    def set_labels_layer(self, layer) -> None:
+        """Set the Labels layer used in labels mode.
+
+        Parameters
+        ----------
+        layer : napari.layers.Labels or None
+            The Labels layer to use, or None to clear.
+        """
+        if self._labels_layer is not None:
+            try:
+                self._labels_layer.events.data.disconnect(self._on_labels_data_changed)
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                # events.paint fires when individual voxels are painted with the
+                # brush tool; events.data only fires on full array replacement.
+                self._labels_layer.events.paint.disconnect(self._on_labels_data_changed)
+            except Exception:  # noqa: BLE001
+                pass
+        self._labels_layer = layer
+        if layer is not None:
+            layer.events.data.connect(self._on_labels_data_changed)
+            layer.events.paint.connect(self._on_labels_data_changed)
+        if self._source_mode == "labels":
+            self._update_plot_from_labels()
+
+    def set_ref_layers(self, layers: list | None) -> None:
+        """Set the reference image layers to extract time series from.
+
+        Parameters
+        ----------
+        layers : list or None
+            Specific Image layers to use, or None to use all image layers
+            that have a time dimension.
+        """
+        self._ref_layers = layers
+        if self._source_mode == "points":
+            self._update_plot_from_points()
+        elif self._source_mode == "labels":
+            self._update_plot_from_labels()
+
+    # ------------------------------------------------------------------
+    # Source mode — private helpers
+    # ------------------------------------------------------------------
+
+    def _get_ref_image_layers(self) -> list:
+        """Return the list of reference image layers to extract data from.
+
+        When `_ref_layers` is None (all-layers mode), every Image layer in
+        the viewer with at least 3 dimensions and not RGB is returned.
+        Otherwise returns the stored list, filtered to layers still present.
+        """
+        current_names = {layer.name for layer in self._viewer.layers}
+        if self._ref_layers is None:
+            result = []
+            for layer in self._viewer.layers:
+                if layer._type_string != "image" or getattr(layer, "rgb", False):
+                    continue
+                # Only include layers that have a time dimension; spatial-only
+                # maps (tSNR, CV, …) have ndim < 4 and no "time" dim.
+                da = layer.metadata.get("xarray")
+                if da is not None:
+                    if "time" in da.dims:
+                        result.append(layer)
+                elif layer.data.ndim >= 4:
+                    result.append(layer)
+            return result
+        return [layer for layer in self._ref_layers if layer.name in current_names]
+
+    def _save_view(self) -> tuple:
+        """Return (xlim, ylim) from the current axes if a plot is present.
+
+        Used to preserve user zoom across replots.  Both values are `None` when the axes
+        contain no data lines.
+        """
+        lines = self._axes.get_lines()
+        xlim = self._axes.get_xlim() if lines else None
+        ylim = self._axes.get_ylim() if (lines and not self._autoscale) else None
+        return xlim, ylim
+
+    def _restore_view(self, xlim, ylim) -> None:
+        """Restore a previously saved view or apply a tight x range.
+
+        When *xlim* is `None` (first plot in a mode), the x range is set to the data
+        extent of the first line so matplotlib's default 5 % margin is removed.
+        """
+        if xlim is not None:
+            self._axes.set_xlim(xlim)
+        else:
+            lines = self._axes.get_lines()
+            if lines:
+                xdata = lines[0].get_xdata()
+                if len(xdata):
+                    self._axes.set_xlim(xdata[0], xdata[-1])
+        if ylim is not None:
+            self._axes.set_ylim(ylim)
+
+    def _apply_zscore(self, ts: np.ndarray) -> np.ndarray:
+        """Normalise a time series to zero mean and unit variance."""
+        mean = np.mean(ts)
+        std = np.std(ts)
+        return (ts - mean) / std if std > 0 else ts - mean
+
+    def _get_label_color(self, label_id: int) -> tuple:
+        """Return a matplotlib-compatible RGBA color for a label ID.
+
+        Tries to read the color from the Labels layer's colormap; falls back
+        to matplotlib's tab20 palette.
+        """
+        if self._labels_layer is not None:
+            try:
+                color = self._labels_layer.get_color(label_id)
+                if color is not None:
+                    return tuple(float(c) for c in color)
+            except Exception:  # noqa: BLE001
+                pass
+        from matplotlib import colormaps
+
+        return colormaps["tab20"](int(label_id - 1) % 20)
+
+    def _style_valid_axes(
+        self,
+        colors: dict,
+        xlabel: str,
+        ylabel: str,
+        title: str,
+        with_legend: bool = False,
+    ) -> None:
+        """Apply common axis styling after a valid plot has been drawn."""
+        self._axes.set_xlabel(xlabel, color=colors["fg"], fontsize=9)
+        self._axes.set_ylabel(ylabel, color=colors["fg"], fontsize=9)
+        self._axes.set_title(title, color=colors["fg"], fontsize=10)
+        if not self._autoscale:
+            if self._ylim_min is not None:
+                self._axes.set_ylim(bottom=self._ylim_min)
+            if self._ylim_max is not None:
+                self._axes.set_ylim(top=self._ylim_max)
+        if self._show_grid:
+            self._axes.grid(True, alpha=0.3, color=colors["fg"])
+        self._axes.tick_params(colors=colors["fg"], labelsize=8)
+        for spine in self._axes.spines.values():
+            spine.set_edgecolor(colors["fg"])
+            spine.set_visible(True)
+        if with_legend:
+            self._axes.legend(
+                fontsize=8,
+                labelcolor=colors["fg"],
+                facecolor=colors["bg"],
+                edgecolor=colors["fg"],
+            )
+        if self._show_cursor:
+            self._vline = self._axes.axvline(
+                self._frame_to_x(self._cursor_frame),
+                color=colors["cursor"],
+                linewidth=1.2,
+                alpha=0.85,
+                zorder=10,
+                animated=True,
+            )
+        else:
+            self._vline = None
+
+    def _on_points_data_changed(self, event) -> None:
+        """Re-plot when the Points layer data changes."""
+        if self._source_mode == "points":
+            self._update_plot_from_points()
+
+    def _on_labels_data_changed(self, event) -> None:
+        """Schedule a debounced re-plot when the Labels layer is painted."""
+        if self._source_mode == "labels":
+            if not self._labels_debounce.isActive():
+                self._labels_debounce.start()
+
+    # ------------------------------------------------------------------
+    # Source mode — plot methods
+    # ------------------------------------------------------------------
+
+    def _update_plot_from_points(self) -> None:
+        """Plot time series for every point in the Points layer."""
+        colors = self._get_colors()
+        saved_xlim, saved_ylim = self._save_view()
+
+        if self._points_layer is None:
+            self._show_message(
+                "No Points layer selected.\n"
+                "Choose one in the Source section of the panel."
+            )
+            return
+
+        ref_layers = self._get_ref_image_layers()
+        if not ref_layers:
+            self._show_message(
+                "No reference image layer found.\nLoad a 4-D image layer first."
+            )
+            return
+
+        n_points = len(self._points_layer.data)
+        if n_points == 0:
+            self._show_message("The selected Points layer is empty.")
+            return
+
+        self._axes.clear()
+        has_any = False
+
+        for pt_idx in range(n_points):
+            pt_data = np.asarray(self._points_layer.data[pt_idx], dtype=float)
+            n_pt = len(pt_data)
+            # napari may pad layer.scale/translate to the viewer's ndim, so use the last
+            # n_pt elements to match the point's dimensionality.
+            pts_scale = np.asarray(self._points_layer.scale, dtype=float)[-n_pt:]
+            pts_translate = np.asarray(self._points_layer.translate, dtype=float)[
+                -n_pt:
+            ]
+            # data → world (spatial, n_pt dims)
+            pt_world = pt_data * pts_scale + pts_translate
+            pt_color = tuple(float(c) for c in self._points_layer.face_color[pt_idx])
+
+            for layer_idx, img_layer in enumerate(ref_layers):
+                img_ndim = img_layer.data.ndim
+                if n_pt < img_ndim:
+                    # 3-D point in a 4-D image: pad the world coord with 0 at the front
+                    # so world_to_data receives the correct ndim. The time value (0) is
+                    # irrelevant — _extract_time_series replaces it with slice(None).
+                    padded = np.zeros(img_ndim)
+                    padded[-n_pt:] = pt_world
+                    pt_world_img = padded
+                else:
+                    pt_world_img = pt_world
+                try:
+                    ts = self._extract_time_series(img_layer, pt_world_img)
+                except Exception:  # noqa: BLE001
+                    ts = None
+                if ts is None:
+                    continue
+
+                ts = np.asarray(ts, dtype=float)
+                if self._zscore:
+                    ts = self._apply_zscore(ts)
+
+                time_coords = self._get_time_coords(img_layer)
+                x = (
+                    time_coords
+                    if (time_coords is not None and len(time_coords) == len(ts))
+                    else np.arange(len(ts))
+                )
+
+                label = f"Point {pt_idx}"
+                if len(ref_layers) > 1:
+                    label = f"{img_layer.name} | {label}"
+
+                linestyle = _LAYER_LINESTYLES[layer_idx % len(_LAYER_LINESTYLES)]
+                self._axes.plot(
+                    x,
+                    ts,
+                    color=pt_color,
+                    linewidth=1.5,
+                    linestyle=linestyle,
+                    label=label,
+                )
+                has_any = True
+                # Keep time coords from the last successful layer for cursor mapping.
+                self._time_coords = time_coords
+                self._current_layer = img_layer
+
+        if has_any:
+            xlabel = self._get_time_xlabel(ref_layers[0])
+            ylabel = "Z-score" if self._zscore else "Intensity"
+            title_ref = ref_layers[0].name if len(ref_layers) == 1 else "All layers"
+            title = f"{title_ref} — {self._points_layer.name}"
+            self._style_valid_axes(
+                colors, xlabel, ylabel, title, with_legend=n_points > 1
+            )
+            self._restore_view(saved_xlim, saved_ylim)
+        else:
+            self._show_message("No valid data at the point positions.\n")
+            return
+
+        self._canvas.draw()
+
+    def _update_plot_from_labels(self) -> None:
+        """Plot mean time series for each unique label in the Labels layer."""
+        colors = self._get_colors()
+        saved_xlim, saved_ylim = self._save_view()
+
+        if self._labels_layer is None:
+            self._show_message(
+                "No Labels layer selected.\n"
+                "Choose one in the Source section of the panel."
+            )
+            return
+
+        ref_layers = self._get_ref_image_layers()
+        if not ref_layers:
+            self._show_message(
+                "No reference image layer found.\nLoad a 4-D image layer first."
+            )
+            return
+
+        # Read the labels data. We intentionally avoid an early "all-zeros" check here
+        # because newer napari versions may return a lazy view from .data that doesn't
+        # reflect painted regions until it is iterated inside the loop.
+        labels_data = np.asarray(self._labels_layer.data)
+
+        self._axes.clear()
+        has_any = False
+        shape_mismatch = False
+
+        for layer_idx, img_layer in enumerate(ref_layers):
+            t_idx = self._time_dim_index(img_layer)
+            img_data = img_layer.data
+            img_spatial = tuple(s for i, s in enumerate(img_data.shape) if i != t_idx)
+
+            # Labels can have the full image shape (T, Z, Y, X) — napari creates labels
+            # with the same shape as the reference image — or the spatial shape only (Z,
+            # Y, X). Collapse the time axis in the former case.
+            if labels_data.shape == img_data.shape:
+                labels_spatial = np.max(labels_data, axis=t_idx)
+            elif labels_data.shape == img_spatial:
+                labels_spatial = labels_data
+            else:
+                shape_mismatch = True
+                continue
+
+            unique_labels = np.unique(labels_spatial)
+            unique_labels = unique_labels[unique_labels != 0]  # exclude background
+            if len(unique_labels) == 0:
+                continue
+
+            # Move time to last axis so spatial boolean indexing works cleanly:
+            # img_arr[mask] → (N_voxels, T).
+            img_arr = np.moveaxis(np.asarray(img_data), t_idx, -1)
+
+            time_coords = self._get_time_coords(img_layer)
+            x = time_coords if time_coords is not None else np.arange(img_arr.shape[-1])
+
+            for lid in unique_labels:
+                mask = labels_spatial == lid
+                ts = np.asarray(img_arr[mask].mean(axis=0), dtype=float)  # (T,)
+
+                if self._zscore:
+                    ts = self._apply_zscore(ts)
+
+                label = f"Label {lid}"
+                if len(ref_layers) > 1:
+                    label = f"{img_layer.name} | {label}"
+
+                linestyle = _LAYER_LINESTYLES[layer_idx % len(_LAYER_LINESTYLES)]
+                self._axes.plot(
+                    x,
+                    ts,
+                    color=self._get_label_color(int(lid)),
+                    linewidth=1.5,
+                    linestyle=linestyle,
+                    label=label,
+                )
+                has_any = True
+
+            # Keep time coords from the last successful layer for cursor mapping.
+            self._time_coords = time_coords
+            self._current_layer = img_layer
+
+        if has_any:
+            xlabel = self._get_time_xlabel(ref_layers[0])
+            ylabel = "Z-score" if self._zscore else "Intensity"
+            title_ref = ref_layers[0].name if len(ref_layers) == 1 else "All layers"
+            title = f"{title_ref} — {self._labels_layer.name}"
+            self._style_valid_axes(colors, xlabel, ylabel, title, with_legend=True)
+            self._restore_view(saved_xlim, saved_ylim)
+        elif shape_mismatch:
+            self._show_message(
+                "Spatial shape of the Labels layer does not match\n"
+                "the reference image. Make sure they share the same grid."
+            )
+            return
+        else:
+            self._show_message("No valid data extracted from the Labels layer.")
+            return
+
+        self._canvas.draw()
 
     def closeEvent(self, a0) -> None:
         """Clean up when widget is closed.
