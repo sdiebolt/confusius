@@ -53,6 +53,14 @@ def _da_to_layer_data(da: xr.DataArray, name: str) -> FullLayerData:
         da.coords[d].attrs.get("units") if d in da.coords else None for d in all_dims
     ]
 
+    # Pre-compute contrast limits so napari displays the image correctly on
+    # load. In napari 0.6.6+ the deferred _should_calc_clims mechanism does
+    # not fire reliably for non-numpy data during the insertion event.
+    # calc_data_range samples a few planes, so it is fast even for large arrays.
+    from napari.layers.utils.layer_utils import calc_data_range
+
+    contrast_limits = calc_data_range(da.data)
+
     kwargs: dict[str, Any] = {
         "name": name,
         "scale": scale,
@@ -61,6 +69,7 @@ def _da_to_layer_data(da: xr.DataArray, name: str) -> FullLayerData:
         "colormap": da.attrs.get("cmap", "gray"),
         "blending": "additive",
         "metadata": {"xarray": da},
+        "contrast_limits": contrast_limits,
     }
     if any(u is not None for u in all_units):
         kwargs["units"] = all_units

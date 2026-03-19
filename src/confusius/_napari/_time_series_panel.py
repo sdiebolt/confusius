@@ -29,9 +29,8 @@ if TYPE_CHECKING:
 class TimeSeriesPanel(QWidget):
     """Right-side panel for configuring time series plots.
 
-    The actual plots are rendered in a bottom dock widget that is created
-    lazily. If the user closes the dock, clicking "Show plot" re-docks
-    the widget.
+    The actual plots are rendered in a bottom dock widget that is created lazily. If the
+    user closes the dock, clicking "Show plot" re-docks the widget.
 
     Parameters
     ----------
@@ -65,8 +64,8 @@ class TimeSeriesPanel(QWidget):
         self._source_btn_group.addButton(self._radio_mouse, 0)
         source_layout.addWidget(self._radio_mouse)
 
-        # Points row — text is part of the radio button (same pattern as the
-        # Mouse row) so the indicator and label are always flush with no gap.
+        # Points row. Text is part of the radio button (same pattern as the Mouse row)
+        # so the indicator and label are always flush with no gap.
         points_row = QHBoxLayout()
         self._radio_points = QRadioButton("Points:")
         self._source_btn_group.addButton(self._radio_points, 1)
@@ -77,7 +76,7 @@ class TimeSeriesPanel(QWidget):
         self._new_points_btn = QPushButton("+")
         self._new_points_btn.setStyleSheet("font-weight: bold; font-size: 14px;")
         self._new_points_btn.setToolTip(
-            "Create a new 3-D Points layer (no time axis).\n"
+            "Create a new 3D Points layer (no time axis).\n"
             "Points will be visible at all time steps."
         )
         self._new_points_btn.clicked.connect(self._create_points_layer)
@@ -95,7 +94,7 @@ class TimeSeriesPanel(QWidget):
         self._new_labels_btn = QPushButton("+")
         self._new_labels_btn.setStyleSheet("font-weight: bold; font-size: 14px;")
         self._new_labels_btn.setToolTip(
-            "Create a new 3-D Labels layer (no time axis).\n"
+            "Create a new 3D Labels layer (no time axis).\n"
             "Labels will be visible at all time steps."
         )
         self._new_labels_btn.clicked.connect(self._create_labels_layer)
@@ -403,7 +402,11 @@ class TimeSeriesPanel(QWidget):
         self._labels_combo.blockSignals(False)
         self._ref_combo.blockSignals(False)
 
-        self._sync_source_to_plotter()
+        # Defer the plotter sync to the next event-loop iteration. When called
+        # from an `inserted` event, this ensures napari has finished setting up
+        # the new layer (including computing contrast limits via its async slice
+        # worker) before we trigger a canvas redraw in the plotter.
+        QTimer.singleShot(0, self._sync_source_to_plotter)
 
     def _on_source_mode_changed(self, btn_id: int, checked: bool) -> None:
         """Handle radio button toggling between source modes."""
@@ -495,7 +498,7 @@ class TimeSeriesPanel(QWidget):
         return None, None, None
 
     def _create_points_layer(self) -> None:
-        """Add a new 3-D Points layer (no time axis) to the viewer.
+        """Add a new 3D Points layer (no time axis) to the viewer.
 
         The layer is initialised with no points and `out_of_slice_display` enabled so
         that added points are always visible regardless of the current time step. Scale
@@ -523,7 +526,7 @@ class TimeSeriesPanel(QWidget):
         layer.out_of_slice_display = True
 
     def _create_labels_layer(self) -> None:
-        """Add a new 3-D Labels layer (no time axis) to the viewer.
+        """Add a new 3D Labels layer (no time axis) to the viewer.
 
         Shape, scale, and translate are derived from the first image layer with
         xarray metadata so the labels are pixel-aligned with the image and the

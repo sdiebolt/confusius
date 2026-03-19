@@ -1492,6 +1492,18 @@ def plot_napari(
         )
         layer = cast("Image", layer)
 
+        # Workaround for napari 0.6.6+: non-numpy data (xarray DataArray /
+        # Dask) defers contrast-limit computation to the async slice worker.
+        # The worker fires AFTER _should_calc_clims is set, but in napari
+        # 0.6.6 the initial viewer refresh triggered by the `inserted` event
+        # completes before that flag is raised, so contrast limits stay at
+        # (0, 1) for float data until the user manually clicks "once".
+        # Explicitly computing them here is robust across napari versions.
+        # See https://github.com/napari/napari/pull/8756.
+        if "contrast_limits" not in layer_kwargs:
+            layer.reset_contrast_limits_range()
+            layer.reset_contrast_limits("data")
+
         if show_colorbar:
             layer.colorbar.visible = True
 
