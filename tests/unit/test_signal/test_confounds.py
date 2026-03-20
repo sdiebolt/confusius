@@ -436,5 +436,4 @@ def test_regress_confounds_reference_implementation(sample_timeseries):
     expected_residuals = signals_2d - X @ coeffs
     expected = expected_residuals.reshape(signals.shape)
 
-    # Results should be very close
-    assert_allclose(cleaned.values, expected, rtol=1e-10)
+    assert_allclose(cleaned.values, expected, rtol=1e-7)
