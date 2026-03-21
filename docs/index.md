@@ -6,8 +6,8 @@ hide:
 
 # Welcome to ConfUSIus
 
-ConfUSIus is a Python package for handling, visualization, preprocessing, and
-statistical analysis of functional ultrasound imaging (fUSI) data.
+ConfUSIus is a Python package and napari plugin for handling, visualization,
+preprocessing, and statistical analysis of functional ultrasound imaging (fUSI) data.
 
 !!! warning "Pre-Alpha Status"
     ConfUSIus is currently in **pre-alpha** and under **active development**. 
@@ -18,19 +18,19 @@ statistical analysis of functional ultrasound imaging (fUSI) data.
 
 <div class="grid cards" markdown>
 
--   [:material-book-open-variant:{ .lg .middle } **User Guide**](user-guide/getting-started.md)
+-   [:lucide-book-open-text:{ .lg .middle } **User Guide**](user-guide/getting-started.md)
 
     ---
 
     Learn how to use ConfUSIus for fUSI data analysis.
 
--   [:material-code-braces:{ .lg .middle } **API Reference**](api/index.md)
+-   [:lucide-app-window:{ .lg .middle } **Graphical Interface**](gui/overview.md)
 
     ---
 
-    Comprehensive reference of all modules, classes, and functions.
+    Explore, inspect, and run QC on your data interactively in napari.
 
--   [:material-account-group:{ .lg .middle } **Community**](user-guide/getting-started.md#getting-help)
+-   [:lucide-users:{ .lg .middle } **Community**](user-guide/getting-started.md#getting-help)
 
     ---
 
@@ -61,6 +61,8 @@ statistical analysis of functional ultrasound imaging (fUSI) data.
 - **Signal Processing**: Denoising, filtering, detrending, and confound regression for
   hemodynamic signals.
 - **Visualization**: Rich plotting utilities for fUSI data exploration.
+- **Napari Plugin**: Interactive data loading, live time-series inspection, and quality
+  control directly in the napari viewer—no scripting required.
 - **Xarray Integration**: Seamless integration with Xarray for labeled multi-dimensional
   arrays.
 

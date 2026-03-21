@@ -34,6 +34,10 @@ nav = [
         { "Functional Connectivity" = "user-guide/connectivity.md" },
         { "General Linear Model" = "user-guide/glm.md" },
     ]},
+    { "Graphical Interface" = [
+        { "Overview" = "gui/overview.md" },
+        { "Using the Plugin" = "gui/plugin.md" },
+    ]},
     { "API Reference" = [
         { "Overview" = "api/index.md" },
         { "Input/Output" = "api/io.md" },

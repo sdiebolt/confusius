@@ -726,6 +726,7 @@ class TimeSeriesPlotter(QWidget):
             spine.set_visible(True)
         if with_legend:
             self._axes.legend(
+                loc="upper right",
                 fontsize=8,
                 labelcolor=colors["fg"],
                 facecolor=colors["bg"],
