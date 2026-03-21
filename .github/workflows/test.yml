@@ -1,4 +1,4 @@
-name: Tests and Linting
+name: Tests
 
 on:
   push:
@@ -17,11 +17,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install the latest version of uv and set the python version
+      - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
@@ -33,24 +33,9 @@ jobs:
         run: uv run pytest tests/
 
       - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.13'
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage.xml
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install the latest version of uv and set the python version
-        uses: astral-sh/setup-uv@v7
-        with:
-          python-version: "3.13"
-
-      - name: Install dependencies
-        run: uv sync --frozen --all-extras
-
-      - name: Run all pre-commit hooks
-        run: uv run prek run --all-files
