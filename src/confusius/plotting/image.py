@@ -1483,14 +1483,19 @@ def plot_napari(
                 layer_kwargs["colormap"] = cmap_attr
 
         layer_kwargs.setdefault("translate", coord_translates)
-        # napari.imshow stubs declare list[Image] but at runtime returns Image
-        # directly — cast to silence the type checker.
+
+        # Pass the underlying array (numpy or Dask) rather than the DataArray. napari's
+        # rendering loop adds overhead on every frame when given an xarray DataArray,
+        # making time scrubbing noticeably slow for lazy (Dask-backed) data. The
+        # DataArray is preserved in layer.metadata by the caller when needed.
         viewer, layer = napari.imshow(
-            data,
+            data.data,
             scale=scale,
             viewer=viewer,
             **layer_kwargs,
         )
+        # napari.imshow stubs declare list[Image] but at runtime returns Image
+        # directly: cast to silence the type checker.
         layer = cast("Image", layer)
 
         # Workaround for napari 0.6.6+: non-numpy data (xarray DataArray /
