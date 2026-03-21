@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import xarray as xr
 from napari.qt.threading import thread_worker
+from napari.utils.notifications import show_error, show_warning
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -21,7 +23,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from confusius._napari._utils import show_napari_error
+from confusius.io import load
+from confusius.plotting.image import plot_napari
 
 if TYPE_CHECKING:
     import napari
@@ -38,7 +41,6 @@ def _load_file(path: Path, lazy: bool) -> xr.DataArray:
     lazy : bool
         Whether to return a lazy (Dask-backed) array without computing.
     """
-    from confusius.io import load
 
     da = load(path)
     if not lazy:
@@ -94,7 +96,7 @@ class DataPanel(QWidget):
         file_layout.setSpacing(6)
 
         self._path_edit = QLineEdit()
-        self._path_edit.setPlaceholderText("Path to .nii / .nii.gz / .scan / .zarr …")
+        self._path_edit.setPlaceholderText("Path to .nii / .nii.gz / .scan / .zarr")
         # Pressing Enter in the path field triggers loading.
         self._path_edit.returnPressed.connect(self._load)
 
@@ -167,12 +169,12 @@ class DataPanel(QWidget):
     def _load(self) -> None:
         path_str = self._path_edit.text().strip()
         if not path_str:
-            show_napari_error("Please select a file or directory.")
+            show_error("Please select a file or directory.")
             return
 
         path = Path(path_str)
         if not path.exists():
-            show_napari_error(f"Path not found: {path}")
+            show_error(f"Path not found: {path}")
             return
 
         self._begin_work()
@@ -183,14 +185,19 @@ class DataPanel(QWidget):
 
     def _on_load_returned(self, da: xr.DataArray) -> None:
         try:
-            from confusius.plotting.image import plot_napari
-
-            _viewer, layer = plot_napari(da, viewer=self.viewer)
-            layer.metadata["xarray"] = da
+            # Capture warnings from plot_napari (e.g. non-uniform spacing) and re-emit
+            # them as napari notifications so they appear in the UI.
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                _viewer, layer = plot_napari(da, viewer=self.viewer)
+                layer.metadata["xarray"] = da
+            for w in caught:
+                if issubclass(w.category, UserWarning):
+                    show_warning(str(w.message))
         except Exception as exc:  # noqa: BLE001
-            show_napari_error(str(exc))
+            show_error(str(exc))
         self._end_work()
 
     def _on_load_error(self, exc: Exception) -> None:
         self._end_work()
-        show_napari_error(str(exc))
+        show_error(str(exc))

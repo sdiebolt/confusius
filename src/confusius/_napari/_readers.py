@@ -11,7 +11,13 @@ lightweight validity check, and either returns `None` (cannot read) or a
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
+
+from napari.layers.utils.layer_utils import calc_data_range
+from napari.utils.notifications import show_warning
+
+from confusius._utils import _compute_spacing_best_effort
+from confusius.io import load
 
 if TYPE_CHECKING:
     import xarray as xr
@@ -23,9 +29,10 @@ def _da_to_layer_data(da: xr.DataArray, name: str) -> FullLayerData:
 
     Mirrors the logic of [`plot_napari`][confusius.plotting.plot_napari]
 
-    * Uses [`spacing`][confusius.xarray.FUSIAccessor.spacing] (median-based,
-      robust to non-uniform grids) for the `scale` so the layer is sized correctly in
-      physical space.
+    * Uses
+      [`_compute_spacing_best_effort`][confusius._utils._compute_spacing_best_effort]
+      for the `scale`: uniform coordinates use their exact spacing; non-uniform
+      coordinates fall back to the median diff and a napari warning is shown.
     * Includes [`origin`][confusius.xarray.FUSIAccessor.origin] as `translate`
       so the layer is positioned correctly in physical space.
     * Reads `"cmap"` from `da.attrs` for the colormap when present.
@@ -33,32 +40,29 @@ def _da_to_layer_data(da: xr.DataArray, name: str) -> FullLayerData:
       attributes. These are stored on the layer but napari does not yet propagate them
       to `viewer.dims.axis_labels` when loading via a reader plugin.
     """
-    from typing import Any
-
-    import confusius  # noqa: F401 — registers the .fusi accessor
 
     all_dims = list(da.dims)
 
-    spacing = da.fusi.spacing
+    spacing, non_uniform = _compute_spacing_best_effort(da)
+    for dim in non_uniform:
+        show_warning(
+            f"Coordinate '{dim}' has non-uniform spacing. Napari requires a "
+            f"uniform grid; using median spacing {spacing[dim]:.4g} as an "
+            "approximation. Physical positions along this axis may appear "
+            "inaccurate."
+        )
     origin = da.fusi.origin
 
-    # Build scale, translate, and units in all_dims order so that each value
-    # is aligned with its corresponding dimension regardless of where the time
-    # axis appears (e.g. last for NIfTI vs first for Zarr).
-    scale: list[float] = [
-        spacing[d] if spacing[d] is not None else 1.0 for d in all_dims
-    ]
+    scale: list[float] = [spacing[str(d)] for d in all_dims]
     translate: list[float] = [origin[d] for d in all_dims]
     all_units: list[str | None] = [
         da.coords[d].attrs.get("units") if d in da.coords else None for d in all_dims
     ]
 
-    # Pre-compute contrast limits so napari displays the image correctly on
-    # load. In napari 0.6.6+ the deferred _should_calc_clims mechanism does
-    # not fire reliably for non-numpy data during the insertion event.
-    # calc_data_range samples a few planes, so it is fast even for large arrays.
-    from napari.layers.utils.layer_utils import calc_data_range
-
+    # Pre-compute contrast limits so napari displays the image correctly on load. In
+    # napari 0.6.6+ the deferred _should_calc_clims mechanism does not fire reliably for
+    # non-numpy data during the insertion event. calc_data_range samples a few planes,
+    # so it is fast even for large arrays.
     contrast_limits = calc_data_range(da.data)
 
     kwargs: dict[str, Any] = {
@@ -84,11 +88,10 @@ def _make_reader(path: str | Path) -> Callable[[PathOrPaths], list[FullLayerData
     dispatches on extension) and converts the result to a `FullLayerData` tuple. This
     function may raise; napari will surface any exception to the user.
     """
-    from confusius.io import load
 
     def _read(_path: PathOrPaths) -> list[FullLayerData]:
-        # Use the pre-validated `path` captured from the outer scope rather
-        # than `_path`, which may be a list when napari replays the reader.
+        # Use the pre-validated `path` captured from the outer scope rather than
+        # `_path`, which may be a list when napari replays the reader.
         da = load(path)
         name = Path(path).name
         return [_da_to_layer_data(da, name)]
@@ -109,8 +112,8 @@ def read_nifti(
     Returns
     -------
     Callable or None
-        Reader function, or `None` if the path is a list or the file does
-        not exist (napari will fall back to other plugins).
+        Reader function, or `None` if the path is a list or the file does not exist
+        (napari will fall back to other plugins).
     """
     if isinstance(path, list) or not isinstance(path, (str, Path)):
         return None
@@ -130,8 +133,8 @@ def read_scan(path: PathOrPaths) -> Callable[[PathOrPaths], list[FullLayerData]]
     Returns
     -------
     Callable or None
-        Reader function, or `None` if the path is a list or the file does
-        not exist (napari will fall back to other plugins).
+        Reader function, or `None` if the path is a list or the file does not exist
+        (napari will fall back to other plugins).
     """
     if isinstance(path, list) or not isinstance(path, (str, Path)):
         return None
@@ -143,8 +146,8 @@ def read_scan(path: PathOrPaths) -> Callable[[PathOrPaths], list[FullLayerData]]
 def read_zarr(path: PathOrPaths) -> Callable[[PathOrPaths], list[FullLayerData]] | None:
     """Get reader for Zarr stores (`.zarr`).
 
-    Validates that the path is a directory containing at least one of the
-    standard Zarr metadata files (`.zgroup`, `.zattrs`, `zarr.json`).
+    Validates that the path is a directory containing at least one of the standard Zarr
+    metadata files (`.zgroup`, `.zattrs`, `zarr.json`).
 
     Parameters
     ----------
@@ -154,9 +157,8 @@ def read_zarr(path: PathOrPaths) -> Callable[[PathOrPaths], list[FullLayerData]]
     Returns
     -------
     Callable or None
-        Reader function, or `None` if the path is a list, not a directory,
-        or contains no Zarr metadata files (napari will fall back to other
-        plugins).
+        Reader function, or `None` if the path is a list, not a directory, or contains
+        no Zarr metadata files (napari will fall back to other plugins).
     """
     if isinstance(path, list) or not isinstance(path, (str, Path)):
         return None

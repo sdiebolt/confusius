@@ -91,22 +91,3 @@ def recolor_toolbar_icons(toolbar: QWidget, color: str) -> None:
         p.fillRect(dst.rect(), qcolor)
         p.end()
         action.setIcon(QIcon(dst))
-
-
-def show_napari_error(message: str) -> None:
-    """Display *message* as a napari error notification.
-
-    Silently swallows any exception so callers never crash on a missing or
-    broken napari notification API.
-
-    Parameters
-    ----------
-    message : str
-        Error message to display.
-    """
-    try:
-        from napari.utils.notifications import show_error
-
-        show_error(message)
-    except Exception:  # noqa: BLE001
-        pass

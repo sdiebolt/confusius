@@ -9,7 +9,7 @@ import numpy as np
 import xarray as xr
 from napari.utils.colormaps import DirectLabelColormap
 
-from confusius._utils import find_stack_level
+from confusius._utils import _compute_spacing_best_effort, find_stack_level
 from confusius.atlas._structures import _build_atlas_cmap_and_norm
 from confusius.extract import extract_with_mask
 from confusius.signal import clean
@@ -1439,13 +1439,16 @@ def plot_napari(
             "Ensure 'dim_order' contains all spatial dimension names."
         )
 
-    # Build scale, translate, and units in all_dims order so that each value
-    # is aligned with its corresponding dimension regardless of where the time
-    # axis appears (e.g. last for NIfTI vs first for Zarr).
-    # Warnings for undefined dims are emitted by .fusi.spacing; fall back to 1.0 so the
-    # scale bar still works.
-    spacing = data.fusi.spacing
-    scale = [s if (s := spacing[dim]) is not None else 1.0 for dim in all_dims]
+    spacing, non_uniform = _compute_spacing_best_effort(data)
+    for dim in non_uniform:
+        warnings.warn(
+            f"Coordinate '{dim}' has non-uniform spacing. Napari requires a "
+            f"uniform grid; using median spacing {spacing[dim]:.4g} as an "
+            "approximation. Physical positions along this axis may appear "
+            "inaccurate.",
+            stacklevel=find_stack_level(),
+        )
+    scale = [spacing[str(dim)] for dim in all_dims]
 
     # .origin falls back to 0.0 for dimensions without coordinates.
     origin = data.fusi.origin

@@ -6,11 +6,13 @@ from typing import TYPE_CHECKING
 
 import napari
 from napari.qt.threading import thread_worker
+from napari.utils.notifications import show_error
 from qtpy.QtCore import QSize, Qt, QTimer
 from qtpy.QtWidgets import (
     QApplication,
     QCheckBox,
     QComboBox,
+    QDockWidget,
     QGroupBox,
     QLabel,
     QMainWindow,
@@ -20,7 +22,9 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from confusius._napari._utils import show_napari_error
+from confusius._napari._qc_plots import QCPlotsWidget
+from confusius.plotting.image import _prepare_carpet_data, plot_napari
+from confusius.qc import compute_cv, compute_dvars, compute_tsnr
 
 if TYPE_CHECKING:
     import xarray as xr
@@ -44,20 +48,12 @@ def _compute_qc_metrics(
     """
     results: dict = {}
     if do_dvars:
-        from confusius.qc import compute_dvars
-
         results["dvars"] = compute_dvars(da)
     if do_tsnr:
-        from confusius.qc import compute_tsnr
-
         results["tsnr"] = compute_tsnr(da)
     if do_cv:
-        from confusius.qc import compute_cv
-
         results["cv"] = compute_cv(da)
     if do_carpet:
-        from confusius.plotting.image import _prepare_carpet_data
-
         results["carpet"] = _prepare_carpet_data(da)
     return results
 
@@ -194,7 +190,6 @@ class QCPanel(QWidget):
         can be re-docked by calling `add_dock_widget` again with the same
         object (cached plots are preserved).
         """
-        from confusius._napari._qc_plots import QCPlotsWidget
 
         if self._qc_plots is not None:
             try:
@@ -234,8 +229,6 @@ class QCPanel(QWidget):
                 # Fix: zero the minimum heights of the central widget, all its QWidget
                 # descendants, AND all side dock widgets so the user can freely drag the
                 # bottom dock splitter upward.
-                from qtpy.QtWidgets import QDockWidget
-
                 central = main_win.centralWidget()
                 if central is None:
                     return
@@ -357,8 +350,6 @@ class QCPanel(QWidget):
                 self._show_btn.show()
 
             if "tsnr" in results or "cv" in results:
-                from confusius.plotting.image import plot_napari
-
                 # plot_napari sets axis_labels from the map's dims (z, y, x), which
                 # would clobber the viewer's "time" label on dim 0. Save and restore to
                 # keep the existing label intact.
@@ -380,24 +371,24 @@ class QCPanel(QWidget):
 
                 self.viewer.dims.axis_labels = saved_labels
         except Exception as exc:  # noqa: BLE001
-            show_napari_error(str(exc))
+            show_error(str(exc))
         finally:
             self._end_work()
 
     def _on_compute_error(self, exc: Exception) -> None:
         self._end_work()
-        show_napari_error(str(exc))
+        show_error(str(exc))
 
     def _compute(self) -> None:
         layer_name = self._layer_combo.currentText()
         if not layer_name:
-            show_napari_error("No layer selected.")
+            show_error("No layer selected.")
             return
 
         layer = self.viewer.layers[layer_name]
         da = layer.metadata.get("xarray")
         if da is None:
-            show_napari_error(
+            show_error(
                 "Selected layer has no DataArray metadata. "
                 "Load the file using the Data panel or the File menu."
             )

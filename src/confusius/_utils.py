@@ -41,6 +41,99 @@ def find_stack_level() -> int:
     return n
 
 
+class _DimSpacing:
+    """Result of per-dimension spacing analysis.
+
+    Attributes
+    ----------
+    value : float or None
+        Exact spacing when the coordinate is uniform or a single-point coord with a
+        `voxdim` attribute. `None` otherwise.
+    median : float or None
+        Median consecutive difference for numeric coordinates with two or more points.
+        Available for both uniform and non-uniform coordinates; `None` for missing,
+        non-numeric, or single-point coordinates.
+    warn_msg : str or None
+        Warning message to emit, or `None` if no warning is needed.
+    """
+
+    __slots__ = ("value", "median", "warn_msg")
+
+    def __init__(
+        self,
+        value: float | None,
+        median: float | None,
+        warn_msg: str | None,
+    ) -> None:
+        self.value = value
+        self.median = median
+        self.warn_msg = warn_msg
+
+
+def _spacing_for_dim(
+    dim: str,
+    data: xr.DataArray,
+    uniformity_tolerance: float,
+) -> _DimSpacing:
+    """Compute spacing information for a single dimension.
+
+    Shared implementation used by
+    [`_compute_spacing`][confusius._utils._compute_spacing] and
+    [`_compute_spacing_best_effort`][confusius._utils._compute_spacing_best_effort] to
+    avoid duplicating the uniformity check and median computation.
+
+    Parameters
+    ----------
+    dim : str
+        Dimension name.
+    data : xarray.DataArray
+        DataArray whose coordinate to inspect.
+    uniformity_tolerance : float
+        Maximum allowed relative range `(max_diff - min_diff) / median_diff`.
+
+    Returns
+    -------
+    _DimSpacing
+        Spacing result for the dimension.
+    """
+    if dim not in data.coords:
+        return _DimSpacing(
+            value=None,
+            median=None,
+            warn_msg=f"Dimension '{dim}' has no coordinate; spacing is undefined.",
+        )
+
+    coord = data.coords[dim]
+    if not np.issubdtype(coord.dtype, int) and not np.issubdtype(coord.dtype, float):
+        return _DimSpacing(value=None, median=None, warn_msg=None)
+
+    if len(coord) < 2:
+        if "voxdim" in coord.attrs:
+            return _DimSpacing(
+                value=float(coord.attrs["voxdim"]), median=None, warn_msg=None
+            )
+        return _DimSpacing(
+            value=None,
+            median=None,
+            warn_msg=(
+                f"Dimension '{dim}' has a single coordinate point and no "
+                "'voxdim' attribute; spacing is undefined."
+            ),
+        )
+
+    diffs = np.diff(coord.values)
+    median = float(np.median(diffs))
+    is_uniform = (np.max(diffs) - np.min(diffs)) / median <= uniformity_tolerance
+
+    if is_uniform:
+        return _DimSpacing(value=median, median=median, warn_msg=None)
+    return _DimSpacing(
+        value=None,
+        median=median,
+        warn_msg=f"Coordinate '{dim}' has non-uniform sampling; spacing is undefined.",
+    )
+
+
 def _compute_spacing(
     data: xr.DataArray,
     uniformity_tolerance: float = 1e-2,
@@ -78,47 +171,57 @@ def _compute_spacing(
     """
     result: dict[str, float | None] = {}
     for dim in (str(d) for d in data.dims):
-        if dim not in data.coords:
-            warnings.warn(
-                f"Dimension '{dim}' has no coordinate; spacing is undefined.",
-                UserWarning,
-                stacklevel=find_stack_level(),
-            )
-            result[dim] = None
-            continue
-
-        coord = data.coords[dim]
-        if not np.issubdtype(coord.dtype, int) and not np.issubdtype(
-            coord.dtype, float
-        ):
-            result[dim] = None
-            continue
-
-        if len(coord) < 2:
-            if "voxdim" in coord.attrs:
-                result[dim] = float(coord.attrs["voxdim"])
-            else:
-                warnings.warn(
-                    f"Dimension '{dim}' has a single coordinate point and no "
-                    "'voxdim' attribute; spacing is undefined.",
-                    UserWarning,
-                    stacklevel=find_stack_level(),
-                )
-                result[dim] = None
-            continue
-
-        diffs = np.diff(coord.values)
-        median_diff = np.median(diffs)
-        if (np.max(diffs) - np.min(diffs)) / median_diff > uniformity_tolerance:
-            warnings.warn(
-                f"Coordinate '{dim}' has non-uniform sampling; spacing is undefined.",
-                UserWarning,
-                stacklevel=find_stack_level(),
-            )
-            result[dim] = None
-        else:
-            result[dim] = float(median_diff)
+        r = _spacing_for_dim(dim, data, uniformity_tolerance)
+        if r.warn_msg is not None:
+            warnings.warn(r.warn_msg, stacklevel=find_stack_level())
+        result[dim] = r.value
     return result
+
+
+def _compute_spacing_best_effort(
+    da: xr.DataArray,
+    uniformity_tolerance: float = 1e-2,
+) -> tuple[dict[str, float], list[str]]:
+    """Compute coordinate spacing, falling back to median diff for non-uniform dims.
+
+    Like [`_compute_spacing`][confusius._utils._compute_spacing] but instead of
+    returning `None` for non-uniform coordinates it returns the median consecutive
+    difference as a best-effort approximation. This is appropriate when a single
+    representative spacing is required (e.g. for napari's `scale` parameter) even
+    though the coordinate is not perfectly uniform. No warnings are emitted; the caller
+    is responsible for issuing context-appropriate messages for the dims listed in
+    `non_uniform`.
+
+    Parameters
+    ----------
+    da : xarray.DataArray
+        DataArray whose coordinate spacing to compute.
+    uniformity_tolerance : float, default: 1e-2
+        Passed through to the uniformity check (see
+        [`_compute_spacing`][confusius._utils._compute_spacing]).
+
+    Returns
+    -------
+    spacing : dict[str, float]
+        Spacing per dimension. Always a `float`; never `None`. Falls back to
+        `1.0` only for dimensions with truly missing, non-numeric, or
+        single-point-without-voxdim coordinates.
+    non_uniform : list[str]
+        Names of dimensions whose coordinates were non-uniform. The median diff
+        was used as the spacing for these dims.
+    """
+    spacing: dict[str, float] = {}
+    non_uniform: list[str] = []
+    for dim in (str(d) for d in da.dims):
+        r = _spacing_for_dim(dim, da, uniformity_tolerance)
+        if r.value is not None:
+            spacing[dim] = r.value
+        elif r.median is not None:
+            spacing[dim] = r.median
+            non_uniform.append(dim)
+        else:
+            spacing[dim] = 1.0
+    return spacing, non_uniform
 
 
 def _compute_origin(
@@ -144,7 +247,6 @@ def _compute_origin(
         if dim not in data.coords:
             warnings.warn(
                 f"Dimension '{dim}' has no coordinate; origin defaults to 0.0.",
-                UserWarning,
                 stacklevel=find_stack_level(),
             )
             result[dim] = 0.0
