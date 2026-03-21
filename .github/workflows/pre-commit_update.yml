@@ -1,0 +1,30 @@
+name: Pre-commit auto-update
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  auto-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Run prek auto-update
+        run: uv run prek auto-update
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          base: main
+          branch: update/pre-commit-update
+          title: "ci: update pre-commit hooks"
+          commit-message: "ci: update pre-commit hooks"
+          body: Update versions of pre-commit hooks to latest version.
+          labels: dependencies
