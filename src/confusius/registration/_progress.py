@@ -153,7 +153,6 @@ class RegistrationProgressPlotter:
                     "visible. Set an interactive backend before calling "
                     "register_volume, e.g.: import matplotlib; "
                     "matplotlib.use('Qt5Agg')",
-                    UserWarning,
                     stacklevel=find_stack_level(),
                 )
 

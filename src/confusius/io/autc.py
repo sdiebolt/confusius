@@ -723,7 +723,6 @@ def convert_autc_dats_to_zarr(
             "axial_coords not provided: storing voxel indices as y coordinates. "
             "Provide axial_coords in probe-relative mm for physically meaningful "
             "coordinates.",
-            UserWarning,
             stacklevel=find_stack_level(),
         )
     if lateral_coords is None:
@@ -731,7 +730,6 @@ def convert_autc_dats_to_zarr(
             "lateral_coords not provided: storing voxel indices as x coordinates. "
             "Provide lateral_coords in probe-relative mm for physically meaningful "
             "coordinates.",
-            UserWarning,
             stacklevel=find_stack_level(),
         )
 
