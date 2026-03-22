@@ -94,7 +94,7 @@ Additionally, ConfUSIus expects certain metadata attributes to be present:
 
 - `compound_sampling_frequency`: Effective sampling frequency of the IQ data (Hz).
 - `transmit_frequency`: Frequency of the transmitted ultrasound pulse (Hz).
-- `sound_velocity`: Speed of sound used for beamforming (m/s).
+- `beamforming_sound_velocity`: Speed of sound used for beamforming (m/s).
 
 !!! note "Loading IQ data from unsupported formats"
     If you've loaded IQ data from an unsupported format (i.e., not using ConfUSIus
@@ -122,7 +122,7 @@ Attributes:
     transmit_frequency:           15625000.0
     compound_sampling_frequency:  500.0
     pulse_repetition_frequency:   15000.0
-    sound_velocity:               1540.0
+    beamforming_sound_velocity:   1540.0
 ```
 
 In this example, the PRF is 15 kHz, but the data uses compound imaging with a
@@ -553,18 +553,18 @@ Coordinates:
   * y        (y) float64 1kB 5.664 5.713 5.762 5.811 ... 11.72 11.77 11.82 11.87
   * x        (x) float64 688B -3.583 -3.492 -3.402 -3.311 ... 3.946 4.037 4.127
 Attributes: (11/16)
-    transmit_frequency:           15625000.0
-    compound_sampling_frequency:  500.0
-    pulse_repetition_frequency:   15000.0
-    sound_velocity:               1540.0
-    units:                        'a.u.'
-    long_name:                    'Power Doppler intensity'
-    clutter_filter_method:        svd_indices
-    clutter_window_width:         300
-    clutter_window_stride:        300
-    doppler_window_width:         300
-    doppler_window_stride:        300
-    clutter_low_cutoff:           40
+    transmit_frequency:             15625000.0
+    compound_sampling_frequency:    500.0
+    pulse_repetition_frequency:     15000.0
+    beamforming_sound_velocity:     1540.0
+    units:                          'a.u.'
+    long_name:                      'Power Doppler intensity'
+    clutter_filter_method:          svd_indices
+    clutter_window_width:           300
+    clutter_window_stride:          300
+    doppler_window_width:           300
+    doppler_window_stride:          300
+    clutter_low_cutoff:             40
 ```
 
 To actually compute the power Doppler values and load them into memory, you must call

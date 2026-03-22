@@ -20,6 +20,8 @@ from confusius.io.utils import check_path
 class EchoFrameMetadata(TypedDict):
     """Metadata extracted from an EchoFrame MAT file.
 
+    Uses fUSI-BIDS compliant field names for consistency with the BIDS specification.
+
     Attributes
     ----------
     lateral_coords : numpy.ndarray
@@ -29,12 +31,12 @@ class EchoFrameMetadata(TypedDict):
         cropping.
     transmit_frequency : float
         Central frequency of the ultrasound probe in hertz.
-    probe_n_elements : int
+    probe_number_of_elements : int
         Number of probe transducer elements.
     probe_pitch : float
         Inter-element pitch of the probe in millimeters.
-    speed_of_sound : float
-        Speed of sound in meters per second.
+    beamforming_sound_velocity : float
+        Speed of sound in meters per second used during beamforming.
     plane_wave_angles : numpy.ndarray
         Angles at which tilted plane waves are emitted in degrees.
     compound_sampling_frequency : float
@@ -48,9 +50,9 @@ class EchoFrameMetadata(TypedDict):
     lateral_coords: npt.NDArray[np.float64]
     axial_coords: npt.NDArray[np.float64]
     transmit_frequency: float
-    probe_n_elements: int
+    probe_number_of_elements: int
     probe_pitch: float
-    speed_of_sound: float
+    beamforming_sound_velocity: float
     plane_wave_angles: npt.NDArray[np.float64]
     compound_sampling_frequency: float
     pulse_repetition_frequency: float
@@ -137,9 +139,9 @@ def load_echoframe_metadata(meta_path: str | Path) -> EchoFrameMetadata:
         lateral_coords=lateral_coords,
         axial_coords=axial_coords,
         transmit_frequency=transmit_frequency,
-        probe_n_elements=probe_n_elements,
+        probe_number_of_elements=probe_n_elements,
         probe_pitch=probe_pitch,
-        speed_of_sound=speed_of_sound,
+        beamforming_sound_velocity=speed_of_sound,
         plane_wave_angles=plane_wave_angles,
         compound_sampling_frequency=compound_sampling_frequency,
         pulse_repetition_frequency=pulse_repetition_frequency,
@@ -335,7 +337,7 @@ def convert_echoframe_dat_to_zarr(
         ds = xr.open_zarr("output.zarr")
         iq = ds["iq"]
 
-    Metadata attributes (e.g., `transmit_frequency`, `sound_velocity`) are stored
+    Metadata attributes (e.g., `transmit_frequency`, `beamforming_sound_velocity`) are stored
     on the `iq` DataArray (accessible via `iq.attrs`), consistent with how
     reduction functions return DataArrays with attributes.
 
@@ -456,9 +458,9 @@ def convert_echoframe_dat_to_zarr(
     zarr_group["y"].attrs["voxdim"] = float(np.diff(meta["axial_coords"]).mean())
     zarr_group["x"].attrs["voxdim"] = float(np.diff(meta["lateral_coords"]).mean())
     zarr_iq.attrs["transmit_frequency"] = meta["transmit_frequency"]
-    zarr_iq.attrs["probe_n_elements"] = meta["probe_n_elements"]
+    zarr_iq.attrs["probe_number_of_elements"] = meta["probe_number_of_elements"]
     zarr_iq.attrs["probe_pitch"] = meta["probe_pitch"]
-    zarr_iq.attrs["sound_velocity"] = meta["speed_of_sound"]
+    zarr_iq.attrs["beamforming_sound_velocity"] = meta["beamforming_sound_velocity"]
     zarr_iq.attrs["plane_wave_angles"] = meta["plane_wave_angles"].tolist()
     zarr_iq.attrs["compound_sampling_frequency"] = meta["compound_sampling_frequency"]
     zarr_iq.attrs["pulse_repetition_frequency"] = meta["pulse_repetition_frequency"]

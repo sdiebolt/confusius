@@ -42,7 +42,7 @@ class TestAUTCConversion:
             transmit_frequency=3000000.0,
             probe_n_elements=64,
             probe_pitch=0.00025,
-            sound_velocity=1480.0,
+            beamforming_sound_velocity=1480.0,
             plane_wave_angles=np.array([-15.0, 0.0, 15.0]),
             compound_sampling_frequency=500.0,
             pulse_repetition_frequency=1500.0,
@@ -105,9 +105,9 @@ class TestAUTCConversion:
             assert ds["y"].attrs["voxdim"] == pytest.approx(4.0)
             assert ds["x"].attrs["voxdim"] == pytest.approx(20.0 / 3.0)
             assert ds["iq"].attrs["transmit_frequency"] == 3000000.0
-            assert ds["iq"].attrs["probe_n_elements"] == 64
+            assert ds["iq"].attrs["probe_number_of_elements"] == 64
             assert ds["iq"].attrs["probe_pitch"] == 0.00025
-            assert ds["iq"].attrs["sound_velocity"] == 1480.0
+            assert ds["iq"].attrs["beamforming_sound_velocity"] == 1480.0
             assert ds["iq"].attrs["plane_wave_angles"] == [-15.0, 0.0, 15.0]
             assert ds["iq"].attrs["compound_sampling_frequency"] == 500.0
             assert ds["iq"].attrs["pulse_repetition_frequency"] == 1500.0

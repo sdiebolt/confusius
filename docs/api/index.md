@@ -14,6 +14,13 @@ guide](../user-guide/index.md) for more detailed explanations and usage examples
     Loading and saving fUSI data in various formats, including those from AUTC and
     EchoFrame systems, as well as general-purpose formats like Zarr and NIfTI.
 
+- **[:lucide-file-badge: fUSI-BIDS](bids.md)**
+
+    ---
+
+    fUSI-BIDS metadata validation, conversion utilities, and coordinate handling for
+    BIDS-compliant fUSI data.
+
 - **[:lucide-check: Data Validation](validation.md)**
 
     ---

@@ -164,7 +164,7 @@ class TestComputeAxialVelocityVolume:
         """Result matches reference Kasai estimator implementation."""
         fs = 100.0
         ultrasound_frequency = 15.625e6
-        sound_velocity = 1540.0
+        beamforming_sound_velocity = 1540.0
         lag = 1
 
         # Reference Kasai estimator (average_angle method).
@@ -175,14 +175,14 @@ class TestComputeAxialVelocityVolume:
         autocorrelation_phase = np.angle(autocorrelation)
         average_phase = autocorrelation_phase.mean(0)
         expected = (
-            average_phase * fs * sound_velocity / (4 * np.pi * ultrasound_frequency)
+            average_phase * fs * beamforming_sound_velocity / (4 * np.pi * ultrasound_frequency)
         )
 
         result = compute_axial_velocity_volume(
             sample_iq_block_4d,
             fs=fs,
             ultrasound_frequency=ultrasound_frequency,
-            sound_velocity=sound_velocity,
+            beamforming_sound_velocity=beamforming_sound_velocity,
             lag=lag,
             estimation_method="average_angle",
         )
@@ -193,7 +193,7 @@ class TestComputeAxialVelocityVolume:
         """Angle_average method computes angle of average autocorrelation."""
         fs = 100.0
         ultrasound_frequency = 15.625e6
-        sound_velocity = 1540.0
+        beamforming_sound_velocity = 1540.0
         lag = 1
 
         # Reference: angle of average autocorrelation.
@@ -203,14 +203,14 @@ class TestComputeAxialVelocityVolume:
         autocorrelation = autocorrelation[lag:]
         average_phase = np.angle(autocorrelation.mean(0))
         expected = (
-            average_phase * fs * sound_velocity / (4 * np.pi * ultrasound_frequency)
+            average_phase * fs * beamforming_sound_velocity / (4 * np.pi * ultrasound_frequency)
         )
 
         result = compute_axial_velocity_volume(
             sample_iq_block_4d,
             fs=fs,
             ultrasound_frequency=ultrasound_frequency,
-            sound_velocity=sound_velocity,
+            beamforming_sound_velocity=beamforming_sound_velocity,
             lag=lag,
             estimation_method="angle_average",
         )
@@ -387,16 +387,16 @@ class TestProcessIqToAxialVelocity:
         assert result.attrs["absolute_velocity"] is True
 
     def test_uses_attrs_for_parameters(self, sample_iq_dataset):
-        """Uses DataArray attributes for fs, ultrasound_frequency and sound_velocity."""
+        """Uses DataArray attributes for fs, ultrasound_frequency and beamforming_sound_velocity."""
         # Set specific attribute values on the iq DataArray to verify they're used.
         sample_iq_dataset["iq"].attrs["compound_sampling_frequency"] = 100.0
         sample_iq_dataset["iq"].attrs["transmit_frequency"] = 10e6
-        sample_iq_dataset["iq"].attrs["sound_velocity"] = 1500.0
+        sample_iq_dataset["iq"].attrs["beamforming_sound_velocity"] = 1500.0
 
         result = process_iq_to_axial_velocity(sample_iq_dataset["iq"])
 
         assert result.attrs["ultrasound_frequency"] == 10e6
-        assert result.attrs["sound_velocity"] == 1500.0
+        assert result.attrs["beamforming_sound_velocity"] == 1500.0
 
     def test_accessor_delegates_to_process_iq_to_axial_velocity(
         self, sample_iq_dataset
@@ -522,7 +522,7 @@ class TestDataArrayClutterMask:
             low_cutoff=2,
             high_cutoff=8,
             ultrasound_frequency=iq.attrs["transmit_frequency"],
-            sound_velocity=iq.attrs["sound_velocity"],
+            beamforming_sound_velocity=iq.attrs["beamforming_sound_velocity"],
         )
 
         assert_allclose(result.values[0], expected[0])

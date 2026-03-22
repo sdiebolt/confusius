@@ -41,6 +41,7 @@ nav = [
     { "API Reference" = [
         { "Overview" = "api/index.md" },
         { "Input/Output" = "api/io.md" },
+        { "fUSI-BIDS" = "api/bids.md" },
         { "Data Validation" = "api/validation.md"},
         { "Multi-Pose Imaging" = "api/multipose.md" },
         { "Beamformed IQ" = "api/iq.md" },
@@ -140,6 +141,7 @@ inventories = [
     "https://scikit-image.org/objects.inv",
     "https://brainglobe.info/objects.inv",
     "https://treelib.readthedocs.io/en/latest/objects.inv",
+    "https://docs.pydantic.dev/latest/objects.inv",
 ]
 paths = ["src"]
 

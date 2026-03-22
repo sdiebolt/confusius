@@ -123,7 +123,7 @@ ConfUSIus currently provides built-in conversion utilities for **AUTC** and
         block_times=block_times,
         compound_sampling_frequency=500.0,
         transmit_frequency=15.625e6,
-        sound_velocity=1510.0,
+        beamforming_sound_velocity=1510.0,
     )
     ```
 
@@ -132,8 +132,8 @@ ConfUSIus currently provides built-in conversion utilities for **AUTC** and
     - `iq`: Beamformed IQ data with dimensions `(time, z, y, x)`.
     - `time`, `z`, `y`, `x`: Coordinate arrays.
     - Voxel sizes (`voxdim`) as per-coordinate attributes on `z`, `y`, and `x`.
-    - Metadata attributes (e.g., `transmit_frequency`, `plane_wave_angles`) as
-      provided via keyword arguments.
+    - Metadata attributes (e.g., `transmit_frequency`, `plane_wave_angles`)
+      as provided via keyword arguments.
 
 === "EchoFrame DAT"
 
@@ -162,8 +162,8 @@ ConfUSIus currently provides built-in conversion utilities for **AUTC** and
     - `iq`: Beamformed IQ data with dimensions `(time, z, y, x)`.
     - `time`, `z`, `y`, `x`: Coordinate arrays.
     - Voxel sizes (`voxdim`) as per-coordinate attributes on `z`, `y`, and `x`.
-    - Metadata attributes (e.g., `transmit_frequency`, `plane_wave_angles`) as
-      extracted from the metadata file.
+    - Metadata attributes (e.g., `transmit_frequency`, `plane_wave_angles`)
+      as extracted from the metadata file.
 
 ### Other Systems
 
@@ -194,7 +194,7 @@ The [`validate_iq`][confusius.validation.validate_iq] function checks that your 
 - Contains required attributes:
     - `compound_sampling_frequency`: Effective IQ sampling frequency in Hz.
     - `transmit_frequency`: Ultrasound transmit frequency in Hz.
-    - `sound_velocity`: Speed of sound in m/s.
+    - `beamforming_sound_velocity`: Speed of sound in m/s.
 
 !!! question "Finding attribute values"
     If you're unsure about the correct values for these attributes:
@@ -202,11 +202,11 @@ The [`validate_iq`][confusius.validation.validate_iq] function checks that your 
     - `compound_sampling_frequency`: Check your acquisition software settings. The
       compound sampling frequency is generally around 500-1000 Hz for fUSI acquisitions,
       but can vary based on the system and settings used.
-    - `transmit_frequency`: Found in your probe specifications or acquisition settings.
-      Generally around 5-10 MHz for clinical probes, and 12-20 MHz for high-frequency
-      probes used in small animal imaging.
-    - `sound_velocity`: Typically 1540 m/s for brain tissues, but may vary with
-      temperature and tissue type.
+    - `transmit_frequency`: Found in your probe specifications or acquisition
+      settings. Generally around 5-10 MHz for clinical probes, and 12-20 MHz for
+      high-frequency probes used in small animal imaging.
+    - `beamforming_sound_velocity`: Typically 1540 m/s for brain tissues, but may vary
+      with temperature and tissue type.
 
 ## Loading Data
 
@@ -261,14 +261,14 @@ Coordinates:
   * y        (y) float64 944B 4.656 4.705 4.753 4.802 ... 10.23 10.28 10.33
   * x        (x) float64 416B -2.671 -2.57 -2.469 -2.369 ... 2.268 2.369 2.469
 Attributes:
-    transmit_frequency:           15625000.0
-    probe_n_elements:             128
-    probe_pitch:                  0.0001
-    sound_velocity:               1510.0
-    plane_wave_angles:            [-10.0, -9.310344696044922, -8.620689392089...
-    compound_sampling_frequency:  500.0
-    pulse_repetition_frequency:   15000.0
-    beamforming_method:           Fourier
+    transmit_frequency:             15625000.0
+    probe_number_of_elements:       128
+    probe_pitch:                    0.0001
+    beamforming_sound_velocity:     1510.0
+    plane_wave_angles:              [-10.0, -9.310344696044922, -8.620689392089...
+    compound_sampling_frequency:    500.0
+    pulse_repetition_frequency:     15000.0
+    beamforming_method:             Fourier
 ```
 
 Notice that the data remains on disk (shown by `dask.array<...>`) until you explicitly

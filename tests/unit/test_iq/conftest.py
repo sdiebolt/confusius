@@ -74,7 +74,7 @@ def sample_iq_dataset(rng):
         attrs={
             "compound_sampling_frequency": 10.0,
             "transmit_frequency": 15.625e6,
-            "sound_velocity": 1540.0,
+            "beamforming_sound_velocity": 1540.0,
         },
     )
 

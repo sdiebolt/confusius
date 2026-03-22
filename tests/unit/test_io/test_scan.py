@@ -402,25 +402,27 @@ class TestLoadScan2D:
 
     def test_provenance_attrs(self, scan_2d: xr.DataArray) -> None:
         """2Dscan attrs contain all provenance fields with correct values."""
+        # BIDS-compatible fields
+        for key in ("device_serial_numbers", "software_versions"):
+            assert key in scan_2d.attrs
+        # Iconeus-specific fields
         for key in (
-            "scan_mode",
-            "subject",
-            "session",
-            "scan",
-            "project",
-            "date",
-            "neuroscan_version",
-            "machine_sn",
+            "iconeus_scan_mode",
+            "iconeus_subject",
+            "iconeus_session",
+            "iconeus_scan",
+            "iconeus_project",
+            "iconeus_date",
         ):
             assert key in scan_2d.attrs
         # Spot-check a few values against the fixture to guard against empty-string bugs.
-        assert scan_2d.attrs["subject"] == "sub-01"
-        assert scan_2d.attrs["date"] == "2025-01-01"
-        assert scan_2d.attrs["machine_sn"] == "SN-0001"
+        assert scan_2d.attrs["iconeus_subject"] == "sub-01"
+        assert scan_2d.attrs["iconeus_date"] == "2025-01-01"
+        assert scan_2d.attrs["device_serial_numbers"] == "SN-0001"
 
     def test_scan_mode_attr(self, scan_2d: xr.DataArray) -> None:
-        """scan_mode attr equals '2Dscan'."""
-        assert scan_2d.attrs["scan_mode"] == "2Dscan"
+        """iconeus_scan_mode attr equals '2Dscan'."""
+        assert scan_2d.attrs["iconeus_scan_mode"] == "2Dscan"
 
     def test_physical_to_lab_shape(self, scan_2d: xr.DataArray) -> None:
         """physical_to_lab affine has shape (4, 4) for 2Dscan."""
@@ -528,8 +530,8 @@ class TestLoadScan3D:
         np.testing.assert_array_equal(da.values, expected)
 
     def test_scan_mode_attr(self, scan_3d: xr.DataArray) -> None:
-        """scan_mode attr equals '3Dscan'."""
-        assert scan_3d.attrs["scan_mode"] == "3Dscan"
+        """iconeus_scan_mode attr equals '3Dscan'."""
+        assert scan_3d.attrs["iconeus_scan_mode"] == "3Dscan"
 
     def test_matrix_probe_z_dim(self, scan_3d_matrix: xr.DataArray) -> None:
         """3Dscan with matrix probe (sizeY=4) has z dimension size 4."""
@@ -636,8 +638,8 @@ class TestLoadScan4D:
         np.testing.assert_array_equal(da.values, expected)
 
     def test_scan_mode_attr(self, scan_4d: xr.DataArray) -> None:
-        """scan_mode attr equals '4Dscan'."""
-        assert scan_4d.attrs["scan_mode"] == "4Dscan"
+        """iconeus_scan_mode attr equals '4Dscan'."""
+        assert scan_4d.attrs["iconeus_scan_mode"] == "4Dscan"
 
 
 # ---------------------------------------------------------------------------
@@ -728,5 +730,3 @@ class TestPhysicalToLab:
         expected[:3, 3] *= 1e3
 
         np.testing.assert_allclose(A, expected, rtol=1e-10)
-
-

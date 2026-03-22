@@ -86,18 +86,18 @@ Coordinates:
   * y        (y) float64 1kB 5.664 5.713 5.762 5.811 ... 11.72 11.77 11.82 11.87
   * x        (x) float64 688B -3.583 -3.492 -3.402 -3.311 ... 3.946 4.037 4.127
 Attributes: (11/16)
-    transmit_frequency:           15625000.0
-    probe_n_elements:             128
-    probe_pitch:                  8.999999999999999e-05
-    sound_velocity:               1520.0
-    plane_wave_angles:            [-10.0, -9.310344696044922, -8.620689392089...
-    ...                           ...
-    clutter_filter_method:        svd_indices
-    clutter_window_width:         300
-    clutter_window_stride:        300
-    doppler_window_width:         300
-    doppler_window_stride:        300
-    clutter_low_cutoff:           40
+    transmit_frequency:             15625000.0
+    probe_number_of_elements:       128
+    probe_pitch:                    8.999999999999999e-05
+    beamforming_sound_velocity:     1520.0
+    plane_wave_angles:              [-10.0, -9.310344696044922, -8.620689392089...
+    ...                             ...
+    clutter_filter_method:          svd_indices
+    clutter_window_width:           300
+    clutter_window_stride:          300
+    doppler_window_width:           300
+    doppler_window_stride:          300
+    clutter_low_cutoff:             40
 ```
 
 Reading the output from top to bottom, a `DataArray` has four components:

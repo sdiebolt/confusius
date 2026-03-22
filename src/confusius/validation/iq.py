@@ -11,7 +11,7 @@ _REQUIRED_COORDS = ("time", "z", "y", "x")
 _REQUIRED_ATTRS = (
     "compound_sampling_frequency",
     "transmit_frequency",
-    "sound_velocity",
+    "beamforming_sound_velocity",
 )
 
 
@@ -30,7 +30,8 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
 
        - `compound_sampling_frequency`: Volume acquisition rate in Hz.
        - `transmit_frequency`: Ultrasound probe central frequency in Hz.
-       - `sound_velocity`: Speed of sound in the imaged medium in m/s.
+       - `beamforming_sound_velocity`: Speed of sound assumed during beamforming in
+         meters per second.
 
     Parameters
     ----------
@@ -40,7 +41,7 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
     require_attrs : bool, default: True
         Whether to validate that all required attributes
         (`compound_sampling_frequency`, `transmit_frequency`,
-        `sound_velocity`) are present in the DataArray attributes.
+        `beamforming_sound_velocity`) are present in the DataArray attributes.
 
     Raises
     ------
@@ -70,7 +71,7 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
     ...     attrs={
     ...         "compound_sampling_frequency": 1000.0,
     ...         "transmit_frequency": 15e6,
-    ...         "sound_velocity": 1540.0,
+    ...         "beamforming_sound_velocity": 1540.0,
     ...     },
     ... )
     >>> validate_iq(iq)

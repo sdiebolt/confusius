@@ -494,7 +494,7 @@ def convert_autc_dats_to_zarr(
     transmit_frequency: float | None = None,
     probe_n_elements: int | None = None,
     probe_pitch: float | None = None,
-    sound_velocity: float | None = None,
+    beamforming_sound_velocity: float | None = None,
     plane_wave_angles: npt.ArrayLike | None = None,
     compound_sampling_frequency: float | None = None,
     pulse_repetition_frequency: float | None = None,
@@ -550,7 +550,7 @@ def convert_autc_dats_to_zarr(
         Number of probe transducers.
     probe_pitch : float, optional
         Inter-element pitch of the probe in millimeters.
-    sound_velocity : float, optional
+    beamforming_sound_velocity : float, optional
         Speed of sound in meters per second.
     plane_wave_angles : array_like, optional
         Angles at which tilted plane waves are emitted in degrees.
@@ -599,7 +599,7 @@ def convert_autc_dats_to_zarr(
         ds = xr.open_zarr("output.zarr")
         iq = ds["iq"]
 
-    Metadata attributes (e.g., `transmit_frequency`, `sound_velocity`) are stored
+    Metadata attributes (e.g., `transmit_frequency`, `beamforming_sound_velocity`) are stored
     on the `iq` DataArray (accessible via `iq.attrs`), consistent with how
     reduction functions return DataArrays with attributes.
 
@@ -770,26 +770,12 @@ def convert_autc_dats_to_zarr(
 
     if transmit_frequency is not None:
         zarr_iq.attrs["transmit_frequency"] = transmit_frequency
-
-    if probe_n_elements is not None:
-        zarr_iq.attrs["probe_n_elements"] = probe_n_elements
-
-    if probe_pitch is not None:
+        zarr_iq.attrs["probe_number_of_elements"] = probe_n_elements
         zarr_iq.attrs["probe_pitch"] = probe_pitch
-
-    if sound_velocity is not None:
-        zarr_iq.attrs["sound_velocity"] = sound_velocity
-
-    if plane_wave_angles is not None:
+        zarr_iq.attrs["beamforming_sound_velocity"] = beamforming_sound_velocity
         zarr_iq.attrs["plane_wave_angles"] = np.asarray(plane_wave_angles).tolist()
-
-    if compound_sampling_frequency is not None:
         zarr_iq.attrs["compound_sampling_frequency"] = compound_sampling_frequency
-
-    if pulse_repetition_frequency is not None:
         zarr_iq.attrs["pulse_repetition_frequency"] = pulse_repetition_frequency
-
-    if beamforming_method is not None:
         zarr_iq.attrs["beamforming_method"] = beamforming_method
 
     first_block = skip_first_blocks

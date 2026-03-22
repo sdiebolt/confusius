@@ -415,7 +415,7 @@ def compute_axial_velocity_volume(
     absolute_velocity: bool = False,
     spatial_kernel: int = 1,
     ultrasound_frequency: float = 15.625e6,
-    sound_velocity: float = 1540,
+    beamforming_sound_velocity: float = 1540,
     estimation_method: Literal["average_angle", "angle_average"] = "average_angle",
 ) -> npt.NDArray:
     """Compute axial velocity volumes from beamformed IQ data.
@@ -470,8 +470,8 @@ def compute_axial_velocity_volume(
         positive and odd. If `1`, no spatial filtering is applied.
     ultrasound_frequency : float, default: 15.625e6
         Probe central frequency in Hertz.
-    sound_velocity : float, default: 1540
-        Speed of sound in the imaged medium, in meters per second.
+    beamforming_sound_velocity : float, default: 1540
+        Speed of sound assumed during beamforming, in meters per second.
     estimation_method : {"average_angle", "angle_average"}, default: "average_angle"
         Method for computing the velocity estimate.
 
@@ -500,7 +500,7 @@ def compute_axial_velocity_volume(
         absolute_velocity: bool,
         fs: float,
         ultrasound_frequency: float,
-        sound_velocity: float,
+        beamforming_sound_velocity: float,
         estimation_method: Literal["average_angle", "angle_average"],
         **_,
     ) -> npt.NDArray:
@@ -522,7 +522,7 @@ def compute_axial_velocity_volume(
             Volume sampling frequency in Hertz.
         ultrasound_frequency : float
             Probe central frequency in Hertz.
-        sound_velocity : float
+        beamforming_sound_velocity : float
             Speed of sound in the imaged medium, in meters per second.
         estimation_method : {"average_angle", "angle_average"}
             Method for computing the velocity estimate.
@@ -566,7 +566,7 @@ def compute_axial_velocity_volume(
         return (
             average_autocorrelation_phase
             * fs
-            * sound_velocity
+            * beamforming_sound_velocity
             / (4 * np.pi * ultrasound_frequency)
         )
 
@@ -585,7 +585,7 @@ def compute_axial_velocity_volume(
         spatial_kernel=spatial_kernel,
         lag=lag,
         absolute_velocity=absolute_velocity,
-        sound_velocity=sound_velocity,
+        beamforming_sound_velocity=beamforming_sound_velocity,
         estimation_method=estimation_method,
     )
 
@@ -1002,7 +1002,8 @@ def process_iq_to_axial_velocity(
 
         - `compound_sampling_frequency`: Volume acquisition rate in Hz.
         - `transmit_frequency`: Ultrasound probe central frequency in Hz.
-        - `sound_velocity`: Speed of sound in the imaged medium in m/s.
+        - `beamforming_sound_velocity`: Speed of sound assumed during beamforming in
+          meters per second.
     clutter_window_width : int, optional
         Width of the sliding temporal window for clutter filtering, in volumes. If not
         provided, uses the chunk size of the IQ data along the temporal dimension.
@@ -1128,7 +1129,7 @@ def process_iq_to_axial_velocity(
     # Validation ensures these attributes are present and of the correct type.
     fs = iq.attrs["compound_sampling_frequency"]
     ultrasound_frequency = iq.attrs["transmit_frequency"]
-    sound_velocity = iq.attrs["sound_velocity"]
+    beamforming_sound_velocity = iq.attrs["beamforming_sound_velocity"]
 
     result = process_iq_blocks(
         dask_iq,
@@ -1147,7 +1148,7 @@ def process_iq_to_axial_velocity(
         absolute_velocity=absolute_velocity,
         spatial_kernel=spatial_kernel,
         ultrasound_frequency=ultrasound_frequency,
-        sound_velocity=sound_velocity,
+        beamforming_sound_velocity=beamforming_sound_velocity,
         estimation_method=estimation_method,
     )
 
@@ -1179,7 +1180,7 @@ def process_iq_to_axial_velocity(
         "absolute_velocity": absolute_velocity,
         "spatial_kernel": spatial_kernel,
         "ultrasound_frequency": ultrasound_frequency,
-        "sound_velocity": sound_velocity,
+        "beamforming_sound_velocity": beamforming_sound_velocity,
         "estimation_method": estimation_method,
     }
     if low_cutoff is not None:

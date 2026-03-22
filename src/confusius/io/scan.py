@@ -236,8 +236,10 @@ def load_scan(
     files the shape is `(npose, 4, 4)`; index with `da.coords["pose"].values` after
     `isel`.
 
-    Provenance attributes are stored in `da.attrs`: `scan_mode`, `subject`, `session`,
-    `scan`, `project`, `date`, `neuroscan_version`, `machine_sn`.
+    Provenance attributes are stored in `da.attrs`: BIDS-compatible fields
+    (`device_serial_numbers`, `software_versions`) and Iconeus-specific fields
+    (`iconeus_scan_mode`, `iconeus_subject`, `iconeus_session`, `iconeus_scan`,
+    `iconeus_project`, `iconeus_date`).
     """
     path = check_path(path, type="file")
 
@@ -266,14 +268,14 @@ def load_scan(
 
         attrs: dict[str, Any] = {
             "affines": {"physical_to_lab": physical_to_lab},
-            "scan_mode": mode,
-            "subject": _read_scan_str(h5, "/scanMetaData/Subject_tag"),
-            "session": _read_scan_str(h5, "/scanMetaData/Session_tag"),
-            "scan": _read_scan_str(h5, "/scanMetaData/Scan_tag"),
-            "project": _read_scan_str(h5, "/scanMetaData/Project_tag"),
-            "date": _read_scan_str(h5, "/scanMetaData/Date"),
-            "neuroscan_version": _read_scan_str(h5, "/scanMetaData/Neuroscan_version"),
-            "machine_sn": _read_scan_str(h5, "/scanMetaData/Machine_SN"),
+            "device_serial_numbers": _read_scan_str(h5, "/scanMetaData/Machine_SN"),
+            "software_versions": _read_scan_str(h5, "/scanMetaData/Neuroscan_version"),
+            "iconeus_scan_mode": mode,
+            "iconeus_subject": _read_scan_str(h5, "/scanMetaData/Subject_tag"),
+            "iconeus_session": _read_scan_str(h5, "/scanMetaData/Session_tag"),
+            "iconeus_scan": _read_scan_str(h5, "/scanMetaData/Scan_tag"),
+            "iconeus_project": _read_scan_str(h5, "/scanMetaData/Project_tag"),
+            "iconeus_date": _read_scan_str(h5, "/scanMetaData/Date"),
         }
 
         raw_lazy = da.from_array(h5["/Data"], chunks=chunks, asarray=False)

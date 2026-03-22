@@ -94,12 +94,44 @@ Coverage reports are generated automatically (terminal, HTML in `htmlcov/`, and 
 - Use try/except blocks for external operations
 
 ### Documentation
+- Use Zensical for documentation generation
 - Use NumPy docstring format for all public functions
 - Include Parameters, Returns, Raises sections
 - Document complex algorithms with references
 - Use type hints in docstrings when helpful
 - Include default values in the type parameter as `arg : type, default: value`, or `arg
-  : type, optional` when the default is `None`.
+  : type, optional` when the default is `None`
+- Use single backticks for inline code (Zensical/MarkDocs style, not Sphinx rst)
+- Use full package names in docstrings (e.g., `xarray.DataArray` not `xr.DataArray`)
+- Use `list[...]`, `tuple[...]` syntax instead of "list of..." descriptions
+- Document array shapes as `(X, Y, Z) numpy.ndarray` or `(X, Y, Z) xarray.DataArray`
+
+#### Multiple Return Values
+When a function returns multiple values, document each return value on a separate line in the `Returns` section:
+```python
+Returns
+-------
+first_value : type
+    Description of the first return value.
+second_value : type
+    Description of the second return value.
+```
+Do not use `tuple[type1, type2]` as the return type in the docstring.
+
+#### Constants
+- Document module-level constants with triple-quoted docstrings placed immediately after the constant.
+- Include a description of the constant's purpose and contents.
+
+#### Attribution and Cross-references
+- For code adapted from other projects (e.g., nilearn), add a NOTICE file reference at the
+  module level: "Portions of this file are derived from [Project], which is licensed under
+  the [License]. See `NOTICE` file for details."
+- Use mkdocs-style links for cross-references to other functions/classes:
+  `[function_name][confusius.module.path.function_name]` or
+  `[ClassName][confusius.module.path.ClassName]`
+- Example: `[fit][confusius.glm._models.OLSModel.fit]` or
+  `[SeedBasedMaps][confusius.connectivity.SeedBasedMaps]`
+- Do NOT use Sphinx-style reference sections (`.. [1]`)
 
 ### Code Structure
 - Use pathlib.Path for file operations
@@ -179,7 +211,8 @@ refactor(iq): simplify power reduction algorithm
 - Prefer reference implementation tests when available.
 
 ### Test Structure
-- Use pytest fixtures for reusable test data.
+- Use pytest fixtures for reusable test data. Always check for existing fixtures in
+  `conftest.py` files before creating new test data.
 - Use `numpy.testing.assert_allclose` for floating-point comparisons.
 - Use `numpy.testing.assert_array_equal` for exact comparisons.
 - Use `pytest.raises` for expected exceptions.

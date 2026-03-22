@@ -16,6 +16,8 @@ import numpy.typing as npt
 import xarray as xr
 
 from confusius._utils import find_stack_level
+from confusius.bids import from_bids, to_bids
+from confusius.bids.validation import validate_metadata
 from confusius.io.utils import check_path
 from confusius.registration.affines import decompose_affine
 
@@ -25,26 +27,77 @@ if TYPE_CHECKING:
 NiftiVersion: TypeAlias = Literal[1, 2]
 """Type alias for NIfTI file format version."""
 
-# ConfUSIus and NIfTI dimension mapping.
 _NIFTI_DIM_ORDER = ("x", "y", "z", "time", "dim4", "dim5", "dim6")
+"""ConfUSIus and NIfTI dimension mapping.
 
-# Unit string mappings between NiBabel and ConfUSIus conventions.
+Maps ConfUSIus dimension names to their NIfTI axis order.
+"""
+
 _NIFTI_TO_CONFUSIUS_SPACE_UNITS: dict[str, str] = {
     "meter": "m",
     "mm": "mm",
     "micron": "um",
 }
+"""Mapping from NIfTI spatial unit strings to ConfUSIus conventions."""
+
 _NIFTI_TO_CONFUSIUS_TIME_UNITS: dict[str, str] = {
     "sec": "s",
     "msec": "ms",
     "usec": "us",
 }
+"""Mapping from NIfTI time unit strings to ConfUSIus conventions."""
+
 _CONFUSIUS_TO_NIFTI_SPACE_UNITS: dict[str, str] = {
     v: k for k, v in _NIFTI_TO_CONFUSIUS_SPACE_UNITS.items()
 }
+"""Mapping from ConfUSIus spatial unit strings to NIfTI conventions."""
+
 _CONFUSIUS_TO_NIFTI_TIME_UNITS: dict[str, str] = {
     v: k for k, v in _NIFTI_TO_CONFUSIUS_TIME_UNITS.items()
 }
+"""Mapping from ConfUSIus time unit strings to NIfTI conventions."""
+
+_TIME_UNIT_TO_SECONDS: dict[str, float] = {
+    "s": 1.0,
+    "ms": 0.001,
+    "us": 0.000001,
+}
+"""Conversion factors to seconds for BIDS compliance.
+
+Maps ConfUSIus time unit strings to their conversion factor to seconds.
+"""
+
+
+def _convert_time_to_seconds(
+    values: npt.NDArray[np.float64], unit: str | None
+) -> npt.NDArray[np.float64]:
+    """Convert time values to seconds.
+
+    Parameters
+    ----------
+    values : numpy.ndarray
+        Time values to convert.
+    unit : str or None
+        Current unit of the values ("s", "ms", "us"). If not provided, assumes seconds.
+
+    Returns
+    -------
+    numpy.ndarray
+        Time values converted to seconds.
+
+    Raises
+    ------
+    ValueError
+        If the unit is not recognized.
+    """
+    if unit is None or unit == "s":
+        return values
+    if unit not in _TIME_UNIT_TO_SECONDS:
+        raise ValueError(
+            f"Unknown time unit: {unit}. "
+            f"Supported units: {list(_TIME_UNIT_TO_SECONDS.keys())}"
+        )
+    return values * _TIME_UNIT_TO_SECONDS[unit]
 
 
 class _NiftiHeaderExtractor:
@@ -465,7 +518,17 @@ def load_nifti(
 
     if sidecar_path.exists():
         with open(sidecar_path) as f:
-            attrs.update(json.load(f))
+            sidecar_data = json.load(f)
+            attrs.update(from_bids(sidecar_data))
+
+        if sidecar_data:
+            try:
+                validate_metadata(sidecar_data)
+            except Exception as e:
+                warnings.warn(
+                    f"fUSI-BIDS validation warning: {e}",
+                    stacklevel=find_stack_level(),
+                )
 
     # We use np.asanyarray to get the memory-mapped array behind Nibabel's proxy. This
     # will allow Dask to create a lazy array without loading the entire dataset into
@@ -514,19 +577,19 @@ def load_nifti(
     attrs.update(affine_attrs)
 
     # Override the pixdim-based time coordinate with sidecar timing fields when present.
-    # Priority: VolumeTiming > RepetitionTime/DelayAfterTrigger > pixdim.
+    # Priority: volume_timing > repetition_time/delay_after_trigger > pixdim.
     if "time" in coords:
         time_attrs = coords["time"].attrs
         n_time = len(coords["time"])
-        if "VolumeTiming" in attrs:
+        if "volume_timing" in attrs:
             coords["time"] = xr.DataArray(
-                np.asarray(attrs.pop("VolumeTiming")),
+                np.asarray(attrs.pop("volume_timing")),
                 dims=["time"],
                 attrs=time_attrs,
             )
-        elif "RepetitionTime" in attrs:
-            rep_time = float(attrs.pop("RepetitionTime"))
-            delay = float(attrs.pop("DelayAfterTrigger", 0.0))
+        elif "repetition_time" in attrs:
+            rep_time = float(attrs.pop("repetition_time"))
+            delay = float(attrs.pop("delay_after_trigger", 0.0))
             if tr is not None and tr > 0 and not np.isclose(rep_time, tr, rtol=1e-3):
                 warnings.warn(
                     f"Sidecar RepetitionTime ({rep_time}) does not match pixdim[4] "
@@ -668,6 +731,15 @@ def save_nifti(
         `attrs["sform_code"]` is used if present; otherwise defaults to `1` when a
         sform affine is available, or `0` when no sform affine is written.
 
+    Notes
+    -----
+    Time coordinates are automatically converted to seconds for BIDS compliance. If the
+    time coordinate has a "units" attribute, values are converted from "ms" or "us" to
+    "s". If no units are specified, seconds are assumed.
+
+    A warning is issued if spatial dimensions `(x, y, z)` have inconsistent units, as
+    NIfTI only supports a single spatial unit in the `xyzt_units` header field.
+
     Examples
     --------
     >>> import confusius as cf
@@ -696,8 +768,7 @@ def save_nifti(
             target_order.append(i)
 
     # ConfUSIus order is (time, z, y, x), NIfTI order is (x, y, z, time).
-    if len(target_order) == len(current_dims):
-        data = np.transpose(data, target_order)
+    data = np.transpose(data, target_order)
 
     # Insert singleton axes for any missing spatial dimensions so that the NIfTI axis
     # order (dim 0 = x, dim 1 = y, dim 2 = z) is always respected. Without this, a (z,
@@ -718,7 +789,14 @@ def save_nifti(
     tr_pixdim: float | None = None
     time_sidecar: dict[str, Any] = {}
     if "time" in data_array.coords:
-        time_values = data_array.coords["time"].values
+        time_values_raw = data_array.coords["time"].values
+        time_unit = data_array.coords["time"].attrs.get("units")
+
+        # Convert to seconds for BIDS compliance.
+        time_values = _convert_time_to_seconds(
+            np.asarray(time_values_raw, dtype=np.float64), time_unit
+        )
+
         tr_spacing, delay = _infer_repetition_time(time_values)
         if tr_spacing is not None:
             tr_pixdim = tr_spacing
@@ -732,6 +810,7 @@ def save_nifti(
     zooms = spatial_zooms
     if "time" in current_dims:
         zooms.append(tr_pixdim if tr_pixdim is not None else 1.0)
+    zooms.extend(1.0 for dim in current_dims if dim not in ("x", "y", "z", "time"))
 
     T = np.array(
         [
@@ -796,6 +875,17 @@ def save_nifti(
     else:
         nifti_img.header.set_sform(None, code=0)
 
+    spatial_units = set()
+    for dim in ("x", "y", "z"):
+        if dim in data_array.coords and "units" in data_array.coords[dim].attrs:
+            spatial_units.add(data_array.coords[dim].attrs["units"])
+    if len(spatial_units) > 1:
+        warnings.warn(
+            f"Spatial dimensions have different units: {spatial_units}. "
+            f"NIfTI only supports a single spatial unit; using the first one found.",
+            stacklevel=find_stack_level(),
+        )
+
     space_unit_nib = None
     for dim in ("x", "y", "z"):
         if dim in data_array.coords and "units" in data_array.coords[dim].attrs:
@@ -803,15 +893,11 @@ def save_nifti(
             space_unit_nib = _CONFUSIUS_TO_NIFTI_SPACE_UNITS.get(confusius_unit)
             break
 
-    time_unit_nib = None
-    if "time" in data_array.coords and "units" in data_array.coords["time"].attrs:
-        confusius_unit = data_array.coords["time"].attrs["units"]
-        time_unit_nib = _CONFUSIUS_TO_NIFTI_TIME_UNITS.get(confusius_unit)
-
-    if space_unit_nib is not None or time_unit_nib is not None:
+    # BIDS timing parameters are always in seconds, so we always set time unit to sec.
+    if space_unit_nib is not None:
         nifti_img.header.set_xyzt_units(
-            xyz=space_unit_nib or "unknown",
-            t=time_unit_nib or "unknown",
+            xyz=space_unit_nib,
+            t="sec",
         )
 
     nifti_img.to_filename(path)
@@ -845,5 +931,16 @@ def save_nifti(
     else:
         sidecar_path = path.with_suffix(".json")
 
+    bids_attrs = to_bids(sidecar_attrs)
+
+    if bids_attrs:
+        try:
+            validate_metadata(bids_attrs)
+        except Exception as e:
+            warnings.warn(
+                f"fUSI-BIDS validation warning when saving: {e}",
+                stacklevel=find_stack_level(),
+            )
+
     with open(sidecar_path, "w") as f:
-        json.dump(sidecar_attrs, f, indent=2, default=str)
+        json.dump(bids_attrs, f, indent=2, default=str)

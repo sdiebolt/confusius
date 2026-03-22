@@ -25,7 +25,7 @@ class TestValidateIq:
             attrs={
                 "compound_sampling_frequency": 1000.0,
                 "transmit_frequency": 15.625e6,
-                "sound_velocity": 1540.0,
+                "beamforming_sound_velocity": 1540.0,
             },
         )
 
@@ -50,7 +50,7 @@ class TestValidateIq:
             attrs={
                 "compound_sampling_frequency": 1000.0,
                 "transmit_frequency": 15.625e6,
-                "sound_velocity": 1540.0,
+                "beamforming_sound_velocity": 1540.0,
             },
         )
 
@@ -69,7 +69,7 @@ class TestValidateIq:
         [
             "compound_sampling_frequency",
             "transmit_frequency",
-            "sound_velocity",
+            "beamforming_sound_velocity",
         ],
     )
     def test_missing_required_attribute_raises(self, valid_iq_dataarray, missing_attr):
