@@ -48,7 +48,7 @@ confusius = "confusius._cli:main"
 confusius = "confusius._napari:napari.yaml"
 
 [build-system]
-requires = ["uv_build>=0.9.5,<0.10.0"]
+requires = ["uv-build>=0.9.5,<0.11.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
