@@ -47,8 +47,8 @@ class SavePanel(QWidget):
 
     - **Direct**: the layer carries a ConfUSIus DataArray in its metadata
       (loaded via the reader), so it is saved verbatim.
-    - **Reconstruct**: coordinates are inferred from the layer's ``scale``,
-      ``translate``, ``axis_labels``, and ``units`` (typical for user-drawn
+    - **Reconstruct**: coordinates are inferred from the layer's `scale`,
+      `translate`, `axis_labels`, and `units` (typical for user-drawn
       labels layers).
     - **Template**: coordinates are borrowed from a second layer that *does*
       carry a DataArray (e.g. the fUSI image on which the labels were drawn).
@@ -57,8 +57,8 @@ class SavePanel(QWidget):
       3D labels layer with a 4D image template), the trailing spatial dimensions
       of the template are used.
 
-    The output format is inferred from the file extension (``.nii`` /
-    ``.nii.gz`` for NIfTI, ``.zarr`` for Zarr).
+    The output format is inferred from the file extension (`.nii` /
+    `.nii.gz` for NIfTI, `.zarr` for Zarr).
 
     Parameters
     ----------
