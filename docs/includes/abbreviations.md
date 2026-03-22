@@ -8,6 +8,7 @@
 *[PCA]: Principal Component Analysis
 *[ICA]: Independent Component Analysis
 *[GLM]: General Linear Model
+*[GLMs]: General Linear Models
 *[ROI]: Region of Interest
 *[ROIs]: Regions of Interest
 *[HRF]: Hemodynamic Response Function

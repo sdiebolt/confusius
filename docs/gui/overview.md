@@ -8,7 +8,7 @@ ConfUSIus ships a [napari](https://napari.org) plugin that provides an interacti
 graphical interface for fUSI data exploration, time series inspection, and quality
 control—no scripting required.
 
-!!! tip "New to napari?"
+!!! question "New to napari?"
     This guide only covers ConfUSIus-specific features. If you are new to napari, the
     official [napari tutorials](https://napari.org/dev/tutorials/index.html) are a great
     starting point for learning the viewer, layer system, and annotation tools. napari
@@ -50,7 +50,7 @@ The widget contains three collapsible panels—[Data I/O](plugin.md#data-io-pane
 Series](plugin.md#time-series-panel), and [QC](plugin.md#qc-panel)—that can each be
 expanded or collapsed independently.
 
-!!! question "Running napari programmatically"
+!!! tip "Running napari programmatically"
     If you prefer to open napari from a Python script or Jupyter notebook, see the
     [Visualization](../user-guide/visualization.md#interactive-exploration-with-napari)
     guide, which covers [`plot_napari`][confusius.plotting.plot_napari] and related

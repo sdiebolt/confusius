@@ -37,47 +37,67 @@ based on ultrasound research platforms such as [Verasonics](https://verasonics.c
 ConfUSIus is a Python package for handling, processing, and analyzing functional
 ultrasound imaging (fUSI) data. It provides tools for the entire fUSI analysis
 pipeline, from converting raw beamformed IQ data to processing hemodynamic signals and
-performing statistical analyses.
+performing statistical analyses. It also ships a [napari](https://napari.org) plugin
+for interactive data exploration.
+
+!!! tip "Prefer not to script?"
+    The [ConfUSIus napari plugin](../gui/overview.md) is a good starting point if you
+    want to explore a dataset before writing any analysis code. It covers data loading
+    and exploration, time series inspection, and quality control—all without scripting.
 
 ## Key Features
 
 ConfUSIus provides a comprehensive toolkit designed specifically for fUSI data:
 
 === "Data I/O"
-    - Convert beamformed IQ data (AUTC, EchoFrame) to Zarr.
-    - Load and save NIfTI files with BIDS sidecar support.
-    - Work with Zarr for cloud-native, chunked storage.
+    - Convert AUTC and EchoFrame beamformed IQ data to Zarr for efficient processing.
+    - Load Zarr, NIfTI, and Iconeus SCAN files as labeled Xarray DataArrays.
+    - Save DataArrays to NIfTI (with automatic BIDS JSON sidecar) or Zarr.
 
 === "Beamformed IQ"
-    - Clutter filtering for separating tissue and blood signals.
-    - Power Doppler and velocity estimation from beamformed IQ data.
+    - SVD-based clutter filtering to separate blood from tissue signals.
+    - Compute power Doppler, B-mode, and axial velocity images from filtered IQ data.
+    - A general-purpose block-processing primitive lets you apply any custom function
+      to IQ blocks efficiently using Dask sliding windows.
 
 === "Quality Control"
-    - Quality control metrics.
-    - Quality control visualizations.
+    - Temporal metric: DVARS for detecting outlier volumes.
+    - Spatial metrics: coefficient of variation (CV) for mapping high-variance regions,
+      and tSNR for compatibility with fMRI-style workflows (with caveats for power
+      Doppler).
+    - Carpet plots (grayplots) to spot global disturbances, motion spikes, and scanner
+      drift.
 
 === "Registration"
-    - Motion correction using volume-wise registration.
-    - Registration between acquisitions.
+    - Frame-by-frame motion correction with rigid or affine transforms; framewise
+      displacement and motion parameter extraction for downstream scrubbing.
+    - Volume registration for inter-session alignment or atlas co-registration (rigid,
+      affine, or deformable B-spline transforms).
 
 === "Visualization"
-    - Interactive exploration of 3D+t datasets using napari.
-    - Static figure generation using Matplotlib.
+    - **Napari plugin**: Graphical interface for data loading and exploration, time
+      series inspection, and quality control—no scripting required.
+    - **Programmatic napari**: Interactive 3D+t exploration from scripts or notebooks.
+    - **Matplotlib**: Static figure generation for publications and reports.
 
 === "Signal Processing"
-    - Extraction of signals using region masking.
-    - Denoising and filtering of hemodynamic signals.
+    - Extract voxel-wise or region-averaged signals using binary masks or label maps.
+    - Clean time series in one step: confound regression (including CompCor),
+      Butterworth filtering (low-, high-, or band-pass), detrending, and
+      standardization.
+    - Censor or interpolate motion-contaminated samples identified during QC.
 
 === "Atlas Integration"
-    - Load and resample brain atlases (Allen CCFv3 and others via BrainGlobe).
-    - Generate brain region masks for signal extraction.
-    - Overlay atlas contours on fUSI volumes.
+    - Load any BrainGlobe-compatible atlas (Allen CCFv3, Waxholm, and more).
+    - Generate region masks and label maps for targeted signal extraction.
+    - Resample atlases to match your acquisition grid; overlay region contours on fUSI
+      images.
 
 === "Analysis"
-    - Functional connectivity analysis.
-    - General linear modeling (GLM) for task-based fUSI data.
-    - Interoperability with other Python scientific libraries (Nilearn, scikit-learn,
-      statsmodels, etc.).
+    - Seed-based correlation maps and region-to-region functional connectivity matrices.
+    - General linear models (GLMs) for task-based and event-related designs.
+    - Interoperability with Nilearn, scikit-learn, statsmodels, and other scientific
+      Python libraries.
 
 ## Typical Workflow
 
@@ -164,14 +184,21 @@ ConfUSIus supports the complete fUSI analysis pipeline, from raw data acquisitio
 
 ## When to Use ConfUSIus
 
-ConfUSIus is designed for researchers and analysts working with fUSI data who need:
+ConfUSIus is designed for anyone working with fUSI data:
 
-- **Efficient handling of large datasets**: Process large-scale beamformed IQ data
-  without running out of memory.
-- **Standardized workflows**: Follow fUSI-BIDS conventions for reproducible research.
-- **Python integration**: Work with modern scientific Python tools (NumPy, Xarray, Dask,
-  scikit-learn).
-- **Flexibility**: Customize processing pipelines while using battle-tested components.
+- **Comprehensive fUSI toolkit**: ConfUSIus covers the entire analysis pipeline in a
+  single, actively maintained open-source package—from IQ processing and quality control
+  to atlas integration, signal extraction, and connectivity analysis.
+- **Accessible at every skill level**: Non-programmers can use the
+  [napari plugin](../gui/overview.md) for interactive data loading, time series
+  inspection, and quality control. Python users can build fully custom pipelines using
+  the scripting API.
+- **Python ecosystem integration**: Works seamlessly with NumPy, Xarray, Dask, Nilearn,
+  scikit-learn, and other scientific Python libraries.
+- **Standardized workflows**: Follow fUSI-BIDS conventions for reproducible,
+  shareable research.
+- **Scalable to large datasets**: Process large beamformed IQ datasets out-of-core using
+  Dask and Zarr without running out of memory.
 
 ## Before You Begin
 
@@ -194,8 +221,10 @@ Ready to get started?
 1. **[Install ConfUSIus](installation.md)**: Set up your environment and install the
    package.
 2. **[I/O Guide](io.md)**: Learn how to load and convert your fUSI data.
-3. **[Examples](../examples/index.md)**: See complete workflows for common tasks.
-4. **[API Reference](../api/index.md)**: Explore detailed function documentation.
+3. **[Graphical Interface](../gui/overview.md)**: Explore your data interactively with
+   the napari plugin—no scripting required.
+4. **[Examples](../examples/index.md)**: See complete workflows for common tasks.
+5. **[API Reference](../api/index.md)**: Explore detailed function documentation.
 
 Still have questions? Check the [GitHub
 issues](https://github.com/sdiebolt/confusius/issues) or open a new one! You can also
