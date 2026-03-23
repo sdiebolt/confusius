@@ -26,20 +26,20 @@ preprocessing, and statistical analysis of functional ultrasound imaging (fUSI) 
 > their experimental needs.
 
 - **I/O Operations**: Load and save fUSI data in various formats (AUTC, EchoFrame,
-  Iconeus SCAN, NIfTI, Zarr)
+  Iconeus, NIfTI, Zarr), with automatic fUSI-BIDS sidecars for NIfTI.
 - **Beamformed IQ Processing**: Process raw beamformed IQ signals into power Doppler,
-  velocity, and other derived metrics
+  velocity, and other derived metrics.
 - **Quality Control**: Compute quality metrics (DVARS, tSNR, CV) to assess data quality
-- **Registration**: Motion correction and spatial alignment tools
+- **Registration**: Motion correction and spatial alignment tools.
 - **Brain Atlas Integration**: Map fUSI data to standard brain atlases for region-based
-  analysis
-- **Signal Extraction**: Extract signals from regions of interest using spatial masks
-- **Signal Processing**: Denoising, filtering, detrending, and confound regression
-- **Visualization**: Rich plotting utilities for fUSI data exploration
+  analysis.
+- **Signal Extraction**: Extract signals from regions of interest using spatial masks.
+- **Signal Processing**: Denoising, filtering, detrending, and confound regression.
+- **Visualization**: Rich plotting utilities for fUSI data exploration.
 - **Napari Plugin**: Interactive data loading, live time-series inspection, and quality
-  control directly in the napari viewer—no scripting required
+  control directly in the napari viewer—no scripting required.
 - **Xarray Integration**: Seamless integration with Xarray for labeled multi-dimensional
-  arrays
+  arrays.
 
 ## Installation
 

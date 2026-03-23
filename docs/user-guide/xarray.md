@@ -337,8 +337,9 @@ fig, ax = registered.fusi.plot.carpet(mask=mask)
 
 ### Saving to Files ([`.fusi.save`][confusius.xarray.FUSIAccessor.save])
 
-Save to NIfTI or Zarr by extension. For NIfTI, an accompanying JSON sidecar is always
-written alongside, storing custom attributes and BIDS timing fields:
+Save to NIfTI or Zarr by extension. For NIfTI, an accompanying fUSI-BIDS JSON sidecar
+is always written alongside, storing converted metadata fields, custom attributes, and
+timing fields derived from the `time` coordinate when available:
 
 ```python
 registered.fusi.save("sub-01_task-awake_pwd.nii.gz")
@@ -376,7 +377,7 @@ registered = pwd.fusi.register.volumewise(reference_time=0)
 # 5. Quick quality check with a carpet plot.
 fig, ax = registered.fusi.plot.carpet(mask=brain_mask)
 
-# 6. Save registered power Doppler to NIfTI with JSON sidecar.
+# 6. Save registered power Doppler to NIfTI with a fUSI-BIDS JSON sidecar.
 registered.fusi.save("sub-01_task-awake_pwd.nii.gz")
 
 # 7. Extract brain voxel time-series.

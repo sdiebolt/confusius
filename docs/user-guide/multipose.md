@@ -248,7 +248,7 @@ import confusius as cf
 anat = cf.load("sub-01_acq-anat_pwd.scan")
 volume = cf.multipose.consolidate_poses(anat)
 
-# Save to NIfTI (creates .nii.gz and a JSON sidecar).
+# Save to NIfTI (creates .nii.gz and a matching fUSI-BIDS JSON sidecar).
 volume.fusi.save("sub-01_acq-anat_pwd.nii.gz")
 
 # Or to Zarr.

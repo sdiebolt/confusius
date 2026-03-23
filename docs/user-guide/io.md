@@ -36,8 +36,8 @@ Xarray can read and write data from multiple storage formats, including:
 
 Additionally, ConfUSIus provides utilities to read and write
 [**NIfTI**](https://nifti.nimh.nih.gov/) files (the standard neuroimaging format for
-BIDS) as Xarray DataArrays, enabling seamless integration with BIDS-compliant fUSI
-datasets.
+BIDS) as Xarray DataArrays, automatically reading and writing matching fUSI-BIDS JSON
+sidecars when present.
 
 ### Recommended Formats for fUSI
 
@@ -384,15 +384,17 @@ Use [`confusius.load`][confusius.load] to load NIfTI files as lazy Xarray DataAr
 ```python
 import confusius as cf
 
-# Load with automatic BIDS sidecar metadata.
+# Load with automatic fUSI-BIDS sidecar metadata.
 da = cf.load("sub-01_task-awake_pwd.nii.gz")
 print(da.dims)
 # Output: ('time', 'z', 'y', 'x')
 ```
 
 ConfUSIus automatically loads a JSON sidecar file with the same basename (e.g.,
-`sub-01_task-awake_pwd.json`) if present, following the BIDS specification for fUSI
-metadata.
+`sub-01_task-awake_pwd.json`) if present. Metadata fields are interpreted using the
+fUSI-BIDS naming conventions and converted back to the usual ConfUSIus attribute names
+on the loaded DataArray. Timing metadata in the sidecar takes precedence over the NIfTI
+header when both are available.
 
 ## Saving Data
 
@@ -404,7 +406,7 @@ the Xarray accessor:
     ```python
     import confusius as cf
 
-    # Save to NIfTI with automatic JSON sidecar creation.
+    # Save to NIfTI with automatic fUSI-BIDS JSON sidecar creation.
     cf.save(data_array, "output.nii.gz")
 
     # Save to Zarr.
@@ -416,17 +418,19 @@ the Xarray accessor:
     ```python
     import confusius
 
-    # Save to NIfTI with automatic JSON sidecar creation.
+    # Save to NIfTI with automatic fUSI-BIDS JSON sidecar creation.
     data_array.fusi.save("output.nii.gz")
 
     # Save to Zarr.
     data_array.fusi.save("output.zarr")
     ```
 
-When saving to NIfTI, a JSON sidecar file will be automatically created. Spatial
-coordinates and units are encoded in the NIfTI header itself; the sidecar stores custom
-attributes and BIDS timing fields (e.g., `RepetitionTime`, `DelayAfterTrigger`,
-`VolumeTiming`).
+When saving to NIfTI, a JSON sidecar file will be automatically created in fUSI-BIDS
+style. Spatial coordinates and units are encoded in the NIfTI header itself; the
+sidecar stores converted metadata fields, custom attributes, and timing metadata such
+as `RepetitionTime`, `DelayAfterTrigger`, or `VolumeTiming`. When possible,
+`RepetitionTime` is inferred directly from the `time` coordinate so the sidecar stays
+consistent with the data being saved.
 
 ## Format Conversion Reference
 
@@ -441,4 +445,3 @@ Quick reference for converting between formats:
 | Zarr | Xarray DataArray | [`confusius.load`][confusius.load] / [`xarray.open_zarr`][xarray.open_zarr] (Dataset) |
 | Xarray DataArray | NIfTI | [`confusius.save`][confusius.save] / [`.fusi.save`][confusius.xarray.FUSIAccessor.save] |
 | Xarray DataArray | Zarr | [`confusius.save`][confusius.save] / [`.fusi.save`][confusius.xarray.FUSIAccessor.save] / [`.to_zarr`][xarray.DataArray.to_zarr] |
-

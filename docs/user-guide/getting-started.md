@@ -52,7 +52,8 @@ ConfUSIus provides a comprehensive toolkit designed specifically for fUSI data:
 === "Data I/O"
     - Convert AUTC and EchoFrame beamformed IQ data to Zarr for efficient processing.
     - Load Zarr, NIfTI, and Iconeus SCAN files as labeled Xarray DataArrays.
-    - Save DataArrays to NIfTI (with automatic BIDS JSON sidecar) or Zarr.
+    - Load and save NIfTI files with automatic fUSI-BIDS JSON sidecar handling.
+    - Save DataArrays to Zarr for chunked, large-scale processing.
 
 === "Beamformed IQ"
     - SVD-based clutter filtering to separate blood from tissue signals.
@@ -268,9 +269,10 @@ ConfUSIus.
   performance](https://zarr.readthedocs.io/en/stable/user-guide/performance/) is a
   useful resource if you intend to work with very large beamformed IQ datasets.
 - [Brain Imaging Data Structure](https://bids-specification.readthedocs.io/en/stable/):
-  ConfUSIus relies on BIDS for storing metadata alongside NIfTI files. Even if you don't
-  use NIfTI as your storage format, following BIDS conventions can help you organize and
-  share your datasets later. You may also want to take a look at the [fUSI-BIDS
+  ConfUSIus uses BIDS conventions when reading and writing JSON sidecars alongside NIfTI
+  files. Even if you don't use NIfTI as your storage format, following BIDS conventions
+  can help you organize and share your datasets later. You may also want to take a look
+  at the [fUSI-BIDS
   specification
   draft](https://docs.google.com/document/d/1W3z01mf1E8cfg_OY7ZGqeUeOKv659jCHQBXavtmT-T8/edit?usp=sharing)
   and at [PyBIDS](https://bids-standard.github.io/pybids/).
@@ -305,4 +307,3 @@ ConfUSIus.
     Montaldo, Gabriel, et al. “Functional Ultrasound Neuroimaging.” Annual Review of
     Neuroscience, vol. 45, no. 1, July 2022, pp. 491–513. DOI.org (Crossref),
     <https://doi.org/10.1146/annurev-neuro-111020-100706>.
-
