@@ -1,18 +1,62 @@
 """Shared utilities for the ConfUSIus napari plugin."""
 
 import datetime as dt
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TypeAlias, cast
+from typing import cast
 
 import numpy as np
+import numpy.typing as npt
 import pandas as pd
 from qtpy.QtCore import QRectF, QSize, Qt
 from qtpy.QtGui import QColor, QIcon, QImage, QPainter, QPixmap
 from qtpy.QtSvg import QSvgRenderer as _QSvgRenderer
 from qtpy.QtWidgets import QApplication, QFileDialog, QToolButton, QWidget
 
-ExportSeries: TypeAlias = tuple[str, np.ndarray, np.ndarray]
-"""Type alias for a plotted series, as a tuple of `(label, x_values, y_values)`."""
+
+@dataclass(frozen=True, slots=True)
+class PlotSeries:
+    """A time series ready for plotting with color.
+
+    Attributes
+    ----------
+    label : str
+        Series name for legend.
+    x_values : numpy.ndarray
+        X-axis values (typically time).
+    y_values : numpy.ndarray
+        Y-axis values (intensity/z-score).
+    color : str | None
+        Hex color string, or None to use default.
+    """
+
+    label: str
+    x_values: npt.NDArray[np.floating]
+    y_values: npt.NDArray[np.floating]
+    color: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ExportSeries:
+    """A time series ready for CSV/TSV export (no color).
+
+    Unlike `PlotSeries`, this excludes color information since exports are
+    data-only.
+
+    Attributes
+    ----------
+    label : str
+        Series name for the header.
+    x_values : numpy.ndarray
+        X-axis values (typically time).
+    y_values : numpy.ndarray
+        Y-axis values (intensity/z-score).
+    """
+
+    label: str
+    x_values: npt.NDArray[np.floating]
+    y_values: npt.NDArray[np.floating]
+
 
 _ASSETS_DIR = Path(__file__).parent / "assets"
 """Directory containing SVG icon assets for export buttons."""
@@ -313,7 +357,7 @@ def prepare_export_series(series: list[ExportSeries]) -> list[ExportSeries]:
     Parameters
     ----------
     series : list[ExportSeries]
-        Plotted series as `(label, x_values, y_values)` tuples.
+        Plotted series to normalize.
 
     Returns
     -------
@@ -326,14 +370,14 @@ def prepare_export_series(series: list[ExportSeries]) -> list[ExportSeries]:
         If any `x`/`y` pair has mismatched lengths.
     """
     prepared = []
-    for label, x_values, y_values in series:
-        x_array = np.ravel(np.asarray(x_values)).copy()
-        y_array = np.ravel(np.asarray(y_values)).copy()
+    for s in series:
+        x_array = np.ravel(np.asarray(s.x_values)).copy()
+        y_array = np.ravel(np.asarray(s.y_values)).copy()
         if len(x_array) != len(y_array):
             raise ValueError(
-                f"Cannot export {label!r}: time and value arrays have different lengths."
+                f"Cannot export {s.label!r}: time and value arrays have different lengths."
             )
-        prepared.append((label, x_array, y_array))
+        prepared.append(ExportSeries(s.label, x_array, y_array))
     return prepared
 
 
@@ -455,15 +499,15 @@ def write_delimited_series(
         raise ValueError("No plotted data available to export.")
 
     prepared_series = prepare_export_series(series)
-    labels = _deduplicate_export_labels([label for label, _, _ in prepared_series])
+    labels = _deduplicate_export_labels([s.label for s in prepared_series])
 
     row_lookup: dict[tuple[object, int], int] = {}
     row_times: list[object] = []
     column_values = [dict() for _ in prepared_series]
 
-    for column_index, (_, x_array, y_array) in enumerate(prepared_series):
+    for column_index, s in enumerate(prepared_series):
         occurrence_counts: dict[object, int] = {}
-        for x_value, y_value in zip(x_array, y_array, strict=True):
+        for x_value, y_value in zip(s.x_values, s.y_values, strict=True):
             key = _export_key(x_value)
             occurrence = occurrence_counts.get(key, 0)
             occurrence_counts[key] = occurrence + 1

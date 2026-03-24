@@ -7,6 +7,7 @@ from typing import Literal
 
 import napari
 import numpy as np
+from matplotlib import colormaps as mpl_colormaps
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
@@ -14,8 +15,10 @@ from napari.utils.notifications import show_error, show_info
 from qtpy.QtCore import QSize, QTimer
 from qtpy.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
 
+from confusius._napari._time_series_store import ImportedSeries, TimeSeriesStore
 from confusius._napari._utils import (
     ExportSeries,
+    PlotSeries,
     create_export_button,
     get_napari_colors,
     prepare_export_series,
@@ -33,18 +36,27 @@ _LAYER_LINESTYLES = ["-", "--", "-.", ":"]
 class TimeSeriesPlotter(QWidget):
     """Bottom dock widget for live time series plotting.
 
-    This widget displays live time series plots when hovering over image layers while
-    holding the Shift key. The first dimension of the image is treated as time.
+    Supports three source modes: mouse hover (Shift + move), a Points layer, or a
+    Labels layer. Imported series from a `TimeSeriesStore` are overlaid on every plot.
+    The time dimension is resolved from xarray metadata when available, falling back to
+    the first array dimension.
 
     Parameters
     ----------
     viewer : napari.Viewer
         The active napari viewer instance.
+    store : TimeSeriesStore | None, optional
+        Shared store containing imported time series to overlay on the live plot.
     """
 
-    def __init__(self, viewer: napari.Viewer) -> None:
+    def __init__(
+        self,
+        viewer: napari.Viewer,
+        store: TimeSeriesStore | None = None,
+    ) -> None:
         super().__init__()
         self._viewer = viewer
+        self._series_store = store
         self._cursor_pos: np.ndarray | None = None
         self._current_layer = None
 
@@ -85,6 +97,10 @@ class TimeSeriesPlotter(QWidget):
         self._bg = None  # Saved pixel buffer (without vline).
         self._cursor_frame: float = 0.0
         self._export_series: list[ExportSeries] = []
+        self._mouse_plot_dirty: bool = True
+        self._mouse_live_line = None
+        self._mouse_imported_signature: tuple[str, ...] = ()
+        self._mouse_legend_signature: tuple[str, ...] = ()
 
         # Throttle blit calls to ~60 fps so the napari time slider stays responsive when
         # the canvas is docked (docked canvases must synchronise repaints with the
@@ -101,6 +117,18 @@ class TimeSeriesPlotter(QWidget):
         self.setMinimumHeight(200)
         self._setup_ui()
         self._setup_callbacks()
+        if self._series_store is not None:
+            self._series_store.plot_data_changed.connect(self._on_plot_data_changed)
+            self._series_store.changed.connect(self._refresh_plot)
+            # If there are already imported series, plot them instead of showing
+            # instructions.
+            imported = self._series_store.imported_series()
+            if imported and self._render_imported_only():
+                pass  # Successfully plotted imported series
+            else:
+                self._show_instructions()
+        else:
+            self._show_instructions()
         self._apply_theme()
 
     def sizeHint(self) -> QSize:
@@ -138,7 +166,6 @@ class TimeSeriesPlotter(QWidget):
         self._axes = self._figure.add_subplot(111)
         # Save background after each full redraw for blitting the time cursor.
         self._canvas.mpl_connect("draw_event", self._on_draw)
-        self._show_instructions()
 
     def _setup_callbacks(self) -> None:
         """Set up napari event callbacks."""
@@ -153,6 +180,7 @@ class TimeSeriesPlotter(QWidget):
 
     def _apply_theme(self) -> None:
         """Apply napari theme to matplotlib figure."""
+        self._mouse_plot_dirty = True
         colors = self._get_colors()
 
         self._figure.patch.set_facecolor(colors["bg"])
@@ -183,6 +211,18 @@ class TimeSeriesPlotter(QWidget):
         self._ylim_min = min_val
         self._ylim_max = max_val
         self._refresh_plot()
+
+    def get_ylim(self) -> tuple[float, float] | None:
+        """Return current Y-axis limits, or None if no plot exists.
+
+        Returns
+        -------
+        tuple[float, float] | None
+            Current `(min, max)` Y-axis limits, or None if axes are empty.
+        """
+        if not self._axes.get_lines():
+            return None
+        return self._axes.get_ylim()
 
     def set_autoscale(self, enabled: bool) -> None:
         """Enable or disable Y-axis autoscaling.
@@ -326,9 +366,17 @@ class TimeSeriesPlotter(QWidget):
             return layer
         return None
 
+    def _invalidate_mouse_cache(self) -> None:
+        """Reset all mouse-plot cache state, forcing a full redraw on the next update."""
+        self._mouse_live_line = None
+        self._mouse_imported_signature = ()
+        self._mouse_legend_signature = ()
+        self._mouse_plot_dirty = True
+
     def _show_message(self, text: str) -> None:
         """Show a centered message in the plot area with no axes or data."""
         self._clear_export_series()
+        self._invalidate_mouse_cache()
         self._axes.clear()
         colors = self._get_colors()
         self._axes.text(
@@ -352,24 +400,20 @@ class TimeSeriesPlotter(QWidget):
     def _show_instructions(self) -> None:
         """Show initial instructions appropriate for the current source mode."""
         if self._source_mode == "points":
-            self._show_message(
-                "Select a Points layer and a reference\n"
-                "image layer in the panel to the right."
-            )
+            msg = "Select a Points layer and a reference\nimage layer in the panel to the right."
         elif self._source_mode == "labels":
-            self._show_message(
-                "Select a Labels layer and a reference\n"
-                "image layer in the panel to the right."
-            )
+            msg = "Select a Labels layer and a reference\nimage layer in the panel to the right."
         else:
-            self._show_message(
+            msg = (
                 'Hold "Shift" while moving the cursor\n'
                 "over an image layer to plot\n"
                 "voxel time series."
             )
+        self._show_message(msg)
 
     def _refresh_plot(self) -> None:
         """Re-render the plot for the current source mode."""
+        self._mouse_plot_dirty = True
         if self._source_mode == "points":
             self._update_plot_from_points()
         elif self._source_mode == "labels":
@@ -377,9 +421,16 @@ class TimeSeriesPlotter(QWidget):
         else:
             self._update_plot()
 
+    def _on_plot_data_changed(self) -> None:
+        """Reset auto x-range when plotted imported series membership changes."""
+        self._has_plot = False
+        self._prev_ts_valid = False
+        self._mouse_plot_dirty = True
+
     def _update_plot(self) -> None:
         """Update the time series plot with current data."""
         if self._current_layer is None or self._cursor_pos is None:
+            self._render_imported_only()
             return
 
         # Preserve zoom state across voxel changes. X limits (time range) are always
@@ -391,99 +442,103 @@ class TimeSeriesPlotter(QWidget):
         # the image, the axes were cleared with no data and matplotlib reset xlim to
         # [0, 1]; restoring that would permanently constrain the axis.
         save_zoom = self._has_plot and self._prev_ts_valid
-        saved_xlim = self._axes.get_xlim() if save_zoom else None
-        saved_ylim = (
-            self._axes.get_ylim() if save_zoom and not self._autoscale else None
+        saved_xlim = (
+            self._axes.get_xlim()
+            if save_zoom and self._xlim_is_user_modified()
+            else None
         )
+        # Use user-specified limits if set, otherwise fall back to current axis limits
+        if save_zoom and not self._autoscale:
+            ymin = (
+                self._ylim_min
+                if self._ylim_min is not None
+                else self._axes.get_ylim()[0]
+            )
+            ymax = (
+                self._ylim_max
+                if self._ylim_max is not None
+                else self._axes.get_ylim()[1]
+            )
+            saved_ylim = (ymin, ymax)
+        else:
+            saved_ylim = None
 
         colors = self._get_colors()
-        self._axes.clear()
 
         ts = self._extract_time_series(self._current_layer, self._cursor_pos)
         # Update stored time coordinates for cursor mapping.
         self._time_coords = self._get_time_coords(self._current_layer)
         if ts is not None:
             if self._zscore:
-                ts_mean = np.mean(ts)
-                ts_std = np.std(ts)
-                if ts_std > 0:
-                    ts = (ts - ts_mean) / ts_std
-                else:
-                    ts = ts - ts_mean
+                ts = self._apply_zscore(ts)
 
             if self._time_coords is not None and len(self._time_coords) == len(ts):
                 x_values = self._time_coords
             else:
                 x_values = np.arange(len(ts))
             xlabel = self._get_time_xlabel(self._current_layer)
-            self._set_export_series(
-                [(self._current_layer.name, np.asarray(x_values), np.asarray(ts))]
-            )
+            live_label = self._current_layer.name
+
+            imported_series = self._imported_plot_series()
+            coord_str = self._mouse_coord_string()
+            title = f"{self._current_layer.name} — ({coord_str})"
+
+            if self._try_fast_mouse_update(
+                live_label=live_label,
+                x_values=np.asarray(x_values),
+                ts=np.asarray(ts),
+                xlabel=xlabel,
+                title=title,
+                saved_xlim=saved_xlim,
+                saved_ylim=saved_ylim,
+                imported_series=imported_series,
+                colors=colors,
+            ):
+                return
+
+            self._axes.clear()
 
             self._axes.plot(
                 x_values,
                 ts,
                 linewidth=1.5,
                 color=colors["accent"],
+                label=live_label,
+            )
+
+            self._mouse_live_line = self._axes.lines[-1]
+            self._plot_series_lines(imported_series, linewidth=1.4, alpha=0.95)
+            self._mouse_imported_signature = self._imported_signature(imported_series)
+            export_imported = self._plot_series_to_export(imported_series)
+            self._set_export_series(
+                [ExportSeries(live_label, np.asarray(x_values), np.asarray(ts))]
+                + export_imported
             )
 
         if ts is not None:
-            # Show actual cursor coordinates (not rounded to voxel), excluding the time
-            # dimension.
-            t_idx = self._time_dim_index(self._current_layer)
-            spatial_coords = [c for i, c in enumerate(self._cursor_pos) if i != t_idx]
-            coord_str = ", ".join(f"{c:.1f}" for c in spatial_coords)
-
-            self._axes.set_xlabel(xlabel, color=colors["fg"], fontsize=9)
-            if self._zscore:
-                self._axes.set_ylabel("Z-score", color=colors["fg"], fontsize=9)
-            else:
-                self._axes.set_ylabel("Intensity", color=colors["fg"], fontsize=9)
-            self._axes.set_title(
-                f"{self._current_layer.name} — ({coord_str})",
-                color=colors["fg"],
-                fontsize=10,
+            self._style_valid_axes(
+                colors,
+                xlabel,
+                "Z-score" if self._zscore else "Intensity",
+                title,
+                with_legend=len(self._export_series) > 1,
             )
-
-            if not self._autoscale:
-                if self._ylim_min is not None:
-                    self._axes.set_ylim(bottom=self._ylim_min)
-                if self._ylim_max is not None:
-                    self._axes.set_ylim(top=self._ylim_max)
-
-            if self._show_grid:
-                self._axes.grid(True, alpha=0.3, color=colors["fg"])
-            self._axes.tick_params(colors=colors["fg"], labelsize=8)
-            for spine in self._axes.spines.values():
-                spine.set_edgecolor(colors["fg"])
-                spine.set_visible(True)
-
-            if saved_xlim is not None:
-                self._axes.set_xlim(saved_xlim)
-            else:
-                # First plot in this session: remove matplotlib's default 5 % margin so
-                # there is no dead space before/after the data.
-                self._axes.set_xlim(x_values[0], x_values[-1])
-            if saved_ylim is not None:
-                self._axes.set_ylim(saved_ylim)
+            self._restore_view(saved_xlim, saved_ylim)
 
             self._has_plot = True
             self._prev_ts_valid = True
-
-            if self._show_cursor:
-                self._vline = self._axes.axvline(
-                    self._frame_to_x(self._cursor_frame),
-                    color=colors["cursor"],
-                    linewidth=1.2,
-                    alpha=0.85,
-                    zorder=10,
-                    animated=True,
-                )
-            else:
-                self._vline = None
+            self._mouse_plot_dirty = False
+            self._mouse_legend_signature = self._legend_signature(
+                live_label, imported_series
+            )
         else:
+            if self._render_imported_only(saved_xlim=saved_xlim, saved_ylim=saved_ylim):
+                return
             self._clear_export_series()
             self._prev_ts_valid = False
+            self._mouse_plot_dirty = True
+            self._mouse_live_line = None
+            self._axes.clear()
             self._vline = None
             self._axes.text(
                 0.5,
@@ -573,12 +628,15 @@ class TimeSeriesPlotter(QWidget):
             One of `"mouse"`, `"points"`, or `"labels"`.
         """
         self._source_mode = mode
+        self._invalidate_mouse_cache()
         if mode == "mouse":
             # Invalidate the saved zoom state so the first mouse-hover plot does not
             # restore the [0, 1] xlim left by the cleared axes.
             self._has_plot = False
             self._prev_ts_valid = False
-            self._show_instructions()
+            # Only show instructions if there are no imported series to display.
+            if not self._render_imported_only():
+                self._show_instructions()
         elif mode == "points":
             self._update_plot_from_points()
         else:
@@ -595,7 +653,7 @@ class TimeSeriesPlotter(QWidget):
         if self._points_layer is not None:
             try:
                 self._points_layer.events.data.disconnect(self._on_points_data_changed)
-            except Exception:  # noqa: BLE001
+            except RuntimeError:
                 pass
         self._points_layer = layer
         if layer is not None:
@@ -614,13 +672,13 @@ class TimeSeriesPlotter(QWidget):
         if self._labels_layer is not None:
             try:
                 self._labels_layer.events.data.disconnect(self._on_labels_data_changed)
-            except Exception:  # noqa: BLE001
+            except RuntimeError:
                 pass
             try:
                 # events.paint fires when individual voxels are painted with the
                 # brush tool; events.data only fires on full array replacement.
                 self._labels_layer.events.paint.disconnect(self._on_labels_data_changed)
-            except Exception:  # noqa: BLE001
+            except RuntimeError:
                 pass
         self._labels_layer = layer
         if layer is not None:
@@ -680,25 +738,58 @@ class TimeSeriesPlotter(QWidget):
         """
         lines = self._axes.get_lines()
         xlim = self._axes.get_xlim() if lines else None
-        ylim = self._axes.get_ylim() if (lines and not self._autoscale) else None
+        if lines and not self._autoscale:
+            # Use user-specified limits if set, otherwise fall back to current axis
+            # limits.
+            ymin = (
+                self._ylim_min
+                if self._ylim_min is not None
+                else self._axes.get_ylim()[0]
+            )
+            ymax = (
+                self._ylim_max
+                if self._ylim_max is not None
+                else self._axes.get_ylim()[1]
+            )
+            ylim = (ymin, ymax)
+        else:
+            ylim = None
         return xlim, ylim
 
     def _restore_view(self, xlim, ylim) -> None:
         """Restore a previously saved view or apply a tight x range.
 
-        When *xlim* is `None` (first plot in a mode), the x range is set to the data
-        extent of the first line so matplotlib's default 5 % margin is removed.
+        When `xlim` is `None` (first plot in a mode), the x range is set to the full
+        data extent across all plotted lines so matplotlib's default 5 % margin is
+        removed.
         """
         if xlim is not None:
             self._axes.set_xlim(xlim)
         else:
-            lines = self._axes.get_lines()
-            if lines:
-                xdata = lines[0].get_xdata()
-                if len(xdata):
-                    self._axes.set_xlim(xdata[0], xdata[-1])
+            x_extent = self._plotted_x_extent()
+            if x_extent is not None:
+                self._axes.set_xlim(x_extent)
         if ylim is not None:
             self._axes.set_ylim(ylim)
+
+    def _xlim_is_user_modified(self) -> bool:
+        """Return whether the current x view differs from the automatic data extent."""
+        auto_xlim = self._plotted_x_extent()
+        if auto_xlim is None:
+            return False
+        return not np.allclose(self._axes.get_xlim(), auto_xlim, rtol=0.0, atol=1e-9)
+
+    def _plotted_x_extent(self) -> tuple[float, float] | None:
+        """Return the overall x extent across all currently plotted lines."""
+        if not self._axes.get_lines():
+            return None
+
+        self._axes.relim()
+        x0 = float(self._axes.dataLim.x0)
+        x1 = float(self._axes.dataLim.x1)
+        if not (np.isfinite(x0) and np.isfinite(x1)):
+            return None
+        return min(x0, x1), max(x0, x1)
 
     def _set_export_series(self, series: list[ExportSeries]) -> None:
         """Store the currently plotted series for export."""
@@ -708,6 +799,183 @@ class TimeSeriesPlotter(QWidget):
     def _clear_export_series(self) -> None:
         """Clear the currently exported series."""
         self._set_export_series([])
+
+    def _visible_imported_series(self) -> list[ImportedSeries]:
+        """Return visible imported series from the shared store."""
+        if self._series_store is None:
+            return []
+        return self._series_store.visible_imported_series()
+
+    def _mouse_coord_string(self) -> str:
+        """Return the current mouse coordinates formatted for the plot title."""
+        if self._current_layer is None or self._cursor_pos is None:
+            return ""
+        t_idx = self._time_dim_index(self._current_layer)
+        spatial_coords = [c for i, c in enumerate(self._cursor_pos) if i != t_idx]
+        return ", ".join(f"{c:.1f}" for c in spatial_coords)
+
+    def _imported_plot_series(self) -> list[PlotSeries]:
+        """Return imported series prepared for plotting and export."""
+        plotted = []
+        for series in self._visible_imported_series():
+            x_values = np.asarray(series.x).copy()
+            y_values = np.asarray(series.y, dtype=float).copy()
+            if self._zscore:
+                y_values = self._apply_zscore(y_values)
+            plotted.append(PlotSeries(series.name, x_values, y_values, series.color))
+        return plotted
+
+    def _plot_series_lines(
+        self,
+        series: list[PlotSeries],
+        *,
+        linewidth: float = 1.5,
+        alpha: float = 1.0,
+    ) -> None:
+        """Plot a list of series onto the current axes."""
+        for s in series:
+            kwargs = {"linewidth": linewidth, "alpha": alpha, "label": s.label}
+            if s.color is not None:
+                kwargs["color"] = s.color
+            self._axes.plot(s.x_values, s.y_values, **kwargs)
+
+    def _imported_signature(self, series: list[PlotSeries]) -> tuple[str, ...]:
+        """Return a lightweight signature for imported series already on the axes."""
+        return tuple(s.label for s in series)
+
+    def _legend_signature(
+        self, live_label: str, imported_series: list[PlotSeries]
+    ) -> tuple[str, ...]:
+        """Return the legend content signature for the current mouse plot."""
+        return (live_label, *self._imported_signature(imported_series))
+
+    @staticmethod
+    def _plot_series_to_export(series: list[PlotSeries]) -> list[ExportSeries]:
+        """Convert PlotSeries to ExportSeries for CSV/TSV export.
+
+        Parameters
+        ----------
+        series : list[PlotSeries]
+            Series with color information.
+
+        Returns
+        -------
+        list[ExportSeries]
+            Series without color for export.
+        """
+        return [ExportSeries(s.label, s.x_values, s.y_values) for s in series]
+
+    def _try_fast_mouse_update(
+        self,
+        *,
+        live_label: str,
+        x_values: np.ndarray,
+        ts: np.ndarray,
+        xlabel: str,
+        title: str,
+        saved_xlim,
+        saved_ylim,
+        imported_series: list[PlotSeries],
+        colors: dict,
+    ) -> bool:
+        """Update the mouse plot without rebuilding imported overlay lines."""
+        if self._mouse_plot_dirty or self._mouse_live_line is None:
+            return False
+        if self._mouse_imported_signature != self._imported_signature(imported_series):
+            return False
+
+        self._mouse_live_line.set_data(x_values, ts)
+        self._mouse_live_line.set_label(live_label)
+        self._mouse_live_line.set_color(colors["accent"])
+        self._set_export_series(
+            [ExportSeries(live_label, x_values, ts)]
+            + self._plot_series_to_export(imported_series)
+        )
+
+        self._axes.set_xlabel(xlabel, color=colors["fg"], fontsize=9)
+        self._axes.set_ylabel(
+            "Z-score" if self._zscore else "Intensity",
+            color=colors["fg"],
+            fontsize=9,
+        )
+        self._axes.set_title(title, color=colors["fg"], fontsize=10)
+        if self._show_grid:
+            self._axes.grid(True, alpha=0.3, color=colors["fg"])
+
+        self._update_legend_if_needed(colors, live_label, imported_series)
+
+        self._axes.relim()
+        self._restore_view(saved_xlim, saved_ylim)
+        if self._autoscale:
+            self._axes.autoscale_view(scalex=False, scaley=True)
+
+        self._has_plot = True
+        self._prev_ts_valid = True
+        self._canvas.draw_idle()
+        return True
+
+    def _update_legend_if_needed(
+        self, colors: dict, live_label: str, imported_series: list[PlotSeries]
+    ) -> None:
+        """Update the legend only when its entries actually changed."""
+        signature = self._legend_signature(live_label, imported_series)
+        if signature == self._mouse_legend_signature:
+            return
+
+        legend = self._axes.get_legend()
+        if legend is not None:
+            legend.remove()
+
+        if len(signature) > 1:
+            self._axes.legend(
+                loc="upper right",
+                fontsize=8,
+                labelcolor=colors["fg"],
+                facecolor=colors["bg"],
+                edgecolor=colors["fg"],
+            )
+        self._mouse_legend_signature = signature
+
+    def _render_imported_only(self, saved_xlim=None, saved_ylim=None) -> bool:
+        """Render only imported series when no live data can be drawn."""
+        imported_series = self._imported_plot_series()
+        if not imported_series:
+            return False
+
+        colors = self._get_colors()
+        self._axes.clear()
+        self._plot_series_lines(imported_series, linewidth=1.4, alpha=0.95)
+        self._set_export_series(self._plot_series_to_export(imported_series))
+        self._mouse_live_line = None
+        self._mouse_imported_signature = self._imported_signature(imported_series)
+        self._mouse_legend_signature = self._imported_signature(imported_series)
+        self._mouse_plot_dirty = True
+        self._time_coords = None
+        self._style_valid_axes(
+            colors,
+            "Time",
+            "Z-score" if self._zscore else "Value",
+            "Imported Time Series",
+            with_legend=len(imported_series) > 1,
+            show_cursor=False,
+        )
+        self._restore_view(saved_xlim, saved_ylim)
+        self._has_plot = True
+        self._prev_ts_valid = True
+        self._canvas.draw_idle()
+        return True
+
+    def _show_message_or_imported(
+        self,
+        text: str,
+        *,
+        saved_xlim=None,
+        saved_ylim=None,
+    ) -> None:
+        """Show a message when no imported series are visible, else plot imports only."""
+        if self._render_imported_only(saved_xlim=saved_xlim, saved_ylim=saved_ylim):
+            return
+        self._show_message(text)
 
     def _write_current_plot_delimited(self, path: Path, delimiter: str) -> None:
         """Write the currently plotted time series to a delimited text file."""
@@ -736,9 +1004,14 @@ class TimeSeriesPlotter(QWidget):
         show_info(f"Exported time series to {path}")
 
     def _apply_zscore(self, ts: np.ndarray) -> np.ndarray:
-        """Normalise a time series to zero mean and unit variance."""
-        mean = np.mean(ts)
-        std = np.std(ts)
+        """Normalise a time series to zero mean and unit variance.
+
+        NaN values are ignored when computing the mean and standard deviation so that
+        series with missing values (imported files with partial columns) are z-scored
+        correctly rather than becoming all-NaN.
+        """
+        mean = np.nanmean(ts)
+        std = np.nanstd(ts)
         return (ts - mean) / std if std > 0 else ts - mean
 
     def _get_label_color(self, label_id: int) -> tuple:
@@ -752,11 +1025,9 @@ class TimeSeriesPlotter(QWidget):
                 color = self._labels_layer.get_color(label_id)
                 if color is not None:
                     return tuple(float(c) for c in color)
-            except Exception:  # noqa: BLE001
+            except (AttributeError, KeyError, IndexError):
                 pass
-        from matplotlib import colormaps
-
-        return colormaps["tab20"](int(label_id - 1) % 20)
+        return mpl_colormaps["tab20"](int(label_id - 1) % 20)
 
     def _style_valid_axes(
         self,
@@ -765,6 +1036,7 @@ class TimeSeriesPlotter(QWidget):
         ylabel: str,
         title: str,
         with_legend: bool = False,
+        show_cursor: bool = True,
     ) -> None:
         """Apply common axis styling after a valid plot has been drawn."""
         self._axes.set_xlabel(xlabel, color=colors["fg"], fontsize=9)
@@ -789,7 +1061,7 @@ class TimeSeriesPlotter(QWidget):
                 facecolor=colors["bg"],
                 edgecolor=colors["fg"],
             )
-        if self._show_cursor:
+        if self._show_cursor and show_cursor:
             self._vline = self._axes.axvline(
                 self._frame_to_x(self._cursor_frame),
                 color=colors["cursor"],
@@ -816,29 +1088,143 @@ class TimeSeriesPlotter(QWidget):
     # Source mode — plot methods
     # ------------------------------------------------------------------
 
+    def _validate_source_layers(
+        self,
+        source_layer,
+        source_name: str,
+        saved_xlim,
+        saved_ylim,
+    ) -> list | None:
+        """Validate that a source layer and at least one reference image layer are set.
+
+        Shows an appropriate message and returns `None` when validation fails;
+        returns the list of reference image layers on success.
+
+        Parameters
+        ----------
+        source_layer : napari layer or None
+            The currently configured source layer (Points or Labels).
+        source_name : str
+            Human-readable layer type used in the error message (e.g. `"Points"`).
+        saved_xlim : tuple or None
+            Saved x-axis limits to restore after showing the message.
+        saved_ylim : tuple or None
+            Saved y-axis limits to restore after showing the message.
+
+        Returns
+        -------
+        list or None
+            The reference image layers, or `None` if validation failed.
+        """
+        if source_layer is None:
+            self._show_message_or_imported(
+                f"No {source_name} layer selected.\n"
+                "Choose one in the Source section of the panel.",
+                saved_xlim=saved_xlim,
+                saved_ylim=saved_ylim,
+            )
+            return None
+        ref_layers = self._get_ref_image_layers()
+        if not ref_layers:
+            self._show_message_or_imported(
+                "No reference image layer found.\nLoad a 4-D image layer first.",
+                saved_xlim=saved_xlim,
+                saved_ylim=saved_ylim,
+            )
+            return None
+        return ref_layers
+
+    @staticmethod
+    def _series_label(base: str, img_layer, ref_layers: list) -> str:
+        """Build a series label, prefixing the layer name when multiple layers are shown.
+
+        Parameters
+        ----------
+        base : str
+            Base label (e.g. `"Point 0"` or `"Label 3"`).
+        img_layer : napari image layer
+            Reference image layer contributing this series.
+        ref_layers : list
+            All active reference image layers.
+
+        Returns
+        -------
+        str
+            `"<layer name> | <base>"` when more than one reference layer is active,
+            otherwise just `base`.
+        """
+        return f"{img_layer.name} | {base}" if len(ref_layers) > 1 else base
+
+    def _finalize_multi_series_plot(
+        self,
+        export_series: list,
+        source_layer_name: str,
+        ref_layers: list,
+        colors: dict,
+        saved_xlim,
+        saved_ylim,
+    ) -> None:
+        """Overlay imported series, style the axes, and redraw after a multi-series plot.
+
+        Shared by `_update_plot_from_points` and `_update_plot_from_labels` once their
+        per-series loops have completed successfully.
+
+        Parameters
+        ----------
+        export_series : list[ExportSeries]
+            Series already plotted by the caller.
+        source_layer_name : str
+            Name of the active Points or Labels layer, used in the plot title.
+        ref_layers : list
+            Active reference image layers.
+        colors : dict
+            Theme color dictionary from `_get_colors`.
+        saved_xlim : tuple or None
+            Saved x-axis limits to restore.
+        saved_ylim : tuple or None
+            Saved y-axis limits to restore.
+        """
+        imported_series = self._imported_plot_series()
+        self._plot_series_lines(imported_series, linewidth=1.4, alpha=0.95)
+        self._set_export_series(
+            export_series + self._plot_series_to_export(imported_series)
+        )
+        xlabel = self._get_time_xlabel(ref_layers[0])
+        ylabel = "Z-score" if self._zscore else "Intensity"
+        title_ref = ref_layers[0].name if len(ref_layers) == 1 else "All layers"
+        self._style_valid_axes(
+            colors,
+            xlabel,
+            ylabel,
+            f"{title_ref} — {source_layer_name}",
+            with_legend=len(self._export_series) > 1,
+        )
+        self._restore_view(saved_xlim, saved_ylim)
+        self._canvas.draw_idle()
+
     def _update_plot_from_points(self) -> None:
         """Plot time series for every point in the Points layer."""
         colors = self._get_colors()
         saved_xlim, saved_ylim = self._save_view()
 
-        if self._points_layer is None:
-            self._show_message(
-                "No Points layer selected.\n"
-                "Choose one in the Source section of the panel."
-            )
-            return
-
-        ref_layers = self._get_ref_image_layers()
-        if not ref_layers:
-            self._show_message(
-                "No reference image layer found.\nLoad a 4-D image layer first."
-            )
+        ref_layers = self._validate_source_layers(
+            self._points_layer, "Points", saved_xlim, saved_ylim
+        )
+        if ref_layers is None:
             return
 
         n_points = len(self._points_layer.data)
         if n_points == 0:
-            self._show_message("The selected Points layer is empty.")
+            self._show_message_or_imported(
+                "The selected Points layer is empty.",
+                saved_xlim=saved_xlim,
+                saved_ylim=saved_ylim,
+            )
             return
+
+        # Pre-compute time coordinates per layer: they don't depend on individual
+        # points.
+        layer_time_coords = [self._get_time_coords(layer) for layer in ref_layers]
 
         self._axes.clear()
         has_any = False
@@ -879,17 +1265,13 @@ class TimeSeriesPlotter(QWidget):
                 if self._zscore:
                     ts = self._apply_zscore(ts)
 
-                time_coords = self._get_time_coords(img_layer)
+                time_coords = layer_time_coords[layer_idx]
                 x = (
                     time_coords
                     if (time_coords is not None and len(time_coords) == len(ts))
                     else np.arange(len(ts))
                 )
-
-                label = f"Point {pt_idx}"
-                if len(ref_layers) > 1:
-                    label = f"{img_layer.name} | {label}"
-
+                label = self._series_label(f"Point {pt_idx}", img_layer, ref_layers)
                 linestyle = _LAYER_LINESTYLES[layer_idx % len(_LAYER_LINESTYLES)]
                 self._axes.plot(
                     x,
@@ -899,45 +1281,37 @@ class TimeSeriesPlotter(QWidget):
                     linestyle=linestyle,
                     label=label,
                 )
-                export_series.append((label, np.asarray(x), np.asarray(ts)))
+                export_series.append(ExportSeries(label, np.asarray(x), np.asarray(ts)))
                 has_any = True
                 # Keep time coords from the last successful layer for cursor mapping.
                 self._time_coords = time_coords
                 self._current_layer = img_layer
 
         if has_any:
-            self._set_export_series(export_series)
-            xlabel = self._get_time_xlabel(ref_layers[0])
-            ylabel = "Z-score" if self._zscore else "Intensity"
-            title_ref = ref_layers[0].name if len(ref_layers) == 1 else "All layers"
-            title = f"{title_ref} — {self._points_layer.name}"
-            self._style_valid_axes(
-                colors, xlabel, ylabel, title, with_legend=n_points > 1
+            self._finalize_multi_series_plot(
+                export_series,
+                self._points_layer.name,
+                ref_layers,
+                colors,
+                saved_xlim,
+                saved_ylim,
             )
-            self._restore_view(saved_xlim, saved_ylim)
         else:
-            self._show_message("No valid data at the point positions.\n")
-            return
-
-        self._canvas.draw_idle()
+            self._show_message_or_imported(
+                "No valid data at the point positions.\n",
+                saved_xlim=saved_xlim,
+                saved_ylim=saved_ylim,
+            )
 
     def _update_plot_from_labels(self) -> None:
         """Plot mean time series for each unique label in the Labels layer."""
         colors = self._get_colors()
         saved_xlim, saved_ylim = self._save_view()
 
-        if self._labels_layer is None:
-            self._show_message(
-                "No Labels layer selected.\n"
-                "Choose one in the Source section of the panel."
-            )
-            return
-
-        ref_layers = self._get_ref_image_layers()
-        if not ref_layers:
-            self._show_message(
-                "No reference image layer found.\nLoad a 4-D image layer first."
-            )
+        ref_layers = self._validate_source_layers(
+            self._labels_layer, "Labels", saved_xlim, saved_ylim
+        )
+        if ref_layers is None:
             return
 
         # Read the labels data. We intentionally avoid an early "all-zeros" check here
@@ -985,10 +1359,7 @@ class TimeSeriesPlotter(QWidget):
                 if self._zscore:
                     ts = self._apply_zscore(ts)
 
-                label = f"Label {lid}"
-                if len(ref_layers) > 1:
-                    label = f"{img_layer.name} | {label}"
-
+                label = self._series_label(f"Label {lid}", img_layer, ref_layers)
                 linestyle = _LAYER_LINESTYLES[layer_idx % len(_LAYER_LINESTYLES)]
                 self._axes.plot(
                     x,
@@ -998,7 +1369,7 @@ class TimeSeriesPlotter(QWidget):
                     linestyle=linestyle,
                     label=label,
                 )
-                export_series.append((label, np.asarray(x), np.asarray(ts)))
+                export_series.append(ExportSeries(label, np.asarray(x), np.asarray(ts)))
                 has_any = True
 
             # Keep time coords from the last successful layer for cursor mapping.
@@ -1006,24 +1377,27 @@ class TimeSeriesPlotter(QWidget):
             self._current_layer = img_layer
 
         if has_any:
-            self._set_export_series(export_series)
-            xlabel = self._get_time_xlabel(ref_layers[0])
-            ylabel = "Z-score" if self._zscore else "Intensity"
-            title_ref = ref_layers[0].name if len(ref_layers) == 1 else "All layers"
-            title = f"{title_ref} — {self._labels_layer.name}"
-            self._style_valid_axes(colors, xlabel, ylabel, title, with_legend=True)
-            self._restore_view(saved_xlim, saved_ylim)
-        elif shape_mismatch:
-            self._show_message(
-                "Spatial shape of the Labels layer does not match\n"
-                "the reference image. Make sure they share the same grid."
+            self._finalize_multi_series_plot(
+                export_series,
+                self._labels_layer.name,
+                ref_layers,
+                colors,
+                saved_xlim,
+                saved_ylim,
             )
-            return
+        elif shape_mismatch:
+            self._show_message_or_imported(
+                "Spatial shape of the Labels layer does not match\n"
+                "the reference image. Make sure they share the same grid.",
+                saved_xlim=saved_xlim,
+                saved_ylim=saved_ylim,
+            )
         else:
-            self._show_message("No valid data extracted from the Labels layer.")
-            return
-
-        self._canvas.draw_idle()
+            self._show_message_or_imported(
+                "No valid data extracted from the Labels layer.",
+                saved_xlim=saved_xlim,
+                saved_ylim=saved_ylim,
+            )
 
     def closeEvent(self, a0) -> None:
         """Clean up when widget is closed.
@@ -1035,4 +1409,18 @@ class TimeSeriesPlotter(QWidget):
         """
         if self._on_mouse_move in self._viewer.mouse_move_callbacks:
             self._viewer.mouse_move_callbacks.remove(self._on_mouse_move)
+        if self._series_store is not None:
+            try:
+                self._series_store.plot_data_changed.disconnect(
+                    self._on_plot_data_changed
+                )
+            except (RuntimeError, TypeError):
+                pass
+            try:
+                self._series_store.changed.disconnect(self._refresh_plot)
+            except (RuntimeError, TypeError):
+                pass
+        self.set_points_layer(None)
+        self.set_labels_layer(None)
+        self._labels_debounce.stop()
         a0.accept()

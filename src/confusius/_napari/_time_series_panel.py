@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 import napari
 from qtpy.QtCore import Qt, QTimer
 from qtpy.QtWidgets import (
@@ -21,7 +20,9 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from confusius._napari._time_series_manager import TimeSeriesManagerDialog
 from confusius._napari._time_series_plotter import TimeSeriesPlotter
+from confusius._napari._time_series_store import TimeSeriesStore
 
 
 class TimeSeriesPanel(QWidget):
@@ -40,6 +41,8 @@ class TimeSeriesPanel(QWidget):
         super().__init__()
         self._viewer = viewer
         self._plotter: TimeSeriesPlotter | None = None
+        self._series_manager: TimeSeriesManagerDialog | None = None
+        self._series_store = TimeSeriesStore(self)
         self._setup_ui()
         viewer.events.theme.connect(self._on_theme_changed)
 
@@ -146,8 +149,7 @@ class TimeSeriesPanel(QWidget):
         y_layout.addWidget(ymin_label)
         self._ymin_spin = QDoubleSpinBox()
         self._ymin_spin.setRange(-1e9, 1e9)
-        self._ymin_spin.setSpecialValueText("Auto")
-        self._ymin_spin.setValue(0)  # 0 = Auto (special value)
+        self._ymin_spin.setValue(-1.0)
         self._ymin_spin.valueChanged.connect(self._apply_settings)
         y_layout.addWidget(self._ymin_spin)
         ymax_label = QLabel("<i>y</i> max:")
@@ -155,8 +157,7 @@ class TimeSeriesPanel(QWidget):
         y_layout.addWidget(ymax_label)
         self._ymax_spin = QDoubleSpinBox()
         self._ymax_spin.setRange(-1e9, 1e9)
-        self._ymax_spin.setSpecialValueText("Auto")
-        self._ymax_spin.setValue(0)  # 0 = Auto (special value)
+        self._ymax_spin.setValue(1.0)
         self._ymax_spin.valueChanged.connect(self._apply_settings)
         y_layout.addWidget(self._ymax_spin)
         limits_layout.addLayout(y_layout)
@@ -197,10 +198,20 @@ class TimeSeriesPanel(QWidget):
         self._show_btn.clicked.connect(self._show_plot)
         layout.addWidget(self._show_btn)
 
+        self._manage_btn = QPushButton("Manage Imported Series")
+        self._manage_btn.clicked.connect(self._show_series_manager)
+        layout.addWidget(self._manage_btn)
+
         layout.addStretch()
 
     def _on_autoscale_changed(self, checked: bool) -> None:
         """Enable/disable manual Y-axis controls based on autoscale setting."""
+        if not checked and self._plotter is not None:
+            # When disabling autoscale, capture current y-limits from the plot
+            current_ylim = self._plotter.get_ylim()
+            if current_ylim is not None:
+                self._ymin_spin.setValue(current_ylim[0])
+                self._ymax_spin.setValue(current_ylim[1])
         self._ymin_spin.setEnabled(not checked)
         self._ymax_spin.setEnabled(not checked)
         self._apply_settings()
@@ -213,7 +224,7 @@ class TimeSeriesPanel(QWidget):
         plotter is already in a live dock this is a no-op.
         """
         if self._plotter is None:
-            self._plotter = TimeSeriesPlotter(self._viewer)
+            self._plotter = TimeSeriesPlotter(self._viewer, store=self._series_store)
 
         if self._plotter.parent() is None:
             # Widget is not docked, create (or re-create) the dock.
@@ -231,13 +242,7 @@ class TimeSeriesPanel(QWidget):
             # before the canvas first paints. This mirrors the pattern used in the QC
             # panel and prevents the HiDPI click-offset bug.
             def _settle_layout() -> None:
-                main_win: QMainWindow | None = None
-                p = dock.parent()
-                while p is not None:
-                    if isinstance(p, QMainWindow):
-                        main_win = p
-                        break
-                    p = p.parent()
+                main_win = self._find_main_window(dock)
                 if main_win is None:
                     return
                 # Zero minimum sizes on the central widget and all its children so the
@@ -256,8 +261,9 @@ class TimeSeriesPanel(QWidget):
                 for side_dock in main_win.findChildren(QDockWidget):
                     if side_dock is not dock:
                         side_dock.setMinimumHeight(0)
-                        if side_dock.widget() is not None:
-                            side_dock.widget().setMinimumSize(QSize(0, 0))
+                        widget = side_dock.widget()
+                        if widget is not None:
+                            widget.setMinimumSize(QSize(0, 0))
 
                 # Ensure the window is tall enough that the initial dock height leaves
                 # room for the user to resize upward.
@@ -289,6 +295,16 @@ class TimeSeriesPanel(QWidget):
             return
         self._ensure_plotter()
 
+    def _show_series_manager(self) -> None:
+        """Show the floating imported-series manager window."""
+        if self._series_manager is None:
+            self._series_manager = TimeSeriesManagerDialog(self._series_store, self)
+            self._series_manager.apply_theme(self._viewer.theme)
+
+        self._series_manager.show()
+        self._series_manager.raise_()
+        self._series_manager.activateWindow()
+
     def _apply_settings(self) -> None:
         """Apply current settings to the plotter."""
         plotter = self._plotter
@@ -299,11 +315,7 @@ class TimeSeriesPanel(QWidget):
         plotter.set_autoscale(autoscale)
 
         if not autoscale:
-            ymin = self._ymin_spin.value()
-            ymax = self._ymax_spin.value()
-            ymin_val = ymin if ymin != 0 else None
-            ymax_val = ymax if ymax != 0 else None
-            plotter.set_ylim(ymin_val, ymax_val)
+            plotter.set_ylim(self._ymin_spin.value(), self._ymax_spin.value())
 
         plotter.set_show_grid(self._grid_check.isChecked())
         plotter.set_zscore(self._zscore_check.isChecked())
@@ -332,7 +344,12 @@ class TimeSeriesPanel(QWidget):
         if checked:
             self._viewer.dims.events.current_step.connect(self._on_time_step_changed)
         else:
-            self._viewer.dims.events.current_step.disconnect(self._on_time_step_changed)
+            try:
+                self._viewer.dims.events.current_step.disconnect(
+                    self._on_time_step_changed
+                )
+            except RuntimeError:
+                pass
         if self._plotter is not None:
             self._plotter.set_show_cursor(checked)
             if checked:
@@ -351,6 +368,28 @@ class TimeSeriesPanel(QWidget):
         """Handle napari theme change."""
         if self._plotter is not None:
             self._plotter.on_theme_changed()
+        if self._series_manager is not None:
+            self._series_manager.apply_theme(self._viewer.theme)
+
+    def _find_main_window(self, widget: QWidget) -> QMainWindow | None:
+        """Traverse up the widget hierarchy to find the QMainWindow.
+
+        Parameters
+        ----------
+        widget : QWidget
+            Starting widget to search from.
+
+        Returns
+        -------
+        QMainWindow | None
+            The main window if found, None otherwise.
+        """
+        parent = widget.parent()
+        while parent is not None:
+            if isinstance(parent, QMainWindow):
+                return parent
+            parent = parent.parent()
+        return None
 
     # ------------------------------------------------------------------
     # Source management
@@ -366,41 +405,41 @@ class TimeSeriesPanel(QWidget):
         self._points_combo.blockSignals(True)
         self._labels_combo.blockSignals(True)
         self._ref_combo.blockSignals(True)
+        try:
+            self._points_combo.clear()
+            self._labels_combo.clear()
+            self._ref_combo.clear()
 
-        self._points_combo.clear()
-        self._labels_combo.clear()
-        self._ref_combo.clear()
+            self._ref_combo.addItem("All image layers")
 
-        self._ref_combo.addItem("All image layers")
+            for layer in self._viewer.layers:
+                t = layer._type_string
+                if t == "points":
+                    self._points_combo.addItem(layer.name)
+                elif t == "labels":
+                    self._labels_combo.addItem(layer.name)
+                elif t == "image" and not getattr(layer, "rgb", False):
+                    # Only show layers that have a time dimension so spatial maps (tSNR,
+                    # CV, ...) are not offered as reference images.
+                    da = layer.metadata.get("xarray")
+                    has_time = (
+                        ("time" in da.dims) if da is not None else layer.data.ndim >= 4
+                    )
+                    if has_time:
+                        self._ref_combo.addItem(layer.name)
 
-        for layer in self._viewer.layers:
-            t = layer._type_string
-            if t == "points":
-                self._points_combo.addItem(layer.name)
-            elif t == "labels":
-                self._labels_combo.addItem(layer.name)
-            elif t == "image" and not getattr(layer, "rgb", False):
-                # Only show layers that have a time dimension so spatial maps (tSNR, CV,
-                # ...) are not offered as reference images.
-                da = layer.metadata.get("xarray")
-                has_time = (
-                    ("time" in da.dims) if da is not None else layer.data.ndim >= 4
-                )
-                if has_time:
-                    self._ref_combo.addItem(layer.name)
-
-        for combo, prev in (
-            (self._points_combo, cur_points),
-            (self._labels_combo, cur_labels),
-            (self._ref_combo, cur_ref),
-        ):
-            idx = combo.findText(prev)
-            if idx >= 0:
-                combo.setCurrentIndex(idx)
-
-        self._points_combo.blockSignals(False)
-        self._labels_combo.blockSignals(False)
-        self._ref_combo.blockSignals(False)
+            for combo, prev in (
+                (self._points_combo, cur_points),
+                (self._labels_combo, cur_labels),
+                (self._ref_combo, cur_ref),
+            ):
+                idx = combo.findText(prev)
+                if idx >= 0:
+                    combo.setCurrentIndex(idx)
+        finally:
+            self._points_combo.blockSignals(False)
+            self._labels_combo.blockSignals(False)
+            self._ref_combo.blockSignals(False)
 
         # Defer the plotter sync to the next event-loop iteration. When called from an
         # `inserted` event, this ensures napari has finished setting up the new layer

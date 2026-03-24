@@ -8,6 +8,7 @@ from qtpy.QtGui import QColor, QIcon, QPainter, QPixmap
 from qtpy.QtWidgets import QToolBar
 
 from confusius._napari._utils import (
+    ExportSeries,
     recolor_toolbar_icons,
     resolve_delimited_export_path,
     write_delimited_series,
@@ -79,11 +80,13 @@ def test_resolve_delimited_export_path_uses_selected_filter():
 def test_write_delimited_series_aligns_duplicate_time_values(tmp_path):
     out_path = tmp_path / "export.tsv"
 
+    import numpy as np
+
     write_delimited_series(
         out_path,
         [
-            ("series", [0, 0, 1], [10, 11, 12]),
-            ("series", [0, 1, 2], [20, 21, 22]),
+            ExportSeries("series", np.array([0, 0, 1]), np.array([10, 11, 12])),
+            ExportSeries("series", np.array([0, 1, 2]), np.array([20, 21, 22])),
         ],
         delimiter="\t",
     )
@@ -101,10 +104,12 @@ def test_write_delimited_series_aligns_duplicate_time_values(tmp_path):
 def test_write_delimited_series_rejects_mismatched_lengths(tmp_path):
     out_path = tmp_path / "broken.tsv"
 
+    import numpy as np
+
     with pytest.raises(ValueError, match="different lengths"):
         write_delimited_series(
             out_path,
-            [("series", [0, 1], [10])],
+            [ExportSeries("series", np.array([0, 1]), np.array([10]))],
             delimiter="\t",
         )
 

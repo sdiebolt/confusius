@@ -232,9 +232,12 @@ class QCPlotsWidget(QWidget):
         ax.set_facecolor(colors["bg"])
 
         time_coord = dvars_da.coords.get("time")
-        x = time_coord.values if time_coord is not None else np.arange(len(dvars_da))
+        if time_coord is not None:
+            x = time_coord.values
+        else:
+            x = np.arange(len(dvars_da), dtype=float)
         xlabel = "Time (s)" if time_coord is not None else "Frame"
-        self._set_dvars_export_series([("DVARS", x, dvars_da.values)])
+        self._set_dvars_export_series([ExportSeries("DVARS", x, dvars_da.values)])
 
         ax.plot(x, dvars_da.values, color=colors["accent"], linewidth=1.2)
         ax.set_xlabel(xlabel, color=colors["fg"], fontsize=9)

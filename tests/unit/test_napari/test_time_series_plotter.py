@@ -12,6 +12,7 @@ import numpy.testing as npt
 import pytest
 import xarray as xr
 
+from confusius._napari._time_series_store import TimeSeriesStore
 from confusius._napari._utils import format_export_value
 
 
@@ -58,6 +59,18 @@ def plotter(viewer):
     from confusius._napari._time_series_plotter import TimeSeriesPlotter
 
     return TimeSeriesPlotter(viewer)
+
+
+@pytest.fixture
+def store():
+    return TimeSeriesStore()
+
+
+@pytest.fixture
+def plotter_with_store(viewer, store):
+    from confusius._napari._time_series_plotter import TimeSeriesPlotter
+
+    return TimeSeriesPlotter(viewer, store=store)
 
 
 # ---------------------------------------------------------------------------
@@ -307,8 +320,10 @@ class TestTsvExport:
         assert plotter._export_button.isEnabled()
 
     def test_writes_csv_when_requested(self, plotter, tmp_path):
+        from confusius._napari._utils import ExportSeries
+
         plotter._set_export_series(
-            [("signal", np.array([0.0, 1.0]), np.array([10.0, 11.5]))]
+            [ExportSeries("signal", np.array([0.0, 1.0]), np.array([10.0, 11.5]))]
         )
 
         out_path = tmp_path / "timeseries.csv"
@@ -318,10 +333,12 @@ class TestTsvExport:
         assert rows == [["time", "signal"], ["0", "10"], ["1", "11.5"]]
 
     def test_aligns_multiple_series_and_deduplicates_headers(self, plotter, tmp_path):
+        from confusius._napari._utils import ExportSeries
+
         plotter._set_export_series(
             [
-                ("series", np.array([0.0, 1.0]), np.array([10.0, 11.0])),
-                ("series", np.array([1.0, 2.0]), np.array([20.0, 21.0])),
+                ExportSeries("series", np.array([0.0, 1.0]), np.array([10.0, 11.0])),
+                ExportSeries("series", np.array([1.0, 2.0]), np.array([20.0, 21.0])),
             ]
         )
 
@@ -337,8 +354,10 @@ class TestTsvExport:
         ]
 
     def test_invalid_plot_clears_export_state(self, plotter):
+        from confusius._napari._utils import ExportSeries
+
         plotter._set_export_series(
-            [("series", np.array([0.0, 1.0]), np.array([10.0, 11.0]))]
+            [ExportSeries("series", np.array([0.0, 1.0]), np.array([10.0, 11.0]))]
         )
 
         layer = _Layer(np.zeros((10, 4, 6, 8)))
@@ -348,3 +367,251 @@ class TestTsvExport:
 
         assert plotter._export_series == []
         assert not plotter._export_button.isEnabled()
+
+
+class TestImportedSeriesIntegration:
+    def test_overlays_imported_series_with_live_mouse_plot(
+        self, plotter_with_store, store, tmp_path
+    ):
+        path = tmp_path / "imported.csv"
+        path.write_text("time,external\n0,20\n1,21\n2,22\n")
+        store.import_file(path)
+
+        layer = _Layer(np.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2))
+        layer.name = "live"
+        plotter_with_store._current_layer = layer
+        plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
+
+        plotter_with_store._update_plot()
+
+        out_path = tmp_path / "combined.tsv"
+        plotter_with_store._write_current_plot_delimited(out_path, delimiter="\t")
+        rows = [line.split("\t") for line in out_path.read_text().splitlines()]
+        assert rows == [
+            ["time", "live", "external"],
+            ["0", "7", "20"],
+            ["1", "15", "21"],
+            ["2", "23", "22"],
+        ]
+
+    def test_plots_imported_series_without_live_data(
+        self, plotter_with_store, store, tmp_path
+    ):
+        path = tmp_path / "imported.tsv"
+        path.write_text("time\tbaseline\n0\t1.0\n0\t2.0\n1\t3.0\n")
+        store.import_file(path)
+
+        plotter_with_store._refresh_plot()
+
+        out_path = tmp_path / "imported_only.tsv"
+        plotter_with_store._write_current_plot_delimited(out_path, delimiter="\t")
+        rows = [line.split("\t") for line in out_path.read_text().splitlines()]
+        assert rows == [
+            ["time", "baseline"],
+            ["0", "1"],
+            ["0", "2"],
+            ["1", "3"],
+        ]
+
+    def test_hidden_imported_series_is_excluded_from_export(
+        self, plotter_with_store, store, tmp_path
+    ):
+        path = tmp_path / "imported.csv"
+        path.write_text("time,external\n0,20\n1,21\n2,22\n")
+        imported = store.import_file(path)
+        store.set_series_visible(imported[0].id, False)
+
+        layer = _Layer(np.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2))
+        layer.name = "live"
+        plotter_with_store._current_layer = layer
+        plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
+
+        plotter_with_store._update_plot()
+
+        out_path = tmp_path / "combined.tsv"
+        plotter_with_store._write_current_plot_delimited(out_path, delimiter="\t")
+        rows = [line.split("\t") for line in out_path.read_text().splitlines()]
+        assert rows == [
+            ["time", "live"],
+            ["0", "7"],
+            ["1", "15"],
+            ["2", "23"],
+        ]
+
+    def test_imported_series_color_is_used_for_overlay(
+        self, plotter_with_store, store, tmp_path
+    ):
+        path = tmp_path / "imported.csv"
+        path.write_text("time,external\n0,20\n1,21\n2,22\n")
+        imported = store.import_file(path)
+        store.set_series_color(imported[0].id, "#123456")
+
+        plotter_with_store._refresh_plot()
+
+        line = plotter_with_store._axes.lines[0]
+        assert line.get_label() == "external"
+        assert line.get_color() == "#123456"
+
+    def test_xlim_defaults_to_largest_plotted_series_extent(
+        self, plotter_with_store, store, tmp_path
+    ):
+        path = tmp_path / "imported.csv"
+        path.write_text("time,external\n-2,20\n0,21\n4,22\n")
+        store.import_file(path)
+
+        layer = _Layer(np.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2))
+        layer.name = "live"
+        plotter_with_store._current_layer = layer
+        plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
+
+        plotter_with_store._update_plot()
+
+        xlim = plotter_with_store._axes.get_xlim()
+        assert xlim[0] == pytest.approx(-2.0)
+        assert xlim[1] == pytest.approx(4.0)
+
+    def test_importing_longer_series_expands_existing_auto_xlim(
+        self, plotter_with_store, store, tmp_path
+    ):
+        layer = _Layer(np.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2))
+        layer.name = "live"
+        plotter_with_store._current_layer = layer
+        plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
+        plotter_with_store._update_plot()
+
+        xlim_before = plotter_with_store._axes.get_xlim()
+        assert xlim_before[0] == pytest.approx(0.0)
+        assert xlim_before[1] == pytest.approx(2.0)
+
+        path = tmp_path / "imported.csv"
+        path.write_text("time,external\n-2,20\n0,21\n4,22\n")
+        store.import_file(path)
+
+        xlim_after = plotter_with_store._axes.get_xlim()
+        assert xlim_after[0] == pytest.approx(-2.0)
+        assert xlim_after[1] == pytest.approx(4.0)
+
+    def test_user_zoom_is_retained_across_mouse_moves(
+        self, plotter_with_store, store, tmp_path
+    ):
+        path = tmp_path / "imported.csv"
+        path.write_text("time,external\n-2,20\n0,21\n4,22\n")
+        store.import_file(path)
+
+        layer = _Layer(np.arange(5 * 3 * 3 * 3).reshape(5, 3, 3, 3))
+        layer.name = "live"
+        plotter_with_store._current_layer = layer
+        plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
+        plotter_with_store._update_plot()
+
+        plotter_with_store._axes.set_xlim((-1.0, 1.0))
+        plotter_with_store._cursor_pos = np.array([0, 2, 2, 2])
+        plotter_with_store._update_plot()
+
+        xlim = plotter_with_store._axes.get_xlim()
+        assert xlim[0] == pytest.approx(-1.0)
+        assert xlim[1] == pytest.approx(1.0)
+
+    def test_invalid_cursor_clears_previous_lines(
+        self, plotter_with_store, store, tmp_path
+    ):
+        path = tmp_path / "imported.csv"
+        path.write_text("time,external\n0,20\n1,21\n2,22\n")
+        store.import_file(path)
+
+        layer = _Layer(np.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2))
+        layer.name = "live"
+        plotter_with_store._current_layer = layer
+        plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
+        plotter_with_store._update_plot()
+
+        plotter_with_store._series_store.clear()
+        plotter_with_store._cursor_pos = np.array([0, 99, 99, 99])
+        plotter_with_store._update_plot()
+
+        assert len(plotter_with_store._axes.lines) == 0
+        assert plotter_with_store._axes.get_title() == ""
+
+    def test_hiding_imported_series_resets_xlim_to_remaining_visible_series(
+        self, plotter_with_store, store, tmp_path
+    ):
+        path = tmp_path / "imported.csv"
+        path.write_text("time,external\n-2,20\n0,21\n4,22\n")
+        imported = store.import_file(path)
+
+        layer = _Layer(np.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2))
+        layer.name = "live"
+        plotter_with_store._current_layer = layer
+        plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
+        plotter_with_store._update_plot()
+
+        store.set_series_visible(imported[0].id, False)
+
+        xlim = plotter_with_store._axes.get_xlim()
+        assert xlim[0] == pytest.approx(0.0)
+        assert xlim[1] == pytest.approx(2.0)
+
+    def test_zscore_of_constant_series_gives_all_zeros(
+        self, plotter_with_store, store, tmp_path
+    ):
+        # A series with all-identical values has std=0; z-scoring should yield
+        # all-zeros (ts - mean) rather than NaN.
+        path = tmp_path / "constant.csv"
+        path.write_text("time,flat\n0,5.0\n1,5.0\n2,5.0\n")
+        store.import_file(path)
+
+        plotter_with_store.set_zscore(True)
+        result = plotter_with_store._render_imported_only()
+
+        assert result is True
+        assert len(plotter_with_store._axes.lines) == 1
+        y_data = plotter_with_store._axes.lines[0].get_ydata()
+        npt.assert_array_equal(y_data, np.zeros(3))
+
+    def test_zscore_with_partial_nan_series(self, plotter_with_store, store, tmp_path):
+        # A series with some NaN values (e.g. alternating missing values as in
+        # a TSV with partial columns). Non-NaN values should be z-scored; NaN
+        # values should remain NaN and the plot should not crash.
+        path = tmp_path / "partial_nan.csv"
+        path.write_text("time,signal\n0,1.0\n1,\n2,3.0\n3,\n4,5.0\n")
+        store.import_file(path)
+
+        plotter_with_store.set_zscore(True)
+        result = plotter_with_store._render_imported_only()
+
+        assert result is True
+        assert len(plotter_with_store._axes.lines) == 1
+        y_data = plotter_with_store._axes.lines[0].get_ydata()
+        # NaN positions must remain NaN.
+        assert np.isnan(y_data[1])
+        assert np.isnan(y_data[3])
+        # Non-NaN positions must not be NaN.
+        assert not np.any(np.isnan(y_data[[0, 2, 4]]))
+
+    def test_close_event_disconnects_store_signals(
+        self, plotter_with_store, store, tmp_path, monkeypatch
+    ):
+        # Import a first series so the plotter is in a known state.
+        path = tmp_path / "first.csv"
+        path.write_text("time,a\n0,1\n1,2\n")
+        store.import_file(path)
+
+        # Track calls to _refresh_plot after the plotter is closed.
+        call_count = {"n": 0}
+        original_refresh = plotter_with_store._refresh_plot
+
+        def _counting_refresh():
+            call_count["n"] += 1
+            original_refresh()
+
+        monkeypatch.setattr(plotter_with_store, "_refresh_plot", _counting_refresh)
+
+        # Close the plotter — this should disconnect the store signals.
+        plotter_with_store.close()
+
+        # Import another series; _refresh_plot must NOT be called.
+        path2 = tmp_path / "second.csv"
+        path2.write_text("time,b\n0,10\n1,20\n")
+        store.import_file(path2)
+
+        assert call_count["n"] == 0
