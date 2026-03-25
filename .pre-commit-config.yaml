@@ -37,3 +37,4 @@ repos:
     hooks:
     - id: numpydoc-validation
       files: ^src/(?!.*tests).+$
+      env: {PYTHONUTF8: "1"}
