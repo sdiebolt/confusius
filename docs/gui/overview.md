@@ -5,7 +5,7 @@ icon: lucide/layout-dashboard
 # ConfUSIus Graphical Interface
 
 ConfUSIus ships a [napari](https://napari.org) plugin that provides an interactive
-graphical interface for fUSI data exploration, time series inspection, and quality
+graphical interface for fUSI data exploration, signals inspection, and quality
 control—no scripting required.
 
 !!! question "New to napari?"
@@ -15,7 +15,7 @@ control—no scripting required.
     also has a rich [plugin hub](https://napari-hub.org) with plugins for loading videos,
     multimodal recordings, and much more—all of which can be used alongside ConfUSIus.
 
-![ConfUSIus plugin overview](../images/gui/plugin-time-series.png)
+![ConfUSIus plugin overview](../images/gui/plugin-signals.png)
 
 ## Launching the Plugin
 
@@ -46,8 +46,8 @@ There are two ways to start the plugin:
     uvx -p 3.13 confusius
     ```
 
-The widget contains three collapsible panels—[Data I/O](plugin.md#data-io-panel), [Time
-Series](plugin.md#time-series-panel), and [QC](plugin.md#qc-panel)—that can each be
+The widget contains three collapsible panels—[Data I/O](plugin.md#data-io-panel),
+[Signals](plugin.md#signals-panel), and [QC](plugin.md#qc-panel)—that can each be
 expanded or collapsed independently.
 
 !!! tip "Running napari programmatically"
@@ -70,7 +70,7 @@ confusius path/to/data.zarr
 Both routes use [`confusius.load()`][confusius.load] under the hood, which produces a
 fully-labeled DataArray with named dimensions, physical coordinates, and all file
 metadata preserved. The DataArray is attached to the layer and used automatically by the
-Time Series and QC panels. By default the full array is loaded into memory for
+Signals and QC panels. By default the full array is loaded into memory for
 responsive time scrubbing. For files that don't fit in RAM, lazy loading keeps the array
 Dask-backed—the layer appears instantly and slices are read from disk on demand. Enable
 it via the **Load lazily** checkbox in the Data Panel, or with the `--lazy` flag on the

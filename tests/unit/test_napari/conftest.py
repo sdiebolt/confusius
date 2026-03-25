@@ -4,26 +4,26 @@ from __future__ import annotations
 
 import pytest
 
-from confusius._napari._time_series._store import TimeSeriesStore
+from confusius._napari._signals._store import SignalStore
 
 
 @pytest.fixture
-def time_series_store():
-    """Return a fresh TimeSeriesStore instance."""
-    return TimeSeriesStore()
+def signals_store():
+    """Return a fresh SignalStore instance."""
+    return SignalStore()
 
 
 @pytest.fixture
-def time_series_csv(tmp_path):
-    """Return a path to a valid CSV time series file."""
+def signals_csv(tmp_path):
+    """Return a path to a valid CSV signals file."""
     path = tmp_path / "series.csv"
     path.write_text("time,a,b\n0,1,4\n1,2,5\n2,3,6\n")
     return path
 
 
 @pytest.fixture
-def time_series_tsv(tmp_path):
-    """Return a path to a valid TSV time series file."""
+def signals_tsv(tmp_path):
+    """Return a path to a valid TSV signals file."""
     path = tmp_path / "series.tsv"
     path.write_text("time\tregion\n0\t1.0\n0\t2.0\n1\t3.0\n")
     return path

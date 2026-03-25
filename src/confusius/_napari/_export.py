@@ -1,4 +1,4 @@
-"""Data structures and serialization for CSV/TSV time series export."""
+"""Data structures and serialization for CSV/TSV signals export."""
 
 import datetime as dt
 from dataclasses import dataclass
@@ -11,13 +11,13 @@ from qtpy.QtWidgets import QFileDialog, QWidget
 
 
 @dataclass(frozen=True, slots=True)
-class PlotSeries:
-    """A time series ready for plotting with color.
+class PlotSignal:
+    """A signal ready for plotting with color.
 
     Attributes
     ----------
     label : str
-        Series name for legend.
+        Signal name for legend.
     x_values : numpy.ndarray
         X-axis values (typically time).
     y_values : numpy.ndarray
@@ -33,16 +33,16 @@ class PlotSeries:
 
 
 @dataclass(frozen=True, slots=True)
-class ExportSeries:
-    """A time series ready for CSV/TSV export (no color).
+class ExportSignal:
+    """A signal ready for CSV/TSV export (no color).
 
-    Unlike `PlotSeries`, this excludes color information since exports are
+    Unlike `PlotSignal`, this excludes color information since exports are
     data-only.
 
     Attributes
     ----------
     label : str
-        Series name for the header.
+        Signal name for the header.
     x_values : numpy.ndarray
         X-axis values (typically time).
     y_values : numpy.ndarray
@@ -54,18 +54,18 @@ class ExportSeries:
     y_values: npt.NDArray[np.floating]
 
 
-def prepare_export_series(series: list[ExportSeries]) -> list[ExportSeries]:
-    """Normalize plotted series into copied 1D NumPy arrays.
+def prepare_export_signal(signals: list[ExportSignal]) -> list[ExportSignal]:
+    """Normalize plotted signals into copied 1D NumPy arrays.
 
     Parameters
     ----------
-    series : list[ExportSeries]
-        Plotted series to normalize.
+    signals : list[ExportSignal]
+        Plotted signals to normalize.
 
     Returns
     -------
-    list[ExportSeries]
-        Series with copied, flattened NumPy arrays.
+    list[ExportSignal]
+        Signal with copied, flattened NumPy arrays.
 
     Raises
     ------
@@ -73,14 +73,14 @@ def prepare_export_series(series: list[ExportSeries]) -> list[ExportSeries]:
         If any `x`/`y` pair has mismatched lengths.
     """
     prepared = []
-    for s in series:
+    for s in signals:
         x_array = np.ravel(np.asarray(s.x_values)).copy()
         y_array = np.ravel(np.asarray(s.y_values)).copy()
         if len(x_array) != len(y_array):
             raise ValueError(
                 f"Cannot export {s.label!r}: time and value arrays have different lengths."
             )
-        prepared.append(ExportSeries(s.label, x_array, y_array))
+        prepared.append(ExportSignal(s.label, x_array, y_array))
     return prepared
 
 
@@ -177,17 +177,17 @@ def format_export_value(value: object) -> str:
     return str(value)
 
 
-def write_delimited_series(
-    path: Path, series: list[ExportSeries], delimiter: str, time_header: str = "time"
+def write_delimited_signals(
+    path: Path, signals: list[ExportSignal], delimiter: str, time_header: str = "time"
 ) -> None:
-    """Write one or more plotted series to a delimited text file.
+    """Write one or more plotted signals to a delimited text file.
 
     Parameters
     ----------
     path : pathlib.Path
         Output file path.
-    series : list[ExportSeries]
-        Plotted series to write.
+    signals : list[ExportSignal]
+        Plotted signals to write.
     delimiter : str
         Delimiter to use when writing the file.
     time_header : str, default: "time"
@@ -196,23 +196,23 @@ def write_delimited_series(
     Raises
     ------
     ValueError
-        If no series are provided or any `x`/`y` pair has mismatched lengths.
+        If no signals are provided or any `x`/`y` pair has mismatched lengths.
     """
-    if not series:
+    if not signals:
         raise ValueError("No plotted data available to export.")
 
-    prepared_series = prepare_export_series(series)
-    labels = _deduplicate_export_labels([s.label for s in prepared_series])
+    prepared_signals = prepare_export_signal(signals)
+    labels = _deduplicate_export_labels([s.label for s in prepared_signals])
 
-    # Build one DataFrame per series, then outer-merge on the time column so series with
-    # different time axes are aligned correctly.
+    # Build one DataFrame per signal, then outer-merge on the time column so signals
+    # with different time axes are aligned correctly.
     merged = pd.DataFrame(
         {
-            time_header: prepared_series[0].x_values,
-            labels[0]: prepared_series[0].y_values,
+            time_header: prepared_signals[0].x_values,
+            labels[0]: prepared_signals[0].y_values,
         }
     )
-    for s, label in zip(prepared_series[1:], labels[1:], strict=True):
+    for s, label in zip(prepared_signals[1:], labels[1:], strict=True):
         right = pd.DataFrame({time_header: s.x_values, label: s.y_values})
         merged = merged.merge(right, on=time_header, how="outer")
 
@@ -230,7 +230,7 @@ def _deduplicate_export_labels(labels: list[str]) -> list[str]:
     counts: dict[str, int] = {}
     unique_labels = []
     for label in labels:
-        base_label = label or "series"
+        base_label = label or "signal"
         count = counts.get(base_label, 0)
         unique_labels.append(base_label if count == 0 else f"{base_label}_{count + 1}")
         counts[base_label] = count + 1

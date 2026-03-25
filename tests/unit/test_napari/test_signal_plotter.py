@@ -1,6 +1,6 @@
-"""Unit tests for the TimeSeriesPlotter widget.
+"""Unit tests for the SignalPlotter widget.
 
-Pure-logic methods (_time_dim_index, _extract_time_series) are tested with
+Pure-logic methods (_time_dim_index, _extract_signals) are tested with
 lightweight mock layers.  Methods that touch the napari viewer (_active_layer,
 _on_mouse_move) use the make_napari_viewer fixture.
 """
@@ -12,9 +12,8 @@ import numpy.testing as npt
 import pytest
 import xarray as xr
 
-from confusius._napari._time_series._store import TimeSeriesStore
 from confusius._napari._export import format_export_value
-
+from confusius._napari._signals._store import SignalStore
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -56,21 +55,21 @@ def viewer(make_napari_viewer):
 
 @pytest.fixture
 def plotter(viewer):
-    from confusius._napari._time_series._plotter import TimeSeriesPlotter
+    from confusius._napari._signals._plotter import SignalPlotter
 
-    return TimeSeriesPlotter(viewer)
+    return SignalPlotter(viewer)
 
 
 @pytest.fixture
 def store():
-    return TimeSeriesStore()
+    return SignalStore()
 
 
 @pytest.fixture
 def plotter_with_store(viewer, store):
-    from confusius._napari._time_series._plotter import TimeSeriesPlotter
+    from confusius._napari._signals._plotter import SignalPlotter
 
-    return TimeSeriesPlotter(viewer, store=store)
+    return SignalPlotter(viewer, store=store)
 
 
 # ---------------------------------------------------------------------------
@@ -98,27 +97,27 @@ class TestTimeDimIndex:
 
 
 # ---------------------------------------------------------------------------
-# _extract_time_series
+# _extract_signals
 # ---------------------------------------------------------------------------
 
 
-class TestExtractTimeSeries:
-    def test_extracts_correct_time_series(self, plotter, rng):
+class TestExtractSignals:
+    def test_extracts_correct_signals(self, plotter, rng):
         data = rng.random((10, 4, 6, 8))
         layer = _Layer(data)
-        ts = plotter._extract_time_series(layer, np.array([0, 1, 2, 3]))
+        ts = plotter._extract_signals(layer, np.array([0, 1, 2, 3]))
         npt.assert_array_equal(ts, data[:, 1, 2, 3])
 
     def test_returns_none_for_out_of_bounds_position(self, plotter):
         layer = _Layer(np.zeros((10, 4, 6, 8)))
-        assert plotter._extract_time_series(layer, np.array([0, 99, 99, 99])) is None
+        assert plotter._extract_signals(layer, np.array([0, 99, 99, 99])) is None
 
     def test_respects_non_standard_time_dim(self, plotter, rng):
         # Time at dim 1: shape (z=4, time=10, y=6, x=8).
         data = rng.random((4, 10, 6, 8))
         da = xr.DataArray(data, dims=["z", "time", "y", "x"])
         layer = _Layer(data, metadata={"xarray": da})
-        ts = plotter._extract_time_series(layer, np.array([1, 0, 2, 3]))
+        ts = plotter._extract_signals(layer, np.array([1, 0, 2, 3]))
         npt.assert_array_equal(ts, data[1, :, 2, 3])
 
 
@@ -192,14 +191,14 @@ class TestGetTimeCoords:
 
 
 class TestGetTimeXlabel:
-    def test_returns_time_frame_without_xarray_metadata(self, plotter):
+    def test_returns_index_without_xarray_metadata(self, plotter):
         layer = _Layer(np.zeros((10, 4, 6, 8)))
-        assert plotter._get_time_xlabel(layer) == "Time Frame"
+        assert plotter._get_time_xlabel(layer) == "Index"
 
-    def test_returns_time_frame_when_no_time_coord(self, plotter):
+    def test_returns_capitalized_dim_when_no_coord(self, plotter):
         da = xr.DataArray(np.zeros((4, 6, 8)), dims=["z", "y", "x"])
         layer = _Layer(np.zeros((4, 6, 8)), metadata={"xarray": da})
-        assert plotter._get_time_xlabel(layer) == "Time Frame"
+        assert plotter._get_time_xlabel(layer) == "Time"
 
     def test_uses_units_from_time_coord(self, plotter, sample_4d_volume):
         # sample_4d_volume has time attrs={"units": "s"}, no long_name.
@@ -254,6 +253,13 @@ class TestFrameToX:
     def test_out_of_bounds_frame_falls_back_to_frame_value(self, plotter):
         plotter._time_coords = np.array([10.0, 10.5, 11.0])
         assert plotter._frame_to_x(99.0) == 99.0
+
+    def test_returns_string_for_non_numeric_coordinates(self, plotter):
+        # String coordinates (e.g., feature names) must be returned as-is so
+        # matplotlib places the cursor at the correct categorical position
+        # instead of inserting a spurious numeric category.
+        plotter._time_coords = np.array(["feat_A", "feat_B", "feat_C"])
+        assert plotter._frame_to_x(1.0) == "feat_B"
 
 
 # ---------------------------------------------------------------------------
@@ -320,10 +326,10 @@ class TestTsvExport:
         assert plotter._export_button.isEnabled()
 
     def test_writes_csv_when_requested(self, plotter, tmp_path):
-        from confusius._napari._export import ExportSeries
+        from confusius._napari._export import ExportSignal
 
-        plotter._set_export_series(
-            [ExportSeries("signal", np.array([0.0, 1.0]), np.array([10.0, 11.5]))]
+        plotter._set_export_signals(
+            [ExportSignal("signal", np.array([0.0, 1.0]), np.array([10.0, 11.5]))]
         )
 
         out_path = tmp_path / "timeseries.csv"
@@ -332,13 +338,13 @@ class TestTsvExport:
         rows = [line.split(",") for line in out_path.read_text().splitlines()]
         assert rows == [["time", "signal"], ["0", "10"], ["1", "11.5"]]
 
-    def test_aligns_multiple_series_and_deduplicates_headers(self, plotter, tmp_path):
-        from confusius._napari._export import ExportSeries
+    def test_aligns_multiple_signals_and_deduplicates_headers(self, plotter, tmp_path):
+        from confusius._napari._export import ExportSignal
 
-        plotter._set_export_series(
+        plotter._set_export_signals(
             [
-                ExportSeries("series", np.array([0.0, 1.0]), np.array([10.0, 11.0])),
-                ExportSeries("series", np.array([1.0, 2.0]), np.array([20.0, 21.0])),
+                ExportSignal("series", np.array([0.0, 1.0]), np.array([10.0, 11.0])),
+                ExportSignal("series", np.array([1.0, 2.0]), np.array([20.0, 21.0])),
             ]
         )
 
@@ -354,10 +360,10 @@ class TestTsvExport:
         ]
 
     def test_invalid_plot_clears_export_state(self, plotter):
-        from confusius._napari._export import ExportSeries
+        from confusius._napari._export import ExportSignal
 
-        plotter._set_export_series(
-            [ExportSeries("series", np.array([0.0, 1.0]), np.array([10.0, 11.0]))]
+        plotter._set_export_signals(
+            [ExportSignal("series", np.array([0.0, 1.0]), np.array([10.0, 11.0]))]
         )
 
         layer = _Layer(np.zeros((10, 4, 6, 8)))
@@ -365,12 +371,12 @@ class TestTsvExport:
         plotter._cursor_pos = np.array([0, 99, 99, 99])
         plotter._update_plot()
 
-        assert plotter._export_series == []
+        assert plotter._export_signals == []
         assert not plotter._export_button.isEnabled()
 
 
-class TestImportedSeriesIntegration:
-    def test_overlays_imported_series_with_live_mouse_plot(
+class TestImportedSignalIntegration:
+    def test_overlays_imported_signals_with_live_mouse_plot(
         self, plotter_with_store, store, tmp_path
     ):
         path = tmp_path / "imported.csv"
@@ -394,7 +400,7 @@ class TestImportedSeriesIntegration:
             ["2", "23", "22"],
         ]
 
-    def test_plots_imported_series_without_live_data(
+    def test_plots_imported_signals_without_live_data(
         self, plotter_with_store, store, tmp_path
     ):
         path = tmp_path / "imported.tsv"
@@ -413,13 +419,13 @@ class TestImportedSeriesIntegration:
             ["1", "3"],
         ]
 
-    def test_hidden_imported_series_is_excluded_from_export(
+    def test_hidden_imported_signal_is_excluded_from_export(
         self, plotter_with_store, store, tmp_path
     ):
         path = tmp_path / "imported.csv"
         path.write_text("time,external\n0,20\n1,21\n2,22\n")
         imported = store.import_file(path)
-        store.set_series_visible(imported[0].id, False)
+        store.set_signal_visible(imported[0].id, False)
 
         layer = _Layer(np.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2))
         layer.name = "live"
@@ -438,13 +444,13 @@ class TestImportedSeriesIntegration:
             ["2", "23"],
         ]
 
-    def test_imported_series_color_is_used_for_overlay(
+    def test_imported_signal_color_is_used_for_overlay(
         self, plotter_with_store, store, tmp_path
     ):
         path = tmp_path / "imported.csv"
         path.write_text("time,external\n0,20\n1,21\n2,22\n")
         imported = store.import_file(path)
-        store.set_series_color(imported[0].id, "#123456")
+        store.set_signal_color(imported[0].id, "#123456")
 
         plotter_with_store._refresh_plot()
 
@@ -452,7 +458,7 @@ class TestImportedSeriesIntegration:
         assert line.get_label() == "external"
         assert line.get_color() == "#123456"
 
-    def test_xlim_defaults_to_largest_plotted_series_extent(
+    def test_xlim_defaults_to_largest_plotted_signal_extent(
         self, plotter_with_store, store, tmp_path
     ):
         path = tmp_path / "imported.csv"
@@ -470,7 +476,7 @@ class TestImportedSeriesIntegration:
         assert xlim[0] == pytest.approx(-2.0)
         assert xlim[1] == pytest.approx(4.0)
 
-    def test_importing_longer_series_expands_existing_auto_xlim(
+    def test_importing_longer_signal_expands_existing_auto_xlim(
         self, plotter_with_store, store, tmp_path
     ):
         layer = _Layer(np.arange(3 * 2 * 2 * 2).reshape(3, 2, 2, 2))
@@ -525,14 +531,14 @@ class TestImportedSeriesIntegration:
         plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
         plotter_with_store._update_plot()
 
-        plotter_with_store._series_store.clear()
+        plotter_with_store._signals_store.clear()
         plotter_with_store._cursor_pos = np.array([0, 99, 99, 99])
         plotter_with_store._update_plot()
 
         assert len(plotter_with_store._axes.lines) == 0
         assert plotter_with_store._axes.get_title() == ""
 
-    def test_hiding_imported_series_resets_xlim_to_remaining_visible_series(
+    def test_hiding_imported_signal_resets_xlim_to_remaining_visible_signals(
         self, plotter_with_store, store, tmp_path
     ):
         path = tmp_path / "imported.csv"
@@ -545,16 +551,16 @@ class TestImportedSeriesIntegration:
         plotter_with_store._cursor_pos = np.array([0, 1, 1, 1])
         plotter_with_store._update_plot()
 
-        store.set_series_visible(imported[0].id, False)
+        store.set_signal_visible(imported[0].id, False)
 
         xlim = plotter_with_store._axes.get_xlim()
         assert xlim[0] == pytest.approx(0.0)
         assert xlim[1] == pytest.approx(2.0)
 
-    def test_zscore_of_constant_series_gives_all_zeros(
+    def test_zscore_of_constant_signal_gives_all_zeros(
         self, plotter_with_store, store, tmp_path
     ):
-        # A series with all-identical values has std=0; z-scoring should yield
+        # A signal with all-identical values has std=0; z-scoring should yield
         # all-zeros (ts - mean) rather than NaN.
         path = tmp_path / "constant.csv"
         path.write_text("time,flat\n0,5.0\n1,5.0\n2,5.0\n")
@@ -568,8 +574,8 @@ class TestImportedSeriesIntegration:
         y_data = plotter_with_store._axes.lines[0].get_ydata()
         npt.assert_array_equal(y_data, np.zeros(3))
 
-    def test_zscore_with_partial_nan_series(self, plotter_with_store, store, tmp_path):
-        # A series with some NaN values (e.g. alternating missing values as in
+    def test_zscore_with_partial_nan_signal(self, plotter_with_store, store, tmp_path):
+        # A signal with some NaN values (e.g. alternating missing values as in
         # a TSV with partial columns). Non-NaN values should be z-scored; NaN
         # values should remain NaN and the plot should not crash.
         path = tmp_path / "partial_nan.csv"
@@ -591,7 +597,7 @@ class TestImportedSeriesIntegration:
     def test_close_event_disconnects_store_signals(
         self, plotter_with_store, store, tmp_path, monkeypatch
     ):
-        # Import a first series so the plotter is in a known state.
+        # Import a first signal so the plotter is in a known state.
         path = tmp_path / "first.csv"
         path.write_text("time,a\n0,1\n1,2\n")
         store.import_file(path)
@@ -609,7 +615,7 @@ class TestImportedSeriesIntegration:
         # Close the plotter — this should disconnect the store signals.
         plotter_with_store.close()
 
-        # Import another series; _refresh_plot must NOT be called.
+        # Import another signal; _refresh_plot must NOT be called.
         path2 = tmp_path / "second.csv"
         path2.write_text("time,b\n0,10\n1,20\n")
         store.import_file(path2)

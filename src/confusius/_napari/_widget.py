@@ -377,7 +377,7 @@ class ConfUSIusWidget(QWidget):
         from confusius._napari._data._load_panel import DataPanel
         from confusius._napari._data._save_panel import SavePanel
         from confusius._napari._qc._panel import QCPanel
-        from confusius._napari._time_series._panel import TimeSeriesPanel
+        from confusius._napari._signals._panel import SignalPanel
 
         container = QWidget()
         # Keep animation objects alive for their duration.
@@ -398,12 +398,12 @@ class ConfUSIusWidget(QWidget):
         accent = "#ffd33d" if self._is_dark() else "#c49a0a"
         tab_entries = [
             ("Data I/O", "file-input"),
-            ("Time Series", "chart-line"),
+            ("Signals", "chart-line"),
             ("Quality Control", "clipboard-check"),
         ]
         panels = [
             data_panel,
-            TimeSeriesPanel(self.viewer),
+            SignalPanel(self.viewer),
             QCPanel(self.viewer),
         ]
         btns: list[QPushButton] = []

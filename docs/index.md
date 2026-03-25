@@ -64,7 +64,7 @@ preprocessing, and statistical analysis of functional ultrasound imaging (fUSI) 
 - **Signal Processing**: Denoising, filtering, detrending, and confound regression for
   hemodynamic signals.
 - **Visualization**: Rich plotting utilities for fUSI data exploration.
-- **Napari Plugin**: Interactive data loading, live time-series inspection, and quality
+- **Napari Plugin**: Interactive data loading, live signals inspection, and quality
   control directly in the napari viewer—no scripting required.
 - **Xarray Integration**: Seamless integration with Xarray for labeled multi-dimensional
   arrays.

@@ -1,4 +1,4 @@
-"""Time series plotter widget for the bottom dock."""
+"""Signals plotter widget for the bottom dock."""
 
 from __future__ import annotations
 
@@ -19,11 +19,16 @@ from qtpy.QtCore import QSize, QTimer
 from qtpy.QtWidgets import QSizePolicy, QVBoxLayout, QWidget
 
 from confusius._napari._export import (
-    ExportSeries,
-    PlotSeries,
-    prepare_export_series,
+    ExportSignal,
+    PlotSignal,
+    prepare_export_signal,
     prompt_delimited_export_path,
-    write_delimited_series,
+    write_delimited_signals,
+)
+from confusius._napari._signals._store import (
+    ImportedSignal,
+    LiveSignal,
+    SignalStore,
 )
 from confusius._napari._theme import (
     create_export_button,
@@ -31,41 +36,36 @@ from confusius._napari._theme import (
     style_export_button,
     style_plot_toolbar,
 )
-from confusius._napari._time_series._store import (
-    ImportedSeries,
-    LiveSeries,
-    TimeSeriesStore,
-)
 
 # Line styles cycled across reference layers so multi-layer plots are distinguishable
 # even when point/label colors are the same.
 _LAYER_LINESTYLES = ["-", "--", "-.", ":"]
 
 
-class TimeSeriesPlotter(QWidget):
-    """Bottom dock widget for live time series plotting.
+class SignalPlotter(QWidget):
+    """Bottom dock widget for live signals plotting.
 
-    Supports three source modes: mouse hover (Shift + move), a Points layer, or a
-    Labels layer. Imported series from a `TimeSeriesStore` are overlaid on every plot.
-    The time dimension is resolved from xarray metadata when available, falling back to
-    the first array dimension.
+    Supports three source modes: mouse hover (Shift + move), a Points layer, or a Labels
+    layer. Imported signals from a `SignalStore` are overlaid on every plot. The time
+    dimension is resolved from xarray metadata when available, falling back to the first
+    array dimension.
 
     Parameters
     ----------
     viewer : napari.Viewer
         The active napari viewer instance.
-    store : TimeSeriesStore | None, optional
-        Shared store containing imported time series to overlay on the live plot.
+    store : SignalStore | None, optional
+        Shared store containing imported signals to overlay on the live plot.
     """
 
     def __init__(
         self,
         viewer: napari.Viewer,
-        store: TimeSeriesStore | None = None,
+        store: SignalStore | None = None,
     ) -> None:
         super().__init__()
         self._viewer = viewer
-        self._series_store = store
+        self._signals_store = store
         self._cursor_pos: np.ndarray | None = None
         self._current_layer = None
 
@@ -76,7 +76,7 @@ class TimeSeriesPlotter(QWidget):
         self._show_grid: bool = True
         self._zscore: bool = False
 
-        # Whether at least one time series has been plotted (used to decide whether to
+        # Whether at least one signals has been plotted (used to decide whether to
         # restore the zoom state on the next _update_plot call).
         self._has_plot: bool = False
         # Whether the previous _update_plot call had valid data. Used to avoid
@@ -87,6 +87,10 @@ class TimeSeriesPlotter(QWidget):
         # Time coordinate values for the current layer, used to map frame indices to
         # real time values on the x-axis.
         self._time_coords: np.ndarray | None = None
+
+        # X-axis dimension name (e.g., "time", "lag", "feature"). When None, falls back
+        # to looking for a "time" dimension in the xarray metadata, then to index 0.
+        self._xaxis_dim: str | None = None
 
         # Source mode: "mouse" | "points" | "labels".
         self._source_mode: Literal["mouse", "points", "labels"] = "mouse"
@@ -105,7 +109,7 @@ class TimeSeriesPlotter(QWidget):
         self._vline = None
         self._bg = None  # Saved pixel buffer (without vline).
         self._cursor_frame: float = 0.0
-        self._export_series: list[ExportSeries] = []
+        self._export_signals: list[ExportSignal] = []
         self._mouse_plot_dirty: bool = True
         self._mouse_live_line = None
         self._mouse_imported_signature: tuple[str, ...] = ()
@@ -130,15 +134,15 @@ class TimeSeriesPlotter(QWidget):
         self.setMinimumHeight(200)
         self._setup_ui()
         self._setup_callbacks()
-        if self._series_store is not None:
-            self._series_store.plot_data_changed.connect(self._on_plot_data_changed)
-            self._series_store.changed.connect(self._refresh_plot)
-            self._series_store.changed.connect(self._sync_live_colors_to_layers)
-            # If there are already imported series, plot them instead of showing
+        if self._signals_store is not None:
+            self._signals_store.plot_data_changed.connect(self._on_plot_data_changed)
+            self._signals_store.changed.connect(self._refresh_plot)
+            self._signals_store.changed.connect(self._sync_live_colors_to_layers)
+            # If there are already imported signals, plot them instead of showing
             # instructions.
-            imported = self._series_store.imported_series()
+            imported = self._signals_store.imported_signals()
             if imported and self._render_imported_only():
-                pass  # Successfully plotted imported series
+                pass  # Successfully plotted imported signal.
             else:
                 self._show_instructions()
         else:
@@ -170,7 +174,7 @@ class TimeSeriesPlotter(QWidget):
 
         self._toolbar = NavigationToolbar(self._canvas, self)
         self._export_button = create_export_button(
-            self._toolbar, "timeSeriesExportButton", self._save_current_plot
+            self._toolbar, "signalExportButton", self._save_current_plot
         )
         self._export_button.setEnabled(False)
         self._toolbar.addWidget(self._export_button)
@@ -261,12 +265,12 @@ class TimeSeriesPlotter(QWidget):
         self._refresh_plot()
 
     def set_zscore(self, enabled: bool) -> None:
-        """Enable or disable Z-scoring of time series.
+        """Enable or disable Z-scoring of signals.
 
         Parameters
         ----------
         enabled : bool
-            Whether to Z-score the time series.
+            Whether to Z-score the signals.
         """
         self._zscore = enabled
         self._refresh_plot()
@@ -284,6 +288,31 @@ class TimeSeriesPlotter(QWidget):
         self._bg = None
         self._refresh_plot()
 
+    def set_xaxis_dim(self, dim: str | None) -> None:
+        """Set the dimension to use for the plot's x-axis.
+
+        When set to a dimension name (e.g., "time", "lag", "feature"), that
+        dimension will be used for the x-axis. When None, the plotter will look
+        for a "time" dimension in the xarray metadata, falling back to index 0.
+
+        Parameters
+        ----------
+        dim : str | None
+            Name of the dimension to use for the x-axis, or None to use
+            automatic detection (looks for "time" first, then defaults to 0).
+        """
+        if self._xaxis_dim != dim:
+            self._xaxis_dim = dim
+            # The previous zoom state belongs to a different coordinate space,
+            # so discard it to avoid applying stale x-limits to the new axis.
+            self._has_plot = False
+            self._prev_ts_valid = False
+            # The blitting background was captured for the old axis layout;
+            # clear it so _flush_cursor does not restore a stale image.
+            self._bg = None
+            self._invalidate_mouse_cache()
+            self._refresh_plot()
+
     def set_time_cursor(self, frame_idx: float) -> None:
         """Schedule a blitted time-cursor update.
 
@@ -300,16 +329,23 @@ class TimeSeriesPlotter(QWidget):
         if not self._cursor_timer.isActive():
             self._cursor_timer.start()
 
-    def _frame_to_x(self, frame: float) -> float:
+    def _frame_to_x(self, frame: float) -> float | str:
         """Convert a napari frame index to the x-axis value used for plotting.
 
-        When time coordinates are available the frame index is mapped to the
-        corresponding time value; otherwise the frame index is returned as-is.
+        When coordinates are available and numeric, the frame index is mapped to the
+        corresponding coordinate value. For non-numeric coordinates (e.g., feature
+        names on a categorical axis) the coordinate string itself is returned so that
+        matplotlib places the cursor at the correct existing category rather than
+        inserting a spurious numeric label.
         """
         if self._time_coords is not None:
             idx = int(round(frame))
             if 0 <= idx < len(self._time_coords):
-                return float(self._time_coords[idx])
+                coord = self._time_coords[idx]
+                try:
+                    return float(coord)
+                except (ValueError, TypeError):
+                    return str(coord)
         return frame
 
     def _flush_cursor(self) -> None:
@@ -389,7 +425,7 @@ class TimeSeriesPlotter(QWidget):
 
     def _show_message(self, text: str) -> None:
         """Show a centered message in the plot area with no axes or data."""
-        self._clear_export_series()
+        self._clear_export_signals()
         self._invalidate_mouse_cache()
         self._axes.clear()
         colors = self._get_colors()
@@ -421,7 +457,7 @@ class TimeSeriesPlotter(QWidget):
             msg = (
                 'Hold "Shift" while moving the cursor\n'
                 "over an image layer to plot\n"
-                "voxel time series."
+                "voxel signals."
             )
         self._show_message(msg)
 
@@ -438,13 +474,13 @@ class TimeSeriesPlotter(QWidget):
             self._update_plot()
 
     def _on_plot_data_changed(self) -> None:
-        """Reset auto x-range when plotted imported series membership changes."""
+        """Reset auto x-range when plotted imported signal membership changes."""
         self._has_plot = False
         self._prev_ts_valid = False
         self._mouse_plot_dirty = True
 
     def _update_plot(self) -> None:
-        """Update the time series plot with current data."""
+        """Update the signals plot with current data."""
         if self._current_layer is None or self._cursor_pos is None:
             self._render_imported_only()
             return
@@ -481,7 +517,7 @@ class TimeSeriesPlotter(QWidget):
 
         colors = self._get_colors()
 
-        ts = self._extract_time_series(self._current_layer, self._cursor_pos)
+        ts = self._extract_signals(self._current_layer, self._cursor_pos)
         # Update stored time coordinates for cursor mapping.
         self._time_coords = self._get_time_coords(self._current_layer)
         if ts is not None:
@@ -495,26 +531,26 @@ class TimeSeriesPlotter(QWidget):
             xlabel = self._get_time_xlabel(self._current_layer)
 
             # Read name/color/visibility from the store if available.
-            mouse_series = (
-                self._series_store.get_live_series("mouse-0")
-                if self._series_store is not None
+            mouse_signal = (
+                self._signals_store.get_live_signal("mouse-0")
+                if self._signals_store is not None
                 else None
             )
-            if mouse_series is not None and not mouse_series.visible:
-                # Mouse series hidden — only show imported.
+            if mouse_signal is not None and not mouse_signal.visible:
+                # Mouse signal hidden: only show imported.
                 self._render_imported_only(saved_xlim=saved_xlim, saved_ylim=saved_ylim)
                 return
 
             live_label = (
-                mouse_series.name
-                if mouse_series is not None
+                mouse_signal.name
+                if mouse_signal is not None
                 else self._current_layer.name
             )
             live_color = (
-                mouse_series.color if mouse_series is not None else colors["accent"]
+                mouse_signal.color if mouse_signal is not None else colors["accent"]
             )
 
-            imported_series = self._imported_plot_series()
+            imported_signals = self._imported_plot_signals()
             coord_str = self._mouse_coord_string()
             title = f"{self._current_layer.name} — ({coord_str})"
 
@@ -527,7 +563,7 @@ class TimeSeriesPlotter(QWidget):
                 title=title,
                 saved_xlim=saved_xlim,
                 saved_ylim=saved_ylim,
-                imported_series=imported_series,
+                imported_signals=imported_signals,
                 colors=colors,
             ):
                 return
@@ -543,11 +579,11 @@ class TimeSeriesPlotter(QWidget):
             )
 
             self._mouse_live_line = self._axes.lines[-1]
-            self._plot_series_lines(imported_series, linewidth=1.4, alpha=0.95)
-            self._mouse_imported_signature = self._imported_signature(imported_series)
-            export_imported = self._plot_series_to_export(imported_series)
-            self._set_export_series(
-                [ExportSeries(live_label, np.asarray(x_values), np.asarray(ts))]
+            self._plot_signal_lines(imported_signals, linewidth=1.4, alpha=0.95)
+            self._mouse_imported_signature = self._imported_signature(imported_signals)
+            export_imported = self._plot_signal_to_export(imported_signals)
+            self._set_export_signals(
+                [ExportSignal(live_label, np.asarray(x_values), np.asarray(ts))]
                 + export_imported
             )
 
@@ -557,7 +593,7 @@ class TimeSeriesPlotter(QWidget):
                 xlabel,
                 "Z-score" if self._zscore else "Intensity",
                 title,
-                with_legend=len(self._export_series) > 1,
+                with_legend=len(self._export_signals) > 1,
             )
             self._restore_view(saved_xlim, saved_ylim)
 
@@ -565,12 +601,12 @@ class TimeSeriesPlotter(QWidget):
             self._prev_ts_valid = True
             self._mouse_plot_dirty = False
             self._mouse_legend_signature = self._legend_signature(
-                live_label, imported_series
+                live_label, imported_signals
             )
         else:
             if self._render_imported_only(saved_xlim=saved_xlim, saved_ylim=saved_ylim):
                 return
-            self._clear_export_series()
+            self._clear_export_signals()
             self._prev_ts_valid = False
             self._mouse_plot_dirty = True
             self._mouse_live_line = None
@@ -595,42 +631,55 @@ class TimeSeriesPlotter(QWidget):
         self._canvas.draw_idle()
 
     def _time_dim_index(self, layer) -> int:
-        """Return the data dimension index that corresponds to time.
+        """Return the data dimension index that corresponds to the x-axis.
 
-        Reads `layer.metadata["xarray"]` when available; falls back to 0.
+        Uses the configured `_xaxis_dim` when available, otherwise looks for
+        "time" in xarray dims, falling back to 0.
         """
         da = layer.metadata.get("xarray")
-        if da is not None and "time" in da.dims:
-            return list(da.dims).index("time")
+        if da is not None:
+            if self._xaxis_dim is not None and self._xaxis_dim in da.dims:
+                return list(da.dims).index(self._xaxis_dim)
+            if "time" in da.dims:
+                return list(da.dims).index("time")
         return 0
 
     def _get_time_coords(self, layer) -> np.ndarray | None:
-        """Return the time coordinate array from the layer's xarray metadata.
+        """Return the x-axis coordinate array from the layer's xarray metadata.
 
         Returns None when no xarray metadata is present or the DataArray has no
-        "time" coordinate.
+        coordinate for the configured x-axis dimension (or "time" if not configured).
         """
         da = layer.metadata.get("xarray")
-        if da is not None and "time" in da.coords:
-            return np.asarray(da.coords["time"])
+        if da is None:
+            return None
+        dim = self._xaxis_dim if self._xaxis_dim is not None else "time"
+        if dim in da.coords:
+            return np.asarray(da.coords[dim])
         return None
 
     def _get_time_xlabel(self, layer) -> str:
-        """Return the x-axis label for the time axis.
+        """Return the x-axis label for the selected axis.
 
-        Reads `long_name` and `units` from the time coordinate attributes
-        when available. Falls back to `"Time"` and no units.
+        Reads `long_name` and `units` from the coordinate attributes
+        when available. Falls back to the dimension name with capitalized first letter.
         """
         da = layer.metadata.get("xarray")
-        if da is not None and "time" in da.coords:
-            attrs = da.coords["time"].attrs
-            name = attrs.get("long_name", "Time")
+        if da is None:
+            return "Index"
+
+        dim = self._xaxis_dim if self._xaxis_dim is not None else "time"
+        if dim in da.coords:
+            attrs = da.coords[dim].attrs
+            name = attrs.get("long_name", dim.capitalize())
             units = attrs.get("units", "")
             return f"{name} ({units})" if units else name
-        return "Time Frame"
 
-    def _extract_time_series(self, layer, cursor_pos: np.ndarray) -> np.ndarray | None:
-        """Extract time series at cursor position from layer.
+        # No coordinate found for this dimension, use dimension name.
+        return dim.capitalize()
+
+    def _extract_signals(self, layer, cursor_pos: np.ndarray) -> np.ndarray | None:
+        """Extract signals at cursor position from layer.
 
         Always uses the nearest voxel to the cursor position.
         """
@@ -666,12 +715,12 @@ class TimeSeriesPlotter(QWidget):
         self._source_mode = mode
         self._invalidate_mouse_cache()
         if mode == "mouse":
-            self._register_mouse_live_series()
+            self._register_mouse_live_signal()
             # Invalidate the saved zoom state so the first mouse-hover plot does not
             # restore the [0, 1] xlim left by the cleared axes.
             self._has_plot = False
             self._prev_ts_valid = False
-            # Only show instructions if there are no imported series to display.
+            # Only show instructions if there are no imported signal to display.
             if not self._render_imported_only():
                 self._show_instructions()
         elif mode == "points":
@@ -740,7 +789,7 @@ class TimeSeriesPlotter(QWidget):
             self._update_plot_from_labels()
 
     def set_ref_layers(self, layers: list | None) -> None:
-        """Set the reference image layers to extract time series from.
+        """Set the reference image layers to extract signals from.
 
         Parameters
         ----------
@@ -767,15 +816,21 @@ class TimeSeriesPlotter(QWidget):
         """
         current_names = {layer.name for layer in self._viewer.layers}
         if self._ref_layers is None:
+            displayed_dims = set(self._viewer.dims.displayed)
             result = []
             for layer in self._viewer.layers:
                 if layer._type_string != "image" or getattr(layer, "rgb", False):
                     continue
-                # Only include layers that have a time dimension; spatial-only
-                # maps (tSNR, CV, …) have ndim < 4 and no "time" dim.
+                # Include layers that have at least one non-displayed dimension
+                # with more than one element (a plottable signal axis). Spatial-only
+                # maps (tSNR, CV, …) have no such dimension and are excluded.
                 da = layer.metadata.get("xarray")
                 if da is not None:
-                    if "time" in da.dims:
+                    has_signal_dim = any(
+                        i not in displayed_dims and da.shape[i] > 1
+                        for i in range(da.ndim)
+                    )
+                    if has_signal_dim:
                         result.append(layer)
                 elif layer.data.ndim >= 4:
                     result.append(layer)
@@ -843,21 +898,21 @@ class TimeSeriesPlotter(QWidget):
             return None
         return min(x0, x1), max(x0, x1)
 
-    def _set_export_series(self, series: list[ExportSeries]) -> None:
-        """Store the currently plotted series for export."""
-        self._export_series = prepare_export_series(series)
-        self._export_button.setEnabled(bool(self._export_series))
+    def _set_export_signals(self, signals: list[ExportSignal]) -> None:
+        """Store the currently plotted signals for export."""
+        self._export_signals = prepare_export_signal(signals)
+        self._export_button.setEnabled(bool(self._export_signals))
 
-    # -- Live series registration ------------------------------------------------
+    # -- Live signal registration ------------------------------------------------
 
-    def _register_mouse_live_series(self) -> None:
-        """Register a single live series for the mouse cursor."""
-        if self._series_store is None:
+    def _register_mouse_live_signal(self) -> None:
+        """Register a single live signal for the mouse cursor."""
+        if self._signals_store is None:
             return
         colors = self._get_colors()
-        self._series_store.register_live_series(
+        self._signals_store.register_live_signals(
             [
-                LiveSeries(
+                LiveSignal(
                     id="mouse-0",
                     name="Cursor",
                     color=colors["accent"],
@@ -868,16 +923,16 @@ class TimeSeriesPlotter(QWidget):
             ]
         )
 
-    def _register_points_live_series(self) -> None:
-        """Register live series from the current Points layer."""
-        if self._series_store is None or self._points_layer is None:
+    def _register_points_live_signals(self) -> None:
+        """Register live signals from the current Points layer."""
+        if self._signals_store is None or self._points_layer is None:
             return
         n_points = len(self._points_layer.data)
-        series = []
+        signals = []
         for pt_idx in range(n_points):
             color = mpl_colors.to_hex(self._points_layer.face_color[pt_idx])
-            series.append(
-                LiveSeries(
+            signals.append(
+                LiveSignal(
                     id=f"point-{pt_idx}",
                     name=f"Point {pt_idx}",
                     color=color,
@@ -886,24 +941,24 @@ class TimeSeriesPlotter(QWidget):
                     source_id=pt_idx,
                 )
             )
-        self._series_store.register_live_series(series)
+        self._signals_store.register_live_signals(signals)
 
-    def _register_labels_live_series(self, unique_labels: np.ndarray) -> None:
-        """Register live series from unique label IDs.
+    def _register_labels_live_signals(self, unique_labels: np.ndarray) -> None:
+        """Register live signals from unique label IDs.
 
         Parameters
         ----------
         unique_labels : numpy.ndarray
             Array of nonzero label IDs found in the Labels layer.
         """
-        if self._series_store is None:
+        if self._signals_store is None:
             return
-        series = []
+        signals = []
         for lid in unique_labels:
             lid_int = int(lid)
             color = mpl_colors.to_hex(self._get_label_color(lid_int))
-            series.append(
-                LiveSeries(
+            signals.append(
+                LiveSignal(
                     id=f"label-{lid_int}",
                     name=f"Label {lid_int}",
                     color=color,
@@ -912,35 +967,35 @@ class TimeSeriesPlotter(QWidget):
                     source_id=lid_int,
                 )
             )
-        self._series_store.register_live_series(series)
+        self._signals_store.register_live_signals(signals)
 
     # -- Bidirectional color sync -----------------------------------------------
 
     def _sync_live_colors_to_layers(self) -> None:
-        """Push live series color overrides from the store to napari layers."""
-        if self._syncing_color or self._series_store is None:
+        """Push live signals color overrides from the store to napari layers."""
+        if self._syncing_color or self._signals_store is None:
             return
         self._syncing_color = True
         try:
-            for series in self._series_store.live_series():
-                if series.source_type == "point" and self._points_layer is not None:
-                    pt_idx = series.source_id
+            for signals in self._signals_store.live_signals():
+                if signals.source_type == "point" and self._points_layer is not None:
+                    pt_idx = signals.source_id
                     if pt_idx is not None and pt_idx < len(self._points_layer.data):
                         current = mpl_colors.to_hex(
                             self._points_layer.face_color[pt_idx]
                         )
-                        if current != series.color:
-                            rgba = transform_color(series.color)[0]
+                        if current != signals.color:
+                            rgba = transform_color(signals.color)[0]
                             self._points_layer.face_color[pt_idx] = rgba
                             self._points_layer.refresh_colors(
                                 update_color_mapping=False
                             )
-                elif series.source_type == "label" and self._labels_layer is not None:
-                    lid = series.source_id
+                elif signals.source_type == "label" and self._labels_layer is not None:
+                    lid = signals.source_id
                     if lid is not None:
                         current = mpl_colors.to_hex(self._get_label_color(lid))
-                        if current != series.color:
-                            rgba = np.asarray(transform_color(series.color)[0])
+                        if current != signals.color:
+                            rgba = np.asarray(transform_color(signals.color)[0])
                             lid_int = int(lid)
 
                             # Collect labels that have colors in the current colormap,
@@ -991,7 +1046,7 @@ class TimeSeriesPlotter(QWidget):
 
     def _on_points_color_changed(self, event=None) -> None:
         """Sync point colors from the layer to the store."""
-        if self._syncing_color or self._series_store is None:
+        if self._syncing_color or self._signals_store is None:
             return
         if self._points_layer is None:
             return
@@ -999,100 +1054,137 @@ class TimeSeriesPlotter(QWidget):
         try:
             for pt_idx in range(len(self._points_layer.data)):
                 sid = f"point-{pt_idx}"
-                live = self._series_store.get_live_series(sid)
+                live = self._signals_store.get_live_signal(sid)
                 if live is None:
                     continue
                 new_color = mpl_colors.to_hex(self._points_layer.face_color[pt_idx])
                 if new_color != live.color:
-                    self._series_store.set_live_series_color(sid, new_color)
+                    self._signals_store.set_live_signal_color(sid, new_color)
         finally:
             self._syncing_color = False
 
     def _on_labels_color_changed(self, event=None) -> None:
         """Sync label colors from the layer's colormap to the store."""
-        if self._syncing_color or self._series_store is None:
+        if self._syncing_color or self._signals_store is None:
             return
         if self._labels_layer is None:
             return
         self._syncing_color = True
         try:
-            for series in self._series_store.live_series():
-                if series.source_type != "label" or series.source_id is None:
+            for signal in self._signals_store.live_signals():
+                if signal.source_type != "label" or signal.source_id is None:
                     continue
-                new_color = mpl_colors.to_hex(self._get_label_color(series.source_id))
-                if new_color != series.color:
-                    self._series_store.set_live_series_color(series.id, new_color)
+                new_color = mpl_colors.to_hex(self._get_label_color(signal.source_id))
+                if new_color != signal.color:
+                    self._signals_store.set_live_signal_color(signal.id, new_color)
         finally:
             self._syncing_color = False
 
-    def _clear_export_series(self) -> None:
-        """Clear the currently exported series."""
-        self._set_export_series([])
+    def _clear_export_signals(self) -> None:
+        """Clear the currently exported signal."""
+        self._set_export_signals([])
 
-    def _visible_imported_series(self) -> list[ImportedSeries]:
-        """Return visible imported series from the shared store."""
-        if self._series_store is None:
+    def _visible_imported_signals(self) -> list[ImportedSignal]:
+        """Return visible imported signals from the shared store."""
+        if self._signals_store is None:
             return []
-        return self._series_store.visible_imported_series()
+        return self._signals_store.visible_imported_signals()
 
     def _mouse_coord_string(self) -> str:
-        """Return the current mouse coordinates formatted for the plot title."""
+        """Return the current mouse coordinates formatted for the plot title.
+
+        Formats coordinates as "dim=value" pairs. String coordinates are shown as-is,
+        numeric coordinates are formatted to one decimal place.
+        """
         if self._current_layer is None or self._cursor_pos is None:
             return ""
-        t_idx = self._time_dim_index(self._current_layer)
-        spatial_coords = [c for i, c in enumerate(self._cursor_pos) if i != t_idx]
-        return ", ".join(f"{c:.1f}" for c in spatial_coords)
 
-    def _imported_plot_series(self) -> list[PlotSeries]:
-        """Return imported series prepared for plotting and export."""
+        da = self._current_layer.metadata.get("xarray")
+        if da is None:
+            # Fallback: just format cursor positions without dimension names.
+            t_idx = self._time_dim_index(self._current_layer)
+            spatial_coords = [c for i, c in enumerate(self._cursor_pos) if i != t_idx]
+            return ", ".join(f"{c:.1f}" for c in spatial_coords)
+
+        # Map cursor position to data indices, then to coordinate values.
+        t_idx = self._time_dim_index(self._current_layer)
+        coord_parts = []
+
+        # Convert all world positions to data indices once.
+        data_indices = self._current_layer.world_to_data(self._cursor_pos)
+
+        for i, (dim, world_pos) in enumerate(zip(da.dims, self._cursor_pos)):
+            if i == t_idx:
+                continue  # Skip the x-axis dimension (signals dimension).
+
+            # Get the data index for this dimension.
+            data_idx = int(round(data_indices[i]))
+
+            if dim in da.coords and data_idx < da.sizes[dim]:
+                coord_val = da.coords[dim].values[data_idx]
+                # Check if coordinate is string-like.
+                if isinstance(coord_val, str) or (
+                    hasattr(coord_val, "dtype") and coord_val.dtype.kind in "UO"
+                ):
+                    coord_parts.append(f"{dim}={coord_val}")
+                else:
+                    coord_parts.append(f"{dim}={coord_val:.1f}")
+            else:
+                # No coordinate metadata, use world position.
+                coord_parts.append(f"{dim}={world_pos:.1f}")
+
+        return ", ".join(coord_parts)
+
+    def _imported_plot_signals(self) -> list[PlotSignal]:
+        """Return imported signals prepared for plotting and export."""
         plotted = []
-        for series in self._visible_imported_series():
-            x_values = np.asarray(series.x).copy()
-            y_values = np.asarray(series.y, dtype=float).copy()
+        for signals in self._visible_imported_signals():
+            x_values = np.asarray(signals.x).copy()
+            y_values = np.asarray(signals.y, dtype=float).copy()
             if self._zscore:
                 y_values = self._apply_zscore(y_values)
-            plotted.append(PlotSeries(series.name, x_values, y_values, series.color))
+            plotted.append(PlotSignal(signals.name, x_values, y_values, signals.color))
         return plotted
 
-    def _plot_series_lines(
+    def _plot_signal_lines(
         self,
-        series: list[PlotSeries],
+        signals: list[PlotSignal],
         *,
         linewidth: float = 1.5,
         alpha: float = 1.0,
     ) -> None:
-        """Plot a list of series onto the current axes."""
-        for s in series:
+        """Plot a list of signals onto the current axes."""
+        for s in signals:
             kwargs = {"linewidth": linewidth, "alpha": alpha, "label": s.label}
             if s.color is not None:
                 kwargs["color"] = s.color
             self._axes.plot(s.x_values, s.y_values, **kwargs)
 
-    def _imported_signature(self, series: list[PlotSeries]) -> tuple[str, ...]:
-        """Return a lightweight signature for imported series already on the axes."""
-        return tuple(s.label for s in series)
+    def _imported_signature(self, signals: list[PlotSignal]) -> tuple[str, ...]:
+        """Return a lightweight signature for imported signals already on the axes."""
+        return tuple(s.label for s in signals)
 
     def _legend_signature(
-        self, live_label: str, imported_series: list[PlotSeries]
+        self, live_label: str, imported_signals: list[PlotSignal]
     ) -> tuple[str, ...]:
         """Return the legend content signature for the current mouse plot."""
-        return (live_label, *self._imported_signature(imported_series))
+        return (live_label, *self._imported_signature(imported_signals))
 
     @staticmethod
-    def _plot_series_to_export(series: list[PlotSeries]) -> list[ExportSeries]:
-        """Convert PlotSeries to ExportSeries for CSV/TSV export.
+    def _plot_signal_to_export(signals: list[PlotSignal]) -> list[ExportSignal]:
+        """Convert PlotSignal to ExportSignal for CSV/TSV export.
 
         Parameters
         ----------
-        series : list[PlotSeries]
-            Series with color information.
+        signals : list[PlotSignal]
+            Signals with color information.
 
         Returns
         -------
-        list[ExportSeries]
-            Series without color for export.
+        list[ExportSignal]
+            Signals without color for export.
         """
-        return [ExportSeries(s.label, s.x_values, s.y_values) for s in series]
+        return [ExportSignal(s.label, s.x_values, s.y_values) for s in signals]
 
     def _try_fast_mouse_update(
         self,
@@ -1105,21 +1197,21 @@ class TimeSeriesPlotter(QWidget):
         title: str,
         saved_xlim,
         saved_ylim,
-        imported_series: list[PlotSeries],
+        imported_signals: list[PlotSignal],
         colors: dict,
     ) -> bool:
         """Update the mouse plot without rebuilding imported overlay lines."""
         if self._mouse_plot_dirty or self._mouse_live_line is None:
             return False
-        if self._mouse_imported_signature != self._imported_signature(imported_series):
+        if self._mouse_imported_signature != self._imported_signature(imported_signals):
             return False
 
         self._mouse_live_line.set_data(x_values, ts)
         self._mouse_live_line.set_label(live_label)
         self._mouse_live_line.set_color(live_color)
-        self._set_export_series(
-            [ExportSeries(live_label, x_values, ts)]
-            + self._plot_series_to_export(imported_series)
+        self._set_export_signals(
+            [ExportSignal(live_label, x_values, ts)]
+            + self._plot_signal_to_export(imported_signals)
         )
 
         self._axes.set_xlabel(xlabel, color=colors["fg"], fontsize=9)
@@ -1132,7 +1224,7 @@ class TimeSeriesPlotter(QWidget):
         if self._show_grid:
             self._axes.grid(True, alpha=0.3, color=colors["fg"])
 
-        self._update_legend_if_needed(colors, live_label, imported_series)
+        self._update_legend_if_needed(colors, live_label, imported_signals)
 
         self._axes.relim()
         self._restore_view(saved_xlim, saved_ylim)
@@ -1145,10 +1237,10 @@ class TimeSeriesPlotter(QWidget):
         return True
 
     def _update_legend_if_needed(
-        self, colors: dict, live_label: str, imported_series: list[PlotSeries]
+        self, colors: dict, live_label: str, imported_signals: list[PlotSignal]
     ) -> None:
         """Update the legend only when its entries actually changed."""
-        signature = self._legend_signature(live_label, imported_series)
+        signature = self._legend_signature(live_label, imported_signals)
         if signature == self._mouse_legend_signature:
             return
 
@@ -1167,26 +1259,26 @@ class TimeSeriesPlotter(QWidget):
         self._mouse_legend_signature = signature
 
     def _render_imported_only(self, saved_xlim=None, saved_ylim=None) -> bool:
-        """Render only imported series when no live data can be drawn."""
-        imported_series = self._imported_plot_series()
-        if not imported_series:
+        """Render only imported signals when no live data can be drawn."""
+        imported_signals = self._imported_plot_signals()
+        if not imported_signals:
             return False
 
         colors = self._get_colors()
         self._axes.clear()
-        self._plot_series_lines(imported_series, linewidth=1.4, alpha=0.95)
-        self._set_export_series(self._plot_series_to_export(imported_series))
+        self._plot_signal_lines(imported_signals, linewidth=1.4, alpha=0.95)
+        self._set_export_signals(self._plot_signal_to_export(imported_signals))
         self._mouse_live_line = None
-        self._mouse_imported_signature = self._imported_signature(imported_series)
-        self._mouse_legend_signature = self._imported_signature(imported_series)
+        self._mouse_imported_signature = self._imported_signature(imported_signals)
+        self._mouse_legend_signature = self._imported_signature(imported_signals)
         self._mouse_plot_dirty = True
         self._time_coords = None
         self._style_valid_axes(
             colors,
             "Time",
             "Z-score" if self._zscore else "Value",
-            "Imported Time Series",
-            with_legend=len(imported_series) > 1,
+            "Imported Signals",
+            with_legend=len(imported_signals) > 1,
             show_cursor=False,
         )
         self._restore_view(saved_xlim, saved_ylim)
@@ -1202,23 +1294,23 @@ class TimeSeriesPlotter(QWidget):
         saved_xlim=None,
         saved_ylim=None,
     ) -> None:
-        """Show a message when no imported series are visible, else plot imports only."""
+        """Show a message when no imported signals are visible, else plot imports only."""
         if self._render_imported_only(saved_xlim=saved_xlim, saved_ylim=saved_ylim):
             return
         self._show_message(text)
 
     def _write_current_plot_delimited(self, path: Path, delimiter: str) -> None:
-        """Write the currently plotted time series to a delimited text file."""
-        write_delimited_series(path, self._export_series, delimiter=delimiter)
+        """Write the currently plotted signals to a delimited text file."""
+        write_delimited_signals(path, self._export_signals, delimiter=delimiter)
 
     def _save_current_plot(self) -> None:
         """Open a save dialog and export the current plot as CSV or TSV."""
-        if not self._export_series:
-            show_error("No time series plot available to save.")
+        if not self._export_signals:
+            show_error("No signals plot available to save.")
             return
 
         export_selection = prompt_delimited_export_path(
-            self, "Export Time Series", str(Path.home() / "time_series.tsv")
+            self, "Export Signals", str(Path.home() / "signals.tsv")
         )
         if export_selection is None:
             return
@@ -1231,13 +1323,13 @@ class TimeSeriesPlotter(QWidget):
             show_error(str(exc))
             return
 
-        show_info(f"Exported time series to {path}")
+        show_info(f"Exported signals to {path}")
 
     def _apply_zscore(self, ts: np.ndarray) -> np.ndarray:
-        """Normalise a time series to zero mean and unit variance.
+        """Normalise a signals to zero mean and unit variance.
 
         NaN values are ignored when computing the mean and standard deviation so that
-        series with missing values (imported files with partial columns) are z-scored
+        signals with missing values (imported files with partial columns) are z-scored
         correctly rather than becoming all-NaN.
         """
         mean = np.nanmean(ts)
@@ -1380,15 +1472,15 @@ class TimeSeriesPlotter(QWidget):
         return ref_layers
 
     @staticmethod
-    def _series_label(base: str, img_layer, ref_layers: list) -> str:
-        """Build a series label, prefixing the layer name when multiple layers are shown.
+    def _signal_label(base: str, img_layer, ref_layers: list) -> str:
+        """Build a signal label, prefixing the layer name when multiple layers are shown.
 
         Parameters
         ----------
         base : str
             Base label (e.g. `"Point 0"` or `"Label 3"`).
         img_layer : napari image layer
-            Reference image layer contributing this series.
+            Reference image layer contributing this signal.
         ref_layers : list
             All active reference image layers.
 
@@ -1400,24 +1492,24 @@ class TimeSeriesPlotter(QWidget):
         """
         return f"{img_layer.name} | {base}" if len(ref_layers) > 1 else base
 
-    def _finalize_multi_series_plot(
+    def _finalize_multi_signals_plot(
         self,
-        export_series: list,
+        export_signals: list,
         source_layer_name: str,
         ref_layers: list,
         colors: dict,
         saved_xlim,
         saved_ylim,
     ) -> None:
-        """Overlay imported series, style the axes, and redraw after a multi-series plot.
+        """Overlay imported signals, style the axes, and redraw after a multi-signals plot.
 
         Shared by `_update_plot_from_points` and `_update_plot_from_labels` once their
-        per-series loops have completed successfully.
+        per-signal loops have completed successfully.
 
         Parameters
         ----------
-        export_series : list[ExportSeries]
-            Series already plotted by the caller.
+        export_signals : list[ExportSignal]
+            Signals already plotted by the caller.
         source_layer_name : str
             Name of the active Points or Labels layer, used in the plot title.
         ref_layers : list
@@ -1429,10 +1521,10 @@ class TimeSeriesPlotter(QWidget):
         saved_ylim : tuple or None
             Saved y-axis limits to restore.
         """
-        imported_series = self._imported_plot_series()
-        self._plot_series_lines(imported_series, linewidth=1.4, alpha=0.95)
-        self._set_export_series(
-            export_series + self._plot_series_to_export(imported_series)
+        imported_signals = self._imported_plot_signals()
+        self._plot_signal_lines(imported_signals, linewidth=1.4, alpha=0.95)
+        self._set_export_signals(
+            export_signals + self._plot_signal_to_export(imported_signals)
         )
         xlabel = self._get_time_xlabel(ref_layers[0])
         ylabel = "Z-score" if self._zscore else "Intensity"
@@ -1442,13 +1534,13 @@ class TimeSeriesPlotter(QWidget):
             xlabel,
             ylabel,
             f"{title_ref} — {source_layer_name}",
-            with_legend=len(self._export_series) > 1,
+            with_legend=len(self._export_signals) > 1,
         )
         self._restore_view(saved_xlim, saved_ylim)
         self._canvas.draw_idle()
 
     def _update_plot_from_points(self) -> None:
-        """Plot time series for every point in the Points layer."""
+        """Plot signals for every point in the Points layer."""
         if self._updating_plot:
             return
         self._updating_plot = True
@@ -1471,8 +1563,8 @@ class TimeSeriesPlotter(QWidget):
                 )
                 return
 
-            # Register live series so the manager can track them.
-            self._register_points_live_series()
+            # Register live signals so the manager can track them.
+            self._register_points_live_signals()
 
             # Pre-compute time coordinates per layer: they don't depend on individual
             # points.
@@ -1480,13 +1572,13 @@ class TimeSeriesPlotter(QWidget):
 
             self._axes.clear()
             has_any = False
-            export_series: list[ExportSeries] = []
+            export_signals: list[ExportSignal] = []
 
             for pt_idx in range(n_points):
                 # Check store for visibility/name/color overrides.
                 live = (
-                    self._series_store.get_live_series(f"point-{pt_idx}")
-                    if self._series_store is not None
+                    self._signals_store.get_live_signal(f"point-{pt_idx}")
+                    if self._signals_store is not None
                     else None
                 )
                 if live is not None and not live.visible:
@@ -1513,16 +1605,17 @@ class TimeSeriesPlotter(QWidget):
                 for layer_idx, img_layer in enumerate(ref_layers):
                     img_ndim = img_layer.data.ndim
                     if n_pt < img_ndim:
-                        # 3-D point in a 4-D image: pad the world coord with 0 at the front
-                        # so world_to_data receives the correct ndim. The time value (0) is
-                        # irrelevant — _extract_time_series replaces it with slice(None).
+                        # 3D point in a 4D image: pad the world coord with 0 at the
+                        # front so world_to_data receives the correct ndim. The time
+                        # value (0) is irrelevant — _extract_signals replaces it
+                        # with slice(None).
                         padded = np.zeros(img_ndim)
                         padded[-n_pt:] = pt_world
                         pt_world_img = padded
                     else:
                         pt_world_img = pt_world
                     try:
-                        ts = self._extract_time_series(img_layer, pt_world_img)
+                        ts = self._extract_signals(img_layer, pt_world_img)
                     except Exception:  # noqa: BLE001
                         ts = None
                     if ts is None:
@@ -1538,7 +1631,7 @@ class TimeSeriesPlotter(QWidget):
                         if (time_coords is not None and len(time_coords) == len(ts))
                         else np.arange(len(ts))
                     )
-                    label = self._series_label(pt_name, img_layer, ref_layers)
+                    label = self._signal_label(pt_name, img_layer, ref_layers)
                     linestyle = _LAYER_LINESTYLES[layer_idx % len(_LAYER_LINESTYLES)]
                     self._axes.plot(
                         x,
@@ -1548,8 +1641,8 @@ class TimeSeriesPlotter(QWidget):
                         linestyle=linestyle,
                         label=label,
                     )
-                    export_series.append(
-                        ExportSeries(label, np.asarray(x), np.asarray(ts))
+                    export_signals.append(
+                        ExportSignal(label, np.asarray(x), np.asarray(ts))
                     )
                     has_any = True
                     # Keep time coords from the last successful layer for cursor mapping.
@@ -1557,8 +1650,8 @@ class TimeSeriesPlotter(QWidget):
                     self._current_layer = img_layer
 
             if has_any:
-                self._finalize_multi_series_plot(
-                    export_series,
+                self._finalize_multi_signals_plot(
+                    export_signals,
                     self._points_layer.name,
                     ref_layers,
                     colors,
@@ -1575,7 +1668,7 @@ class TimeSeriesPlotter(QWidget):
             self._updating_plot = False
 
     def _update_plot_from_labels(self) -> None:
-        """Plot mean time series for each unique label in the Labels layer."""
+        """Plot mean signal for each unique label in the Labels layer."""
         if self._updating_plot:
             return
         self._updating_plot = True
@@ -1597,7 +1690,7 @@ class TimeSeriesPlotter(QWidget):
             self._axes.clear()
             has_any = False
             shape_mismatch = False
-            export_series: list[ExportSeries] = []
+            export_signals: list[ExportSignal] = []
             # Collect all unique labels across layers for registration.
             all_unique_labels: set[int] = set()
 
@@ -1641,8 +1734,8 @@ class TimeSeriesPlotter(QWidget):
                     lid_int = int(lid)
                     # Check store for visibility/name/color overrides.
                     live = (
-                        self._series_store.get_live_series(f"label-{lid_int}")
-                        if self._series_store is not None
+                        self._signals_store.get_live_signal(f"label-{lid_int}")
+                        if self._signals_store is not None
                         else None
                     )
                     if live is not None and not live.visible:
@@ -1660,7 +1753,7 @@ class TimeSeriesPlotter(QWidget):
                         if live is not None
                         else mpl_colors.to_hex(self._get_label_color(lid_int))
                     )
-                    label = self._series_label(base_name, img_layer, ref_layers)
+                    label = self._signal_label(base_name, img_layer, ref_layers)
                     linestyle = _LAYER_LINESTYLES[layer_idx % len(_LAYER_LINESTYLES)]
                     self._axes.plot(
                         x,
@@ -1670,8 +1763,8 @@ class TimeSeriesPlotter(QWidget):
                         linestyle=linestyle,
                         label=label,
                     )
-                    export_series.append(
-                        ExportSeries(label, np.asarray(x), np.asarray(ts))
+                    export_signals.append(
+                        ExportSignal(label, np.asarray(x), np.asarray(ts))
                     )
                     has_any = True
 
@@ -1679,13 +1772,13 @@ class TimeSeriesPlotter(QWidget):
                 self._time_coords = time_coords
                 self._current_layer = img_layer
 
-            # Register live series after we know all unique labels.
+            # Register live signal after we know all unique labels.
             if all_unique_labels:
-                self._register_labels_live_series(np.array(sorted(all_unique_labels)))
+                self._register_labels_live_signals(np.array(sorted(all_unique_labels)))
 
             if has_any:
-                self._finalize_multi_series_plot(
-                    export_series,
+                self._finalize_multi_signals_plot(
+                    export_signals,
                     self._labels_layer.name,
                     ref_layers,
                     colors,
@@ -1718,19 +1811,19 @@ class TimeSeriesPlotter(QWidget):
         """
         if self._on_mouse_move in self._viewer.mouse_move_callbacks:
             self._viewer.mouse_move_callbacks.remove(self._on_mouse_move)
-        if self._series_store is not None:
+        if self._signals_store is not None:
             try:
-                self._series_store.plot_data_changed.disconnect(
+                self._signals_store.plot_data_changed.disconnect(
                     self._on_plot_data_changed
                 )
             except (RuntimeError, TypeError):
                 pass
             try:
-                self._series_store.changed.disconnect(self._refresh_plot)
+                self._signals_store.changed.disconnect(self._refresh_plot)
             except (RuntimeError, TypeError):
                 pass
             try:
-                self._series_store.changed.disconnect(self._sync_live_colors_to_layers)
+                self._signals_store.changed.disconnect(self._sync_live_colors_to_layers)
             except (RuntimeError, TypeError):
                 pass
         self.set_points_layer(None)

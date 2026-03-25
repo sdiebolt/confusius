@@ -4,22 +4,22 @@ import xarray as xr
 
 
 def validate_time_series(
-    signals: xr.DataArray,
+    time_series: xr.DataArray,
     operation_name: str,
     check_time_chunks: bool = True,
 ) -> int:
-    """Validate time series for signal processing operations.
+    """Validate time series for time series processing operations.
 
     Performs common validation checks:
 
-    1. Signals have a `time` dimension.
+    1. Time series have a `time` dimension.
     2. Time dimension has more than 1 timepoint.
     3. Time dimension is not chunked for Dask arrays (optional).
 
     Parameters
     ----------
-    signals : xarray.DataArray
-        Input signals to validate. Must have a `time` dimension.
+    time_series : xarray.DataArray
+        Input time series to validate. Must have a `time` dimension.
     operation_name : str
         Name of the operation (used in error/warning messages).
     check_time_chunks : bool, default=True
@@ -35,23 +35,23 @@ def validate_time_series(
     Raises
     ------
     ValueError
-        If `signals` has no `time` dimension, if the `time` dimension has only 1
+        If `time_series` has no `time` dimension, if the `time` dimension has only 1
         timepoint, or if the `time` dimension is chunked in a Dask array (when
         `check_time_chunks=True`).
     """
-    if "time" not in signals.dims:
-        raise ValueError("signals must have a 'time' dimension")
+    if "time" not in time_series.dims:
+        raise ValueError("time_series must have a 'time' dimension")
 
-    if signals.sizes["time"] == 1:
+    if time_series.sizes["time"] == 1:
         raise ValueError(
             f"{operation_name.capitalize()} requires more than 1 timepoint, "
-            f"got {signals.sizes['time']}"
+            f"got {time_series.sizes['time']}"
         )
 
-    time_axis = signals.get_axis_num("time")
+    time_axis = time_series.get_axis_num("time")
 
-    if check_time_chunks and hasattr(signals.data, "chunks"):
-        time_chunks = signals.data.chunks[time_axis]
+    if check_time_chunks and hasattr(time_series.data, "chunks"):
+        time_chunks = time_series.data.chunks[time_axis]
         if len(time_chunks) > 1:
             raise ValueError(
                 f"Data is chunked along the 'time' dimension ({len(time_chunks)} "

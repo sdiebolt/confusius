@@ -36,7 +36,7 @@ preprocessing, and statistical analysis of functional ultrasound imaging (fUSI) 
 - **Signal Extraction**: Extract signals from regions of interest using spatial masks.
 - **Signal Processing**: Denoising, filtering, detrending, and confound regression.
 - **Visualization**: Rich plotting utilities for fUSI data exploration.
-- **Napari Plugin**: Interactive data loading, live time-series inspection, and quality
+- **Napari Plugin**: Interactive data loading, live signals inspection, and quality
   control directly in the napari viewer—no scripting required.
 - **Xarray Integration**: Seamless integration with Xarray for labeled multi-dimensional
   arrays.

@@ -61,11 +61,10 @@ def _compute_qc_metrics(
 class QCPanel(QWidget):
     """Right-side panel for computing QC metrics and displaying plots.
 
-    Time-series metrics (DVARS, Carpet plot) are rendered in a bottom dock widget that
-    is created lazily. If the user closes the dock, clicking "Show plots" or "Compute"
-    re-docks the widget (cached plots are preserved). Spatial map metrics (tSNR, CV) are
-    added as new napari layers with correct scale and translate derived from the
-    DataArray's coordinates.
+    Temporal metrics (DVARS, Carpet plot) are rendered in a bottom dock widget. If the
+    user closes the dock, clicking "Show plots" or "Compute" re-docks the widget (cached
+    plots are preserved). Spatial map metrics (tSNR, CV) are added as new napari layers
+    with correct scale and translate derived from the DataArray's coordinates.
 
     DVARS and spatial computations run in a background thread via
     `napari.qt.threading.thread_worker` so the UI remains responsive.
@@ -100,8 +99,8 @@ class QCPanel(QWidget):
         self._layer_combo = QComboBox()
         layout.addWidget(self._layer_combo)
 
-        # --- Time-series metrics (bottom dock) ---------------------------
-        ts_group = QGroupBox("Time-series metrics")
+        # --- Temporal metrics (bottom dock) ---------------------------
+        ts_group = QGroupBox("Temporal metrics")
         ts_layout = QVBoxLayout(ts_group)
         ts_layout.setSpacing(4)
         self._dvars_check = QCheckBox("DVARS")
@@ -113,7 +112,7 @@ class QCPanel(QWidget):
         layout.addWidget(ts_group)
 
         # --- Spatial map metrics (new viewer layers) ---------------------
-        maps_group = QGroupBox("Spatial maps")
+        maps_group = QGroupBox("Spatial metrics")
         maps_layout = QVBoxLayout(maps_group)
         maps_layout.setSpacing(4)
         self._tsnr_check = QCheckBox("tSNR")

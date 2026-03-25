@@ -1,4 +1,4 @@
-"""Time series control panel for the ConfUSIus sidebar."""
+"""Signals control panel for the ConfUSIus sidebar."""
 
 from __future__ import annotations
 
@@ -20,13 +20,13 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
-from confusius._napari._time_series._manager import TimeSeriesManagerDialog
-from confusius._napari._time_series._plotter import TimeSeriesPlotter
-from confusius._napari._time_series._store import TimeSeriesStore
+from confusius._napari._signals._manager import SignalsManagerDialog
+from confusius._napari._signals._plotter import SignalPlotter
+from confusius._napari._signals._store import SignalStore
 
 
-class TimeSeriesPanel(QWidget):
-    """Right-side panel for configuring time series plots.
+class SignalPanel(QWidget):
+    """Right-side panel for configuring signal plots.
 
     The actual plots are rendered in a bottom dock widget that is created lazily. If the
     user closes the dock, clicking "Show plot" re-docks the widget.
@@ -40,9 +40,9 @@ class TimeSeriesPanel(QWidget):
     def __init__(self, viewer: napari.Viewer) -> None:
         super().__init__()
         self._viewer = viewer
-        self._plotter: TimeSeriesPlotter | None = None
-        self._series_manager: TimeSeriesManagerDialog | None = None
-        self._series_store = TimeSeriesStore(self)
+        self._plotter: SignalPlotter | None = None
+        self._signals_manager: SignalsManagerDialog | None = None
+        self._signals_store = SignalStore(self)
         self._setup_ui()
         viewer.events.theme.connect(self._on_theme_changed)
 
@@ -119,28 +119,31 @@ class TimeSeriesPanel(QWidget):
         self._labels_combo.currentTextChanged.connect(self._on_source_selection_changed)
         self._ref_combo.currentTextChanged.connect(self._on_source_selection_changed)
 
-        self._viewer.layers.events.inserted.connect(self._refresh_source_combos)
+        self._viewer.layers.events.inserted.connect(self._on_layer_inserted)
         self._viewer.layers.events.removed.connect(self._refresh_source_combos)
+        self._viewer.layers.selection.events.active.connect(
+            self._on_active_layer_changed
+        )
         self._refresh_source_combos()
 
-        # Axis limits group.
-        limits_group = QGroupBox("Axis Limits")
-        limits_layout = QVBoxLayout(limits_group)
-        limits_layout.setSpacing(4)
+        # Axis parameters group.
+        axis_group = QGroupBox("Axis Parameters")
+        axis_layout = QVBoxLayout(axis_group)
+        axis_layout.setSpacing(4)
 
-        # Autoscale checkbox. QCheckBox does not support rich text, so we pair a
-        # text-less checkbox with a clickable QLabel to get the italic "y".
-        autoscale_row = QHBoxLayout()
-        self._autoscale_check = QCheckBox()
-        self._autoscale_check.setChecked(True)
-        self._autoscale_check.toggled.connect(self._on_autoscale_changed)
-        autoscale_label = QLabel("Autoscale <i>y</i>-axis")
-        autoscale_label.setTextFormat(Qt.TextFormat.RichText)
-        autoscale_label.mousePressEvent = lambda _e: self._autoscale_check.toggle()  # type: ignore[method-assign]
-        autoscale_row.addWidget(self._autoscale_check)
-        autoscale_row.addWidget(autoscale_label)
-        autoscale_row.addStretch()
-        limits_layout.addLayout(autoscale_row)
+        # X-axis dimension selection.
+        xaxis_row = QHBoxLayout()
+        xaxis_label = QLabel("<i>x</i>-axis:")
+        xaxis_label.setTextFormat(Qt.TextFormat.RichText)
+        xaxis_row.addWidget(xaxis_label)
+        self._xaxis_combo = QComboBox()
+        self._xaxis_combo.setToolTip(
+            "Select which dimension to use for the plot's x-axis. "
+            "Defaults to 'time' when available, otherwise the first axis."
+        )
+        self._xaxis_combo.currentTextChanged.connect(self._on_xaxis_changed)
+        xaxis_row.addWidget(self._xaxis_combo, stretch=1)
+        axis_layout.addLayout(xaxis_row)
 
         # Y-axis limits.
         y_layout = QHBoxLayout()
@@ -160,12 +163,29 @@ class TimeSeriesPanel(QWidget):
         self._ymax_spin.setValue(1.0)
         self._ymax_spin.valueChanged.connect(self._apply_settings)
         y_layout.addWidget(self._ymax_spin)
-        limits_layout.addLayout(y_layout)
+        axis_layout.addLayout(y_layout)
+
+        # Autoscale checkbox. QCheckBox does not support rich text, so we pair a
+        # text-less checkbox with a clickable QLabel to get the italic "y".
+        autoscale_row = QHBoxLayout()
+        self._autoscale_check = QCheckBox()
+        self._autoscale_check.setChecked(True)
+        self._autoscale_check.toggled.connect(self._on_autoscale_changed)
+        autoscale_label = QLabel("Autoscale <i>y</i>-axis")
+        autoscale_label.setTextFormat(Qt.TextFormat.RichText)
+        autoscale_label.mousePressEvent = lambda _e: self._autoscale_check.toggle()  # type: ignore[method-assign]
+        autoscale_row.addWidget(self._autoscale_check)
+        autoscale_row.addWidget(autoscale_label)
+        autoscale_row.addStretch()
+        axis_layout.addLayout(autoscale_row)
 
         # Apply initial autoscale state so spinboxes start disabled.
         self._on_autoscale_changed(True)
 
-        layout.addWidget(limits_group)
+        layout.addWidget(axis_group)
+
+        # Initialize the x-axis combo after the widget is created.
+        self._refresh_xaxis_combo()
 
         # Display options.
         display_group = QGroupBox("Display Options")
@@ -177,29 +197,29 @@ class TimeSeriesPanel(QWidget):
         self._grid_check.toggled.connect(self._apply_settings)
         display_layout.addWidget(self._grid_check)
 
-        self._zscore_check = QCheckBox("Z-score time series")
-        self._zscore_check.setChecked(False)
-        self._zscore_check.toggled.connect(self._apply_settings)
-        display_layout.addWidget(self._zscore_check)
-
-        self._cursor_check = QCheckBox("Show time cursor")
+        self._cursor_check = QCheckBox("Show x-axis cursor")
         self._cursor_check.setChecked(False)
         self._cursor_check.setToolTip(
-            "Draw a vertical cursor on the plot tracking the napari time slider."
+            "Draw a vertical cursor on the plot tracking the napari x-axis slider."
         )
         self._cursor_check.toggled.connect(self._on_cursor_toggled)
         display_layout.addWidget(self._cursor_check)
 
+        self._zscore_check = QCheckBox("Z-score signal")
+        self._zscore_check.setChecked(False)
+        self._zscore_check.toggled.connect(self._apply_settings)
+        display_layout.addWidget(self._zscore_check)
+
         layout.addWidget(display_group)
 
         # Show plot button, disabled while the dock is visible.
-        self._show_btn = QPushButton("Show Time Series Plot")
+        self._show_btn = QPushButton("Show Signal Plot")
         self._show_btn.setObjectName("primary_btn")
         self._show_btn.clicked.connect(self._show_plot)
         layout.addWidget(self._show_btn)
 
-        self._manage_btn = QPushButton("Manage Imported Series")
-        self._manage_btn.clicked.connect(self._show_series_manager)
+        self._manage_btn = QPushButton("Manage Signals")
+        self._manage_btn.clicked.connect(self._show_signals_manager)
         layout.addWidget(self._manage_btn)
 
         layout.addStretch()
@@ -216,20 +236,20 @@ class TimeSeriesPanel(QWidget):
         self._ymax_spin.setEnabled(not checked)
         self._apply_settings()
 
-    def _ensure_plotter(self) -> TimeSeriesPlotter:
-        """Return the bottom-dock TimeSeriesPlotter.
+    def _ensure_plotter(self) -> SignalPlotter:
+        """Return the bottom-dock SignalPlotter.
 
         Creates and docks the widget on first call. If the dock was closed (the
         plotter's parent becomes None after napari removes it), re-docks it. When the
         plotter is already in a live dock this is a no-op.
         """
         if self._plotter is None:
-            self._plotter = TimeSeriesPlotter(self._viewer, store=self._series_store)
+            self._plotter = SignalPlotter(self._viewer, store=self._signals_store)
 
         if self._plotter.parent() is None:
             # Widget is not docked, create (or re-create) the dock.
             dock = self._viewer.window.add_dock_widget(
-                self._plotter, name="Time Series Plot", area="bottom"
+                self._plotter, name="Signal Plot", area="bottom"
             )
 
             # Disable the button while the dock is visible; re-enable on hide/close.
@@ -285,7 +305,7 @@ class TimeSeriesPanel(QWidget):
         return self._plotter
 
     def _show_plot(self) -> None:
-        """Show or re-dock the time series plot widget."""
+        """Show or re-dock the signal plot widget."""
         # If the plotter is already in a live dock, just raise it.
         if self._plotter is not None and self._plotter.parent() is not None:
             parent = self._plotter.parent()
@@ -295,15 +315,15 @@ class TimeSeriesPanel(QWidget):
             return
         self._ensure_plotter()
 
-    def _show_series_manager(self) -> None:
-        """Show the floating imported-series manager window."""
-        if self._series_manager is None:
-            self._series_manager = TimeSeriesManagerDialog(self._series_store, self)
-            self._series_manager.apply_theme(self._viewer.theme)
+    def _show_signals_manager(self) -> None:
+        """Show the floating signals manager window."""
+        if self._signals_manager is None:
+            self._signals_manager = SignalsManagerDialog(self._signals_store, self)
+            self._signals_manager.apply_theme(self._viewer.theme)
 
-        self._series_manager.show()
-        self._series_manager.raise_()
-        self._series_manager.activateWindow()
+        self._signals_manager.show()
+        self._signals_manager.raise_()
+        self._signals_manager.activateWindow()
 
     def _apply_settings(self) -> None:
         """Apply current settings to the plotter."""
@@ -321,32 +341,48 @@ class TimeSeriesPanel(QWidget):
         plotter.set_zscore(self._zscore_check.isChecked())
         plotter.set_show_cursor(self._cursor_check.isChecked())
 
-    def _time_dim_index(self) -> int:
-        """Return the viewer dimension index for time.
+        # Set the x-axis dimension.
+        xaxis_dim = self._xaxis_combo.currentText()
+        if xaxis_dim:
+            plotter.set_xaxis_dim(xaxis_dim)
 
-        Reads xarray metadata from the first layer that has a `"time"` dim;
-        falls back to 0.
+    def _time_dim_index(self) -> int:
+        """Return the viewer dimension index for the x-axis dimension.
+
+        Uses the configured x-axis dimension from the dropdown when available,
+        otherwise falls back to looking for a 'time' dimension, then to 0.
         """
+        xaxis_dim = self._xaxis_combo.currentText()
+
+        # First try the configured x-axis dimension.
+        if xaxis_dim:
+            for layer in self._viewer.layers:
+                da = layer.metadata.get("xarray")
+                if da is not None and xaxis_dim in da.dims:
+                    return list(da.dims).index(xaxis_dim)
+
+        # Fall back to looking for 'time'.
         for layer in self._viewer.layers:
             da = layer.metadata.get("xarray")
             if da is not None and "time" in da.dims:
                 return list(da.dims).index("time")
+
         return 0
 
     def _current_frame(self) -> float:
-        """Return the current time frame index from the viewer's step."""
+        """Return the current x-axis frame index from the viewer's step."""
         current_step = self._viewer.dims.current_step
         t_idx = self._time_dim_index()
         return float(current_step[t_idx]) if t_idx < len(current_step) else 0.0
 
     def _on_cursor_toggled(self, checked: bool) -> None:
-        """Connect or disconnect the time-step event and update the plotter."""
+        """Connect or disconnect the x-axis step event and update the plotter."""
         if checked:
-            self._viewer.dims.events.current_step.connect(self._on_time_step_changed)
+            self._viewer.dims.events.current_step.connect(self._on_xaxis_step_changed)
         else:
             try:
                 self._viewer.dims.events.current_step.disconnect(
-                    self._on_time_step_changed
+                    self._on_xaxis_step_changed
                 )
             except RuntimeError:
                 pass
@@ -355,8 +391,8 @@ class TimeSeriesPanel(QWidget):
             if checked:
                 self._plotter.set_time_cursor(self._current_frame())
 
-    def _on_time_step_changed(self, event) -> None:
-        """Forward the current napari time step to the time cursor."""
+    def _on_xaxis_step_changed(self, event) -> None:
+        """Forward the current napari x-axis step to the x-axis cursor."""
         if self._plotter is None:
             return
         current_step = event.value
@@ -368,8 +404,8 @@ class TimeSeriesPanel(QWidget):
         """Handle napari theme change."""
         if self._plotter is not None:
             self._plotter.on_theme_changed()
-        if self._series_manager is not None:
-            self._series_manager.apply_theme(self._viewer.theme)
+        if self._signals_manager is not None:
+            self._signals_manager.apply_theme(self._viewer.theme)
 
     def _find_main_window(self, widget: QWidget) -> QMainWindow | None:
         """Traverse up the widget hierarchy to find the QMainWindow.
@@ -412,6 +448,7 @@ class TimeSeriesPanel(QWidget):
 
             self._ref_combo.addItem("All image layers")
 
+            displayed_dims = set(self._viewer.dims.displayed)
             for layer in self._viewer.layers:
                 t = layer._type_string
                 if t == "points":
@@ -419,13 +456,17 @@ class TimeSeriesPanel(QWidget):
                 elif t == "labels":
                     self._labels_combo.addItem(layer.name)
                 elif t == "image" and not getattr(layer, "rgb", False):
-                    # Only show layers that have a time dimension so spatial maps (tSNR,
-                    # CV, ...) are not offered as reference images.
+                    # Include layers with at least one non-displayed signal
+                    # dimension so spatial maps (tSNR, CV, ...) are excluded.
                     da = layer.metadata.get("xarray")
-                    has_time = (
-                        ("time" in da.dims) if da is not None else layer.data.ndim >= 4
-                    )
-                    if has_time:
+                    if da is not None:
+                        has_signal_dim = any(
+                            i not in displayed_dims and da.shape[i] > 1
+                            for i in range(da.ndim)
+                        )
+                    else:
+                        has_signal_dim = layer.data.ndim >= 4
+                    if has_signal_dim:
                         self._ref_combo.addItem(layer.name)
 
             for combo, prev in (
@@ -504,30 +545,136 @@ class TimeSeriesPanel(QWidget):
         # Mode last, triggers a replot with the already-updated layers.
         plotter.set_source_mode(mode)
 
+    def _on_active_layer_changed(self, event) -> None:
+        """Handle active layer change to update x-axis dropdown options."""
+        self._refresh_xaxis_combo()
+
+    def _on_layer_inserted(self, event) -> None:
+        """Handle layer insertion to refresh source combos and x-axis options.
+
+        Also refreshes the x-axis combo when an image layer with xarray metadata
+        is inserted, since the metadata may be attached after the layer is added
+        to the viewer (e.g., via plot_napari).
+        """
+        self._refresh_source_combos()
+
+        # Defer the x-axis combo refresh to the next event-loop iteration so that
+        # any metadata attached after the layer is inserted (e.g., by plot_napari)
+        # is available when we check for it.
+        QTimer.singleShot(0, self._deferred_xaxis_refresh)
+
+    def _deferred_xaxis_refresh(self) -> None:
+        """Refresh x-axis combo after deferring to allow metadata attachment."""
+        # Check the active layer for xarray metadata.
+        layer = self._viewer.layers.selection.active
+        if (
+            layer is not None
+            and layer._type_string == "image"
+            and "xarray" in layer.metadata
+        ):
+            self._refresh_xaxis_combo()
+
+    def _get_available_xaxis_dims(self) -> list[str]:
+        """Return list of available x-axis dimensions from the active layer.
+
+        Returns the dimension names from the active image layer's xarray
+        metadata if available, excluding:
+        - Dimensions currently displayed in the viewer (can't plot along displayed dims)
+        - Dimensions with only 1 element (can't create meaningful x-axis)
+
+        Falls back to dimension indices based on the layer's data shape if no
+        xarray metadata is present.
+        """
+        layer = self._viewer.layers.selection.active
+        if layer is None or layer._type_string != "image":
+            return []
+
+        # Get the indices of displayed dimensions from napari's dims.
+        displayed_dims = set(self._viewer.dims.displayed)
+
+        da = layer.metadata.get("xarray")
+        if da is not None:
+            # Filter out displayed dimensions and single-element dimensions.
+            return [
+                dim
+                for i, dim in enumerate(da.dims)
+                if i not in displayed_dims and da.shape[i] > 1
+            ]
+
+        # Fallback: generate generic dimension names based on data shape.
+        ndim = layer.data.ndim
+        return [
+            f"dim_{i}"
+            for i in range(ndim)
+            if i not in displayed_dims and layer.data.shape[i] > 1
+        ]
+
+    def _refresh_xaxis_combo(self) -> None:
+        """Repopulate the x-axis dimension dropdown.
+
+        Preserves the current selection if it's still available.
+        Defaults to 'time' if present, otherwise the first available dimension.
+        """
+        dims = self._get_available_xaxis_dims()
+        if not dims:
+            self._xaxis_combo.clear()
+            self._xaxis_combo.setEnabled(False)
+            return
+
+        current = self._xaxis_combo.currentText()
+        self._xaxis_combo.blockSignals(True)
+        try:
+            self._xaxis_combo.clear()
+            for dim in dims:
+                self._xaxis_combo.addItem(dim)
+
+            # Try to restore previous selection, or default to 'time', or first item.
+            if current and current in dims:
+                self._xaxis_combo.setCurrentText(current)
+            elif "time" in dims:
+                self._xaxis_combo.setCurrentText("time")
+            else:
+                self._xaxis_combo.setCurrentIndex(0)
+        finally:
+            self._xaxis_combo.blockSignals(False)
+
+        self._xaxis_combo.setEnabled(True)
+        # Notify plotter of the (potentially new) selection.
+        self._on_xaxis_changed()
+
+    def _on_xaxis_changed(self) -> None:
+        """Handle x-axis dimension selection change."""
+        self._apply_settings()
+
     def _spatial_info(
         self,
     ) -> tuple[
         tuple[int, ...] | None, tuple[float, ...] | None, tuple[float, ...] | None
     ]:
-        """Return (shape, scale, translate) for the first temporal image layer.
+        """Return (shape, scale, translate) for the spatial axes of the first signal layer.
 
+        Spatial axes are those currently displayed in the viewer (i.e., not slider axes).
         All three values come from the *same* layer so they are guaranteed to
         be consistent.  Returns `(None, None, None)` when no suitable layer
         is found.
         """
+        displayed_dims = set(self._viewer.dims.displayed)
         for layer in self._viewer.layers:
             if layer._type_string != "image":
                 continue
             da = layer.metadata.get("xarray")
-            if da is not None and "time" in da.dims:
-                t_idx = list(da.dims).index("time")
-                shape = tuple(s for dim, s in zip(da.dims, da.shape) if dim != "time")
-                scale = tuple(float(s) for i, s in enumerate(layer.scale) if i != t_idx)
-                translate = tuple(
-                    float(t) for i, t in enumerate(layer.translate) if i != t_idx
-                )
+            if da is not None:
+                # Only use layers that have at least one non-displayed signal dim.
+                signal_dims = [i for i in range(da.ndim) if i not in displayed_dims]
+                if not signal_dims:
+                    continue
+                # Extract shape/scale/translate for the displayed (spatial) axes only.
+                spatial_indices = sorted(displayed_dims & set(range(da.ndim)))
+                shape = tuple(da.shape[i] for i in spatial_indices)
+                scale = tuple(float(layer.scale[i]) for i in spatial_indices)
+                translate = tuple(float(layer.translate[i]) for i in spatial_indices)
                 return shape, scale, translate
-            # Fallback: treat dim 0 as time for 4D+ layers without xarray metadata.
+            # Fallback: treat dim 0 as the signal axis for 4D+ layers without xarray.
             if layer.data.ndim >= 4:
                 return (
                     layer.data.shape[1:],

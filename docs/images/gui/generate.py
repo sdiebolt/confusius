@@ -143,10 +143,10 @@ except Exception as exc:
     print(f"  plugin-data-io.png failed: {exc}")
 
 # ---------------------------------------------------------------------------
-# 2. Time Series panel — hover mode, voxel time series at spatial centre
+# 2. Signals panel — hover mode, voxel time series at spatial centre
 # ---------------------------------------------------------------------------
 
-print("Generating plugin-time-series.png …")
+print("Generating plugin-signals.png …")
 
 try:
     import numpy as np
@@ -158,18 +158,18 @@ try:
     viewer2.window.add_dock_widget(widget2, name="ConfUSIus", area="right")
     _qt_sleep(200)
 
-    # Open Time Series panel (index 1).
+    # Open Signals panel (index 1).
     _open_accordion(widget2, 1)
 
-    # Retrieve the TimeSeriesPanel from the accordion container layout.
+    # Retrieve the Signals panel from the accordion container layout.
     _container2 = widget2._accordion_btns[0][0].parent()
     ts_panel = _container2.layout().itemAt(2 * 1 + 1).widget()
 
-    # Open the bottom dock with the time series plotter.
+    # Open the bottom dock with the signals plotter.
     plotter = ts_panel._ensure_plotter()
     _qt_sleep(350)  # Let the dock resize QTimer.singleShot(200, …) fire.
 
-    # Inject a time series from the spatial centre of the volume directly,
+    # Inject a signal from the spatial centre of the volume directly,
     # bypassing the actual mouse event so no display is needed.
     layer2 = viewer2.layers[0]
     center_data = np.array([0] + [s // 2 for s in layer2.data.shape[1:]], dtype=float)
@@ -180,11 +180,11 @@ try:
 
     viewer2.window._qt_window.resize(1400, 1050)
     get_qapp().processEvents()
-    _napari_screenshot(viewer2, str(HERE / "plugin-time-series.png"))
+    _napari_screenshot(viewer2, str(HERE / "plugin-signals.png"))
     viewer2.close()
-    print("  Saved plugin-time-series.png")
+    print("  Saved plugin-signals.png")
 except Exception as exc:
-    print(f"  plugin-time-series.png failed: {exc}")
+    print(f"  plugin-signals.png failed: {exc}")
 
 # ---------------------------------------------------------------------------
 # 3. QC panel — DVARS, Carpet plot, and CV computed and displayed
@@ -242,10 +242,10 @@ except Exception as exc:
     print(f"  plugin-qc.png failed: {exc}")
 
 # ---------------------------------------------------------------------------
-# 4. Time Series panel — points mode, 2 points with distinct face colours
+# 4. Signals panel — points mode, 2 points with distinct face colours
 # ---------------------------------------------------------------------------
 
-print("Generating plugin-time-series-points.png …")
+print("Generating plugin-signals-points.png …")
 
 try:
     import numpy as np
@@ -257,7 +257,7 @@ try:
     viewer4.window.add_dock_widget(widget4, name="ConfUSIus", area="right")
     _qt_sleep(200)
 
-    # Open Time Series panel (index 1).
+    # Open Signals panel (index 1).
     _open_accordion(widget4, 1)
     _container4 = widget4._accordion_btns[0][0].parent()
     ts_panel4 = _container4.layout().itemAt(2 * 1 + 1).widget()
@@ -296,17 +296,17 @@ try:
 
     viewer4.window._qt_window.resize(1400, 1050)
     get_qapp().processEvents()
-    _napari_screenshot(viewer4, str(HERE / "plugin-time-series-points.png"))
+    _napari_screenshot(viewer4, str(HERE / "plugin-signals-points.png"))
     viewer4.close()
-    print("  Saved plugin-time-series-points.png")
+    print("  Saved plugin-signals-points.png")
 except Exception as exc:
-    print(f"  plugin-time-series-points.png failed: {exc}")
+    print(f"  plugin-signals-points.png failed: {exc}")
 
 # ---------------------------------------------------------------------------
-# 5. Time Series panel — labels mode, 3 labelled regions
+# 5. Signals panel — labels mode, 3 labelled regions
 # ---------------------------------------------------------------------------
 
-print("Generating plugin-time-series-labels.png …")
+print("Generating plugin-signals-labels.png …")
 
 try:
     import numpy as np
@@ -318,7 +318,7 @@ try:
     viewer5.window.add_dock_widget(widget5, name="ConfUSIus", area="right")
     _qt_sleep(200)
 
-    # Open Time Series panel (index 1).
+    # Open Signals panel (index 1).
     _open_accordion(widget5, 1)
     _container5 = widget5._accordion_btns[0][0].parent()
     ts_panel5 = _container5.layout().itemAt(2 * 1 + 1).widget()
@@ -367,11 +367,11 @@ try:
 
     viewer5.window._qt_window.resize(1400, 1050)
     get_qapp().processEvents()
-    _napari_screenshot(viewer5, str(HERE / "plugin-time-series-labels.png"))
+    _napari_screenshot(viewer5, str(HERE / "plugin-signals-labels.png"))
     viewer5.close()
-    print("  Saved plugin-time-series-labels.png")
+    print("  Saved plugin-signals-labels.png")
 except Exception as exc:
-    print(f"  plugin-time-series-labels.png failed: {exc}")
+    print(f"  plugin-signals-labels.png failed: {exc}")
 
 # ---------------------------------------------------------------------------
 

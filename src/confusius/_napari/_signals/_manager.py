@@ -1,4 +1,4 @@
-"""Floating manager window for imported and live time series."""
+"""Floating manager window for imported signals."""
 
 from __future__ import annotations
 
@@ -21,8 +21,8 @@ from qtpy.QtWidgets import (
     QWidget,
 )
 
+from confusius._napari._signals._store import LiveSignal, SignalStore
 from confusius._napari._theme import get_napari_colors
-from confusius._napari._time_series._store import LiveSeries, TimeSeriesStore
 
 _SOURCE_LABELS = {
     "mouse": "Mouse",
@@ -56,26 +56,26 @@ def _colored_button_style(r: int, g: int, b: int) -> str:
     )
 
 
-class TimeSeriesManagerDialog(QDialog):
-    """Modeless dialog for managing live and imported time series.
+class SignalsManagerDialog(QDialog):
+    """Modeless dialog for managing live and imported signals.
 
-    Live series (from mouse, points, or labels layers) appear at the top of
-    the table.  They can be renamed, recolored, and hidden but not removed.
-    Imported series appear below and support the full set of operations.
+    Live signals (from mouse, points, or labels layers) appear at the top of the table.
+    They can be renamed, recolored, and hidden but not removed. Imported signals appear
+    below and support the full set of operations.
 
     Parameters
     ----------
-    store : TimeSeriesStore
-        Shared time-series store.
+    store : SignalStore
+        Shared imported-signals store.
     parent : QWidget | None, optional
         Optional parent widget.
     """
 
-    def __init__(self, store: TimeSeriesStore, parent: QWidget | None = None) -> None:
+    def __init__(self, store: SignalStore, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._store = store
         self._updating_table = False
-        self.setWindowTitle("Time Series Manager")
+        self.setWindowTitle("Signal Manager")
         self.setModal(False)
         self.resize(720, 360)
         self._setup_ui()
@@ -96,13 +96,13 @@ class TimeSeriesManagerDialog(QDialog):
         button_row.addWidget(self._import_btn)
 
         self._remove_btn = QPushButton("Remove")
-        self._remove_btn.setToolTip("Remove selected imported series")
+        self._remove_btn.setToolTip("Remove selected imported signal")
         self._remove_btn.setStyleSheet(_colored_button_style(200, 80, 80))
         self._remove_btn.clicked.connect(self._remove_selected)
         button_row.addWidget(self._remove_btn)
 
         self._clear_btn = QPushButton("Clear All Imported")
-        self._clear_btn.setToolTip("Remove all imported series")
+        self._clear_btn.setToolTip("Remove all imported signals")
         self._clear_btn.setStyleSheet(_colored_button_style(200, 80, 80))
         self._clear_btn.clicked.connect(self._store.clear)
         button_row.addWidget(self._clear_btn)
@@ -138,62 +138,62 @@ class TimeSeriesManagerDialog(QDialog):
         """Refresh the table from the shared store."""
         self._updating_table = True
         try:
-            live_list = self._store.live_series()
-            imported_list = self._store.imported_series()
+            live_list = self._store.live_signals()
+            imported_list = self._store.imported_signals()
             total = len(live_list) + len(imported_list)
             self._table.setRowCount(total)
 
             row = 0
-            for series in live_list:
-                self._set_live_row(row, series)
+            for signal in live_list:
+                self._set_live_row(row, signal)
                 row += 1
-            for series in imported_list:
-                self._set_imported_row(row, series)
+            for signal in imported_list:
+                self._set_imported_row(row, signal)
                 row += 1
         finally:
             self._updating_table = False
 
-    def _set_live_row(self, row: int, series: LiveSeries) -> None:
-        """Populate one table row from a live series."""
+    def _set_live_row(self, row: int, signal: LiveSignal) -> None:
+        """Populate one table row from a live signal."""
         visible_item = QTableWidgetItem()
         visible_item.setFlags(
             Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsUserCheckable
         )
         visible_item.setCheckState(
-            Qt.CheckState.Checked if series.visible else Qt.CheckState.Unchecked
+            Qt.CheckState.Checked if signal.visible else Qt.CheckState.Unchecked
         )
-        visible_item.setData(Qt.ItemDataRole.UserRole, series.id)
+        visible_item.setData(Qt.ItemDataRole.UserRole, signal.id)
         self._table.setItem(row, 0, visible_item)
 
-        name_item = QTableWidgetItem(series.name)
+        name_item = QTableWidgetItem(signal.name)
         name_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsEditable)
-        name_item.setData(Qt.ItemDataRole.UserRole, series.id)
+        name_item.setData(Qt.ItemDataRole.UserRole, signal.id)
         self._table.setItem(row, 1, name_item)
 
         color_btn = QPushButton()
         color_btn.setToolTip("Click to change color")
         color_btn.setStyleSheet(
-            f"background-color: {series.color};"
+            f"background-color: {signal.color};"
             "border: 1px solid rgba(128, 128, 128, 0.6);"
             "border-radius: 3px;"
             "margin: 3px 6px;"
         )
         color_btn.clicked.connect(
-            lambda _checked=False, sid=series.id: self._choose_color(sid)
+            lambda _checked=False, sid=signal.id: self._choose_color(sid)
         )
         self._table.setCellWidget(row, 2, color_btn)
 
-        source_label = _SOURCE_LABELS.get(series.source_type, series.source_type)
+        source_label = _SOURCE_LABELS.get(signal.source_type, signal.source_type)
         source_item = QTableWidgetItem(source_label)
         source_item.setFlags(Qt.ItemFlag.ItemIsEnabled)
-        source_item.setData(Qt.ItemDataRole.UserRole, series.id)
+        source_item.setData(Qt.ItemDataRole.UserRole, signal.id)
         italic_font = QFont()
         italic_font.setItalic(True)
         source_item.setFont(italic_font)
         self._table.setItem(row, 3, source_item)
 
-    def _set_imported_row(self, row: int, series) -> None:
-        """Populate one table row from an imported series."""
+    def _set_imported_row(self, row: int, signal) -> None:
+        """Populate one table row from an imported signal."""
         visible_item = QTableWidgetItem()
         visible_item.setFlags(
             Qt.ItemFlag.ItemIsEnabled
@@ -201,113 +201,113 @@ class TimeSeriesManagerDialog(QDialog):
             | Qt.ItemFlag.ItemIsUserCheckable
         )
         visible_item.setCheckState(
-            Qt.CheckState.Checked if series.visible else Qt.CheckState.Unchecked
+            Qt.CheckState.Checked if signal.visible else Qt.CheckState.Unchecked
         )
-        visible_item.setData(Qt.ItemDataRole.UserRole, series.id)
+        visible_item.setData(Qt.ItemDataRole.UserRole, signal.id)
         self._table.setItem(row, 0, visible_item)
 
-        name_item = QTableWidgetItem(series.name)
+        name_item = QTableWidgetItem(signal.name)
         name_item.setFlags(
             Qt.ItemFlag.ItemIsEnabled
             | Qt.ItemFlag.ItemIsSelectable
             | Qt.ItemFlag.ItemIsEditable
         )
-        name_item.setData(Qt.ItemDataRole.UserRole, series.id)
+        name_item.setData(Qt.ItemDataRole.UserRole, signal.id)
         self._table.setItem(row, 1, name_item)
 
         color_btn = QPushButton()
         color_btn.setToolTip("Click to change color")
         color_btn.setStyleSheet(
-            f"background-color: {series.color};"
+            f"background-color: {signal.color};"
             "border: 1px solid rgba(128, 128, 128, 0.6);"
             "border-radius: 3px;"
             "margin: 3px 6px;"
         )
         color_btn.clicked.connect(
-            lambda _checked=False, sid=series.id: self._choose_color(sid)
+            lambda _checked=False, sid=signal.id: self._choose_color(sid)
         )
         self._table.setCellWidget(row, 2, color_btn)
 
-        source_item = QTableWidgetItem(series.source_label)
+        source_item = QTableWidgetItem(signal.source_label)
         source_item.setFlags(Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
-        source_item.setData(Qt.ItemDataRole.UserRole, series.id)
+        source_item.setData(Qt.ItemDataRole.UserRole, signal.id)
         self._table.setItem(row, 3, source_item)
 
     # -- Item edit callbacks --------------------------------------------------
 
-    def _is_live_id(self, series_id: str) -> bool:
-        """Return whether a series ID belongs to a live series."""
-        return series_id.startswith(("mouse-", "point-", "label-"))
+    def _is_live_id(self, signal_id: str) -> bool:
+        """Return whether a signal ID belongs to a live signal."""
+        return signal_id.startswith(("mouse-", "point-", "label-"))
 
     def _on_item_changed(self, item: QTableWidgetItem) -> None:
         """Apply visibility or name edits back to the store."""
         if self._updating_table:
             return
 
-        series_id = item.data(Qt.ItemDataRole.UserRole)
-        if not isinstance(series_id, str):
+        signal_id = item.data(Qt.ItemDataRole.UserRole)
+        if not isinstance(signal_id, str):
             return
 
-        is_live = self._is_live_id(series_id)
+        is_live = self._is_live_id(signal_id)
 
         try:
             if item.column() == 0:
                 visible = item.checkState() == Qt.CheckState.Checked
                 if is_live:
-                    self._store.set_live_series_visible(series_id, visible)
+                    self._store.set_live_signal_visible(signal_id, visible)
                 else:
-                    self._store.set_series_visible(series_id, visible)
+                    self._store.set_signal_visible(signal_id, visible)
             elif item.column() == 1:
                 if is_live:
-                    self._store.rename_live_series(series_id, item.text())
+                    self._store.rename_live_signal(signal_id, item.text())
                 else:
-                    self._store.rename_series(series_id, item.text())
+                    self._store.rename_signal(signal_id, item.text())
         except Exception as exc:  # noqa: BLE001
             show_error(str(exc))
             self._refresh_table()
 
-    def _choose_color(self, series_id: str) -> None:
-        """Open a color picker for a series."""
-        is_live = self._is_live_id(series_id)
+    def _choose_color(self, signal_id: str) -> None:
+        """Open a color picker for a signal."""
+        is_live = self._is_live_id(signal_id)
 
         if is_live:
-            live = self._store.get_live_series(series_id)
+            live = self._store.get_live_signal(signal_id)
             current = live.color if live is not None else "#ffffff"
         else:
             current = next(
-                (s.color for s in self._store.imported_series() if s.id == series_id),
+                (s.color for s in self._store.imported_signals() if s.id == signal_id),
                 "#ffffff",
             )
 
-        color = QColorDialog.getColor(QColor(current), self, "Choose Series Color")
+        color = QColorDialog.getColor(QColor(current), self, "Choose Signal Color")
         if not color.isValid():
             return
 
         try:
             if is_live:
-                self._store.set_live_series_color(series_id, color.name())
+                self._store.set_live_signal_color(signal_id, color.name())
             else:
-                self._store.set_series_color(series_id, color.name())
+                self._store.set_signal_color(signal_id, color.name())
         except Exception as exc:  # noqa: BLE001
             show_error(str(exc))
 
     def _remove_selected(self) -> None:
-        """Remove the currently selected imported series (live series are skipped)."""
-        series_ids = []
+        """Remove the currently selected imported signal (live signals are skipped)."""
+        signal_ids = []
         for index in self._table.selectionModel().selectedRows():
             item = self._table.item(index.row(), 1)
             if item is None:
                 continue
-            series_id = item.data(Qt.ItemDataRole.UserRole)
-            if isinstance(series_id, str) and not self._is_live_id(series_id):
-                series_ids.append(series_id)
-        self._store.remove_series(series_ids)
+            signal_id = item.data(Qt.ItemDataRole.UserRole)
+            if isinstance(signal_id, str) and not self._is_live_id(signal_id):
+                signal_ids.append(signal_id)
+        self._store.remove_signals(signal_ids)
 
     def _import_file(self) -> None:
         """Import one CSV or TSV file into the shared store."""
         path_str, _ = QFileDialog.getOpenFileName(
             self,
-            "Import Time Series",
+            "Import Signal",
             "",
             "Delimited text (*.tsv *.csv);;TSV (*.tsv);;CSV (*.csv);;All files (*)",
         )
@@ -321,7 +321,7 @@ class TimeSeriesManagerDialog(QDialog):
             return
 
         count = len(imported)
-        noun = "series" if count != 1 else "time series"
+        noun = "signal" if count != 1 else "signals"
         show_info(f"Imported {count} {noun} from {Path(path_str).name}")
 
     def apply_theme(self, theme_name: str) -> None:

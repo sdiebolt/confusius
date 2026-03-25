@@ -1791,7 +1791,7 @@ def _prepare_carpet_data(
     detrend_order : int, optional
         Polynomial order for detrending. See `plot_carpet`.
     standardize : bool, default: True
-        Whether to z-score each voxel time series.
+        Whether to z-score each voxel signals.
     vmin : float, optional
         Lower colormap bound. Computed from data when `None`.
     vmax : float, optional
@@ -1953,7 +1953,7 @@ def plot_carpet(
 
     A carpet plot (also known as "grayplot" or "Power plot") displays voxel
     intensities as a 2D raster image with time on the x-axis and voxels on
-    the y-axis. Each row represents one voxel's time series, typically
+    the y-axis. Each row represents one voxel's signals, typically
     standardized to z-scores.
 
     Parameters
@@ -1973,7 +1973,7 @@ def plot_carpet(
 
         If not provided, no detrending is applied.
     standardize : bool, default: True
-        Whether to standardize each voxel's time series to z-scores.
+        Whether to standardize each voxel's signals to z-scores.
     cmap : str, default: "gray"
         Matplotlib colormap name.
     vmin : float, optional

@@ -8,9 +8,9 @@ from qtpy.QtGui import QColor, QIcon, QPainter, QPixmap
 from qtpy.QtWidgets import QToolBar
 
 from confusius._napari._export import (
-    ExportSeries,
+    ExportSignal,
     resolve_delimited_export_path,
-    write_delimited_series,
+    write_delimited_signals,
 )
 from confusius._napari._theme import recolor_toolbar_icons
 
@@ -77,16 +77,16 @@ def test_resolve_delimited_export_path_uses_selected_filter():
     assert delimiter == "\t"
 
 
-def test_write_delimited_series_merges_different_time_axes(tmp_path):
+def test_write_delimited_signals_merges_different_time_axes(tmp_path):
     out_path = tmp_path / "export.tsv"
 
     import numpy as np
 
-    write_delimited_series(
+    write_delimited_signals(
         out_path,
         [
-            ExportSeries("live", np.array([0, 1, 2]), np.array([10, 11, 12])),
-            ExportSeries("imported", np.array([1, 2, 3]), np.array([20, 21, 22])),
+            ExportSignal("live", np.array([0, 1, 2]), np.array([10, 11, 12])),
+            ExportSignal("imported", np.array([1, 2, 3]), np.array([20, 21, 22])),
         ],
         delimiter="\t",
     )
@@ -101,21 +101,21 @@ def test_write_delimited_series_merges_different_time_axes(tmp_path):
     ]
 
 
-def test_write_delimited_series_rejects_mismatched_lengths(tmp_path):
+def test_write_delimited_signals_rejects_mismatched_lengths(tmp_path):
     out_path = tmp_path / "broken.tsv"
 
     import numpy as np
 
     with pytest.raises(ValueError, match="different lengths"):
-        write_delimited_series(
+        write_delimited_signals(
             out_path,
-            [ExportSeries("series", np.array([0, 1]), np.array([10]))],
+            [ExportSignal("series", np.array([0, 1]), np.array([10]))],
             delimiter="\t",
         )
 
 
-def test_write_delimited_series_rejects_empty_input(tmp_path):
+def test_write_delimited_signals_rejects_empty_input(tmp_path):
     out_path = tmp_path / "empty.tsv"
 
     with pytest.raises(ValueError, match="No plotted data"):
-        write_delimited_series(out_path, [], delimiter="\t")
+        write_delimited_signals(out_path, [], delimiter="\t")

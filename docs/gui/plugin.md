@@ -42,10 +42,10 @@ Three save modes are applied automatically depending on what is available:
 | **Template** | A template layer is selected. Coordinates are borrowed from the template DataArray. |
 | **Reconstruct** | No template and no DataArray in metadata (e.g. a freshly drawn labels layer). Coordinates are reconstructed from the napari layer state (`scale`, `translate`, `axis_labels`). |
 
-## Time Series Panel
+## Signals Panel
 
-The Time Series Panel plots the fUSI signal over time for one or more spatial locations.
-The plot appears in a bottom dock that is created the first time you use the panel. A
+The Signals Panel plots fUSI signals over time for one or more spatial locations. The
+plot appears in a bottom dock that is created the first time you use the panel. A
 vertical cursor line that follows the napari time slider can optionally be enabled.
 
 ### Choosing a data source
@@ -54,34 +54,34 @@ Select an image layer from the **Layer** dropdown, then choose one of three sour
 modes:
 
 **Hover** (default)
-: Hold ++shift++ and move the mouse over the canvas. The plot updates live with the time
-  series at the cursor position, extracted from the currently selected image layer.
+: Hold ++shift++ and move the mouse over the canvas. The plot updates live with the 
+  signal at the cursor position, extracted from the currently selected image layer.
 
-![ConfUSIus Time Series panel — hover mode](../images/gui/plugin-time-series.png)
+![ConfUSIus Signals panel — hover mode](../images/gui/plugin-signals.png)
 
 **Points**
 : Select a Points layer (or click **New points layer** to create one). Each point is
   plotted as a separate line colored by its face color. Add or remove points in napari
   and the plot updates automatically.
 
-![ConfUSIus Time Series panel — points mode](../images/gui/plugin-time-series-points.png)
+![ConfUSIus Signals panel — points mode](../images/gui/plugin-signals-points.png)
 
 **Labels**
-: Select a Labels layer (or click **New labels layer** to create one). The mean time
-  series is extracted for each distinct integer label and plotted as a separate line,
+: Select a Labels layer (or click **New labels layer** to create one). The mean 
+  signal is extracted for each distinct integer label and plotted as a separate line,
   colored by the label's color in the napari colormap. This is useful for quickly
   comparing region-averaged signals after painting ROIs with napari's brush tool.
 
-![ConfUSIus Time Series panel — labels mode](../images/gui/plugin-time-series-labels.png)
+![ConfUSIus Signals panel — labels mode](../images/gui/plugin-signals-labels.png)
 
 ### Plot options
 
 | Option | Description |
 |--------|-------------|
 | **Y-axis limits** | Toggle between autoscale and manual min/max. |
-| **Z-score** | Normalize each time series to zero mean and unit variance before plotting. |
+| **Z-score** | Normalize each signal to zero mean and unit variance before plotting. |
 | **Grid** | Show or hide the background grid. |
-| **Reference image** | In Points and Labels modes, select which image layer to extract time series from. Defaults to all image layers, plotting each as a separate line. |
+| **Reference image** | In Points and Labels modes, select which image layer to extract signals from. Defaults to all image layers, plotting each as a separate line. |
 
 ## QC Panel
 
@@ -95,7 +95,7 @@ Select a layer from the **Layer** dropdown, check the metrics you want, and clic
 === "Temporal metrics"
 
     Temporal metrics are rendered as plots in the bottom dock (the same dock used by the
-    Time Series Panel, in separate tabs). Computed plots are cached and survive dock
+    Signals Panel, in separate tabs). Computed plots are cached and survive dock
     closure: closing and reopening the bottom dock restores the last computed result.
 
     **DVARS**

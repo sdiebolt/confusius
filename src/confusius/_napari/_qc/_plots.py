@@ -14,10 +14,10 @@ from qtpy.QtCore import QSize, QTimer
 from qtpy.QtWidgets import QSizePolicy, QTabWidget, QVBoxLayout, QWidget
 
 from confusius._napari._export import (
-    ExportSeries,
-    prepare_export_series,
+    ExportSignal,
+    prepare_export_signal,
     prompt_delimited_export_path,
-    write_delimited_series,
+    write_delimited_signals,
 )
 from confusius._napari._theme import (
     create_export_button,
@@ -36,8 +36,8 @@ class QCPlotsWidget(QWidget):
     Tabs
     ----
     DVARS
-        Timeseries line plot of the DVARS metric, with a navigation toolbar and a
-        blitted vertical cursor tracking the napari time slider.
+        Line plot of the DVARS metric, with a navigation toolbar and a blitted vertical
+        cursor tracking the napari time slider.
     Carpet plot
         Raster image of voxel intensities over time, with a matching cursor.
 
@@ -54,7 +54,7 @@ class QCPlotsWidget(QWidget):
         # Cached data for theme-change redraws.
         self._dvars_da: xr.DataArray | None = None
         self._dvars_layer_name: str = ""
-        self._dvars_export_series: list[ExportSeries] = []
+        self._dvars_export_signal: list[ExportSignal] = []
         self._data_da: dict | None = None  # pre-computed carpet dict
         self._carpet_layer_name: str = ""
         # Blitting state per plot.
@@ -66,7 +66,7 @@ class QCPlotsWidget(QWidget):
         self._carpet_bg = None
         # Last known time value so vlines are restored correctly after replot.
         self._current_time_val: float | None = None
-        # Throttle blit calls to ~60 fps (see TimeSeriesPlotter for rationale).
+        # Throttle blit calls to ~60 fps (see SignalsPlotter for rationale).
         self._cursor_timer = QTimer(self)
         self._cursor_timer.setSingleShot(True)
         self._cursor_timer.setInterval(16)  # ms → ~60 fps
@@ -141,18 +141,18 @@ class QCPlotsWidget(QWidget):
         if toolbar is self._dvars_toolbar:
             style_export_button(self._dvars_export_button, colors)
 
-    def _set_dvars_export_series(self, series: list[ExportSeries]) -> None:
-        """Store the currently plotted DVARS series for export."""
-        self._dvars_export_series = prepare_export_series(series)
-        self._dvars_export_button.setEnabled(bool(self._dvars_export_series))
+    def _set_dvars_export_signal(self, signal: list[ExportSignal]) -> None:
+        """Store the currently plotted DVARS signal for export."""
+        self._dvars_export_signal = prepare_export_signal(signal)
+        self._dvars_export_button.setEnabled(bool(self._dvars_export_signal))
 
     def _write_dvars_delimited(self, path: Path, delimiter: str) -> None:
         """Write the current DVARS trace to a delimited text file."""
-        write_delimited_series(path, self._dvars_export_series, delimiter=delimiter)
+        write_delimited_signals(path, self._dvars_export_signal, delimiter=delimiter)
 
     def _save_dvars(self) -> None:
         """Open a save dialog and export the DVARS trace as CSV or TSV."""
-        if not self._dvars_export_series:
+        if not self._dvars_export_signal:
             show_error("No DVARS plot available to export.")
             return
 
@@ -203,12 +203,12 @@ class QCPlotsWidget(QWidget):
     # ------------------------------------------------------------------
 
     def update_dvars(self, dvars_da: xr.DataArray, layer_name: str = "") -> None:
-        """Redraw the DVARS timeseries using the current napari theme.
+        """Redraw the DVARS signal using the current napari theme.
 
         Parameters
         ----------
         dvars_da : xarray.DataArray
-            1-D DVARS timeseries, optionally with a `"time"` coordinate.
+            1D DVARS signal, optionally with a `"time"` coordinate.
         layer_name : str, optional
             Name of the source layer, shown as the plot title.
         """
@@ -239,7 +239,7 @@ class QCPlotsWidget(QWidget):
         else:
             x = np.arange(len(dvars_da), dtype=float)
         xlabel = "Time (s)" if time_coord is not None else "Frame"
-        self._set_dvars_export_series([ExportSeries("DVARS", x, dvars_da.values)])
+        self._set_dvars_export_signal([ExportSignal("DVARS", x, dvars_da.values)])
 
         ax.plot(x, dvars_da.values, color=colors["accent"], linewidth=1.2)
         ax.set_xlabel(xlabel, color=colors["fg"], fontsize=9)
