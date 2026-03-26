@@ -212,6 +212,22 @@ class TestValidation:
         assert isinstance(result.VolumeTiming, list)
         assert result.VolumeTiming == [0.0, 1.5, 3.0]
 
+    def test_format_validation_error(self):
+        """Test that format_validation_error produces clean messages."""
+        from confusius.bids.validation import format_validation_error
+
+        try:
+            bids.validate_metadata({"VolumeTiming": [0.0, 1.0, 2.0]})
+        except ValidationError as e:
+            formatted = format_validation_error(e)
+
+            # Should contain the error message
+            assert "FrameAcquisitionDuration is REQUIRED" in formatted
+            # Should NOT contain verbose pydantic details
+            assert "type=value_error" not in formatted
+            assert "input_value=" not in formatted
+            assert "errors.pydantic.dev" not in formatted
+
 
 class TestSliceTimeCoordinate:
     """Test slice timing coordinate creation and extraction."""
