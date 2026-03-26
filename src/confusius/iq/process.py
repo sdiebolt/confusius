@@ -109,7 +109,6 @@ def _format_clutter_filter_spec(
 
 def compute_processed_volume_times(
     volume_times: npt.ArrayLike,
-    n_input_volumes: int,
     clutter_window_width: int,
     clutter_window_stride: int,
     inner_window_width: int,
@@ -125,8 +124,8 @@ def compute_processed_volume_times(
 
     1. **Outer windows** (clutter filtering): Defined by `clutter_window_width` and
        `clutter_window_stride`.
-    2. **Inner windows** (Doppler/velocity): Within each outer window, defined by
-       `inner_window_width` and `inner_window_stride`.
+    2. **Inner windows** (Doppler/velocity/B-mode): Within each outer window, defined by
+      `inner_window_width` and `inner_window_stride`.
 
     Each output volume corresponds to one inner window. This function computes the
     timestamp for each output volume based on the provided `timing_reference`.
@@ -135,8 +134,6 @@ def compute_processed_volume_times(
     ----------
     volume_times : array_like
         Timestamps of the input IQ volumes, in seconds.
-    n_input_volumes : int
-        Number of input IQ volumes. Used to compute window counts.
     clutter_window_width : int
         Width of the outer (clutter filtering) window, in volumes.
     clutter_window_stride : int
@@ -165,7 +162,6 @@ def compute_processed_volume_times(
     >>> volume_times = np.arange(100) * 0.1
     >>> output_times = compute_processed_volume_times(
     ...     volume_times,
-    ...     n_input_volumes=100,
     ...     clutter_window_width=50,
     ...     clutter_window_stride=50,
     ...     inner_window_width=50,
@@ -178,48 +174,42 @@ def compute_processed_volume_times(
     volume_times = np.asarray(volume_times)
 
     n_outer_windows = (
-        n_input_volumes - clutter_window_width
+        len(volume_times) - clutter_window_width
     ) // clutter_window_stride + 1
 
     n_inner_windows = (
         clutter_window_width - inner_window_width
     ) // inner_window_stride + 1
 
-    output_times = []
+    outer_starts = np.arange(n_outer_windows) * clutter_window_stride
+    inner_offsets = np.arange(n_inner_windows) * inner_window_stride
 
-    for outer_idx in range(n_outer_windows):
-        outer_start = outer_idx * clutter_window_stride
+    if timing_reference == "start":
+        offset = 0.0
+    elif timing_reference == "center":
+        offset = (inner_window_width - 1) / 2
+    elif timing_reference == "end":
+        offset = inner_window_width - 1.0
+    else:
+        raise ValueError(
+            f"Unknown timing_reference: {timing_reference}. "
+            "Must be 'start', 'center', or 'end'."
+        )
 
-        for inner_idx in range(n_inner_windows):
-            inner_start = outer_start + inner_idx * inner_window_stride
+    # Shape: (n_outer_windows, n_inner_windows), then flatten.
+    ref_indices = (
+        outer_starts[:, np.newaxis] + inner_offsets[np.newaxis, :] + offset
+    ).ravel()
 
-            if timing_reference == "start":
-                ref_idx: int | float = inner_start
-            elif timing_reference == "center":
-                ref_idx = inner_start + (inner_window_width - 1) / 2
-            elif timing_reference == "end":
-                ref_idx = inner_start + inner_window_width - 1
-            else:
-                raise ValueError(
-                    f"Unknown timing_reference: {timing_reference}. "
-                    "Must be 'start', 'center', or 'end'."
-                )
+    # Interpolate timestamps for fractional indices (e.g., window center).
+    low_idx = np.floor(ref_indices).astype(int)
+    frac = ref_indices - low_idx
+    high_idx = np.minimum(low_idx + 1, len(volume_times) - 1)
 
-            # Interpolate timestamp for fractional indices (e.g., window center).
-            if ref_idx == int(ref_idx):
-                output_times.append(volume_times[int(ref_idx)])
-            else:
-                low_idx = int(ref_idx)
-                high_idx = low_idx + 1
-                frac = ref_idx - low_idx
-                output_times.append(
-                    volume_times[low_idx] * (1 - frac) + volume_times[high_idx] * frac
-                )
-
-    return np.array(output_times)
+    return volume_times[low_idx] * (1 - frac) + volume_times[high_idx] * frac
 
 
-def _process_block_with_clutter_filter(
+def process_iq_block_with_clutter_filter(
     block: npt.NDArray,
     process_block_func: Callable[Concatenate[npt.NDArray, ...], npt.NDArray],
     clutter_mask: npt.NDArray | None = None,
@@ -238,7 +228,7 @@ def _process_block_with_clutter_filter(
 
     Four clutter filters are available (see `filter_method`). After clutter filtering,
     reduction is performed using a sliding window across volumes and a user-provided
-        processing function (`process_block_func`).
+    processing function (`process_block_func`).
 
     Parameters
     ----------
@@ -292,8 +282,8 @@ def _process_block_with_clutter_filter(
         When using the Butterworth clutter filter, the sampling frequency, in hertz.
     butterworth_order : int, default: 4
         When using the Butterworth clutter filter, the order of the filter.
-    kwargs
-        Keyword arguments passed to `process_block_func`.
+    **kwargs
+        Additional keyword arguments passed to `process_block_func`.
 
     Returns
     -------
@@ -446,7 +436,7 @@ def compute_power_doppler_volume(
         """
         return np.mean(np.abs(block) ** 2, axis=0)
 
-    return _process_block_with_clutter_filter(
+    return process_iq_block_with_clutter_filter(
         block=block,
         process_block_func=process_block_func,
         clutter_mask=clutter_mask,
@@ -657,7 +647,7 @@ def compute_axial_velocity_volume(
             / (4 * np.pi * transmit_frequency)
         )
 
-    return _process_block_with_clutter_filter(
+    return process_iq_block_with_clutter_filter(
         block=block,
         process_block_func=process_block_func,
         clutter_mask=clutter_mask,
@@ -925,7 +915,6 @@ def process_iq_to_power_doppler(
 
     output_times_values = compute_processed_volume_times(
         volume_times=iq.coords["time"].values,
-        n_input_volumes=dask_iq.shape[0],
         clutter_window_width=clutter_window_width,
         clutter_window_stride=clutter_window_stride,
         inner_window_width=doppler_window_width,
@@ -1030,7 +1019,6 @@ def process_iq_to_bmode(
 
     output_times_values = compute_processed_volume_times(
         volume_times=iq.coords["time"].values,
-        n_input_volumes=dask_iq.shape[0],
         clutter_window_width=bmode_window_width,
         clutter_window_stride=bmode_window_stride,
         inner_window_width=bmode_window_width,
@@ -1259,7 +1247,6 @@ def process_iq_to_axial_velocity(
 
     output_times_values = compute_processed_volume_times(
         volume_times=iq.coords["time"].values,
-        n_input_volumes=dask_iq.shape[0],
         clutter_window_width=clutter_window_width,
         clutter_window_stride=clutter_window_stride,
         inner_window_width=velocity_window_width,

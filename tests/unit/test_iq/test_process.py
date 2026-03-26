@@ -34,7 +34,6 @@ class TestComputeProcessedVolumeTimes:
         volume_times = np.arange(10) * 0.1  # 0.0, 0.1, ..., 0.9
         result = compute_processed_volume_times(
             volume_times,
-            n_input_volumes=10,
             clutter_window_width=10,
             clutter_window_stride=10,
             inner_window_width=10,
@@ -46,20 +45,49 @@ class TestComputeProcessedVolumeTimes:
         else:
             assert_array_equal(result, expected)
 
-    def test_multiple_windows_correct_count(self):
-        """Multiple windows produce correct number of output timestamps."""
+    def test_multiple_windows_values(self):
+        """Multiple windows produce correct timestamps."""
         volume_times = np.arange(100) * 0.1
         result = compute_processed_volume_times(
             volume_times,
-            n_input_volumes=100,
             clutter_window_width=50,
             clutter_window_stride=50,
             inner_window_width=25,
             inner_window_stride=25,
             timing_reference="center",
         )
-        # 2 outer windows, 2 inner windows each = 4 output times.
-        assert len(result) == 4
+        # 2 outer windows (start at 0, 50), 2 inner windows each (offset 0, 25).
+        # Inner window centers: indices 12, 37, 62, 87.
+        assert_allclose(result, [1.2, 3.7, 6.2, 8.7])
+
+    def test_nonuniform_spacing(self):
+        """Interpolation works correctly with non-uniform volume times."""
+        # Non-uniform timestamps: accelerating spacing.
+        volume_times = np.array([0.0, 0.1, 0.3, 0.6, 1.0])
+        result = compute_processed_volume_times(
+            volume_times,
+            clutter_window_width=5,
+            clutter_window_stride=5,
+            inner_window_width=5,
+            inner_window_stride=5,
+            timing_reference="center",
+        )
+        # Center index = 2.0 (integer), so result is volume_times[2] = 0.3.
+        assert_array_equal(result, [0.3])
+
+    def test_nonuniform_spacing_interpolated(self):
+        """Fractional center interpolates correctly with non-uniform times."""
+        volume_times = np.array([0.0, 0.1, 0.3, 0.6, 1.0, 1.5])
+        result = compute_processed_volume_times(
+            volume_times,
+            clutter_window_width=6,
+            clutter_window_stride=6,
+            inner_window_width=6,
+            inner_window_stride=6,
+            timing_reference="center",
+        )
+        # Center index = 2.5, interpolate between times[2]=0.3 and times[3]=0.6.
+        assert_allclose(result, [0.45])
 
     def test_invalid_timing_reference_raises(self):
         """Invalid timing_reference raises ValueError."""
@@ -67,7 +95,6 @@ class TestComputeProcessedVolumeTimes:
         with pytest.raises(ValueError, match="Unknown timing_reference"):
             compute_processed_volume_times(
                 volume_times,
-                n_input_volumes=10,
                 clutter_window_width=10,
                 clutter_window_stride=10,
                 inner_window_width=10,
@@ -80,7 +107,6 @@ class TestComputeProcessedVolumeTimes:
         volume_times = np.arange(100) * 0.1
         result = compute_processed_volume_times(
             volume_times,
-            n_input_volumes=100,
             clutter_window_width=50,
             clutter_window_stride=50,
             inner_window_width=50,
