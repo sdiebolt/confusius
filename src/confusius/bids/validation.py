@@ -11,7 +11,14 @@ from collections.abc import Mapping
 from typing import Any, Literal
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 from confusius._utils import find_stack_level
 
@@ -394,6 +401,35 @@ def validate_metadata(metadata: Mapping[str, Any]) -> "FUSIBIDSMetadata":
         If the metadata fails validation.
     """
     return FUSIBIDSMetadata.model_validate(metadata)
+
+
+def format_validation_error(error: ValidationError) -> str:
+    """Format a Pydantic ValidationError into a concise, readable message.
+
+    Extracts just the essential error information without the verbose details
+    like input values, types, or URLs.
+
+    Parameters
+    ----------
+    error : ValidationError
+        The Pydantic validation error to format.
+
+    Returns
+    -------
+    str
+        A formatted error message with just the error locations and messages.
+
+    Examples
+    --------
+    >>> try:
+    ...     validate_metadata({"Manufacturer": "Test"})
+    ... except ValidationError as e:
+    ...     msg = format_validation_error(e)
+    """
+    error_messages = []
+    for err in error.errors():
+        error_messages.append(f"  - {err['msg']}")
+    return "\n".join(error_messages)
 
 
 FUSI_BIDS_FIELDS: frozenset[str] = frozenset(FUSIBIDSMetadata.model_fields.keys())

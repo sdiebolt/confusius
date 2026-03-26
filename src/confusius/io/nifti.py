@@ -14,10 +14,11 @@ import dask.array as da
 import numpy as np
 import numpy.typing as npt
 import xarray as xr
+from pydantic import ValidationError
 
 from confusius._utils import _representative_step, _spacing_for_dim, find_stack_level
 from confusius.bids import from_bids, to_bids
-from confusius.bids.validation import validate_metadata
+from confusius.bids.validation import format_validation_error, validate_metadata
 from confusius.io.utils import check_path
 from confusius.registration.affines import decompose_affine
 
@@ -524,6 +525,11 @@ def load_nifti(
         if sidecar_data:
             try:
                 validate_metadata(sidecar_data)
+            except ValidationError as e:
+                warnings.warn(
+                    f"fUSI-BIDS validation warning:\n{format_validation_error(e)}",
+                    stacklevel=find_stack_level(),
+                )
             except Exception as e:
                 warnings.warn(
                     f"fUSI-BIDS validation warning: {e}",
@@ -1006,6 +1012,11 @@ def save_nifti(
     if bids_attrs:
         try:
             validate_metadata(bids_attrs)
+        except ValidationError as e:
+            warnings.warn(
+                f"fUSI-BIDS validation warning when saving:\n{format_validation_error(e)}",
+                stacklevel=find_stack_level(),
+            )
         except Exception as e:
             warnings.warn(
                 f"fUSI-BIDS validation warning when saving: {e}",
