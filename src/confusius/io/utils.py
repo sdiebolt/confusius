@@ -3,8 +3,6 @@
 from pathlib import Path
 from typing import Any, Literal
 
-__all__ = ["check_path"]
-
 
 def check_path(
     path: Path | str | Any,

@@ -75,6 +75,37 @@ def _read_scan_scalar(h5: h5py.File, path: str) -> float:
     return float(h5[path][()].flat[0])
 
 
+def _infer_scan_volume_acquisition_duration(
+    time_values: npt.ArrayLike,
+) -> float | None:
+    """Infer SCAN end-reference acquisition duration from the first timestamp.
+
+    Iconeus SCAN stores timestamps using an `end` reference. When acquisition is
+    triggered at `t=0`, the first timestamp therefore equals the duration between the
+    start and end reference points for the exported `time` coordinate.
+
+    Parameters
+    ----------
+    time_values : array_like
+        One-dimensional sequence of SCAN timestamps for one acquisition stream.
+
+    Returns
+    -------
+    float or None
+        Inferred acquisition duration in seconds. Returns `None` when no timestamps are
+        available or when the first timestamp is non-positive.
+    """
+    flattened = np.asarray(time_values, dtype=np.float64).reshape(-1)
+    if flattened.size == 0:
+        return None
+
+    first_timestamp = float(flattened[0])
+    if first_timestamp <= 0:
+        return None
+
+    return first_timestamp
+
+
 def _coords_from_voxels_to_probe(
     voxels_to_probe: npt.NDArray[np.float64],
     size_x: int,
@@ -351,13 +382,20 @@ def _load_2dscan(
         h5["/acqMetaData/time"][()], dtype=np.float64
     )
     time_vals = time_raw.squeeze()
+    time_attrs: dict[str, Any] = {
+        "units": "s",
+        "volume_acquisition_reference": "end",
+    }
+    volume_acquisition_duration = _infer_scan_volume_acquisition_duration(time_vals)
+    if volume_acquisition_duration is not None:
+        time_attrs["volume_acquisition_duration"] = volume_acquisition_duration
 
     coords: dict[str, Any] = {
         "time": xr.DataArray(
             time_vals,
             dims=["time"],
-            # Iconeus SCAN files store the end-of-block timestamp.
-            attrs={"units": "s", "volume_acquisition_reference": "end"},
+            # Iconeus SCAN files store end-referenced timestamps.
+            attrs=time_attrs,
         ),
         **spatial_coords,
     }
@@ -494,21 +532,28 @@ def _load_4dscan(
     )
 
     block_time = time_raw[np.arange(n_time), np.argmin(time_raw, axis=1)]
+    time_attrs: dict[str, Any] = {
+        "units": "s",
+        "volume_acquisition_reference": "end",
+    }
+    volume_acquisition_duration = _infer_scan_volume_acquisition_duration(block_time)
+    if volume_acquisition_duration is not None:
+        time_attrs["volume_acquisition_duration"] = volume_acquisition_duration
 
     pose_vals = np.arange(npose)
 
     pose_time = xr.DataArray(
         time_raw,
         dims=["time", "pose"],
-        attrs={"units": "s"},
+        attrs=time_attrs,
     )
 
     coords: dict[str, Any] = {
         "time": xr.DataArray(
             block_time,
             dims=["time"],
-            # Iconeus SCAN files store the end-of-block timestamp.
-            attrs={"units": "s", "volume_acquisition_reference": "end"},
+            # Iconeus SCAN files store end-referenced timestamps.
+            attrs=time_attrs,
         ),
         "pose": xr.DataArray(pose_vals, dims=["pose"]),
         "pose_time": pose_time,

@@ -5,13 +5,94 @@ single volumes by merging the pose dimension into a spatial dimension.
 """
 
 import warnings
-from typing import Any, cast
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 import xarray as xr
 
 from confusius._utils import find_stack_level
+from confusius.timing import convert_time_reference
+
+
+def _build_consolidated_time_coordinate(
+    time_coord: xr.DataArray,
+    slice_time_values: npt.NDArray[np.floating],
+    slice_time_attrs: dict[str, Any],
+) -> xr.DataArray:
+    """Build consolidated volume timings from per-slice timing metadata.
+
+    Parameters
+    ----------
+    time_coord : xarray.DataArray
+        Original volume-level time coordinate.
+    slice_time_values : numpy.ndarray
+        Consolidated per-slice timestamps with dims `(time, sweep_dim)`.
+    slice_time_attrs : dict[str, Any]
+        Attributes carried by the consolidated `slice_time` coordinate.
+
+    Returns
+    -------
+    xarray.DataArray
+        Replacement `time` coordinate for the consolidated volume. If per-slice timing
+        metadata are insufficient to infer a whole-volume duration, the original
+        `time_coord` is returned unchanged.
+
+    Warns
+    -----
+    UserWarning
+        If per-slice timing metadata do not include a usable
+        `volume_acquisition_duration`. In that case, the original `time` coordinate is
+        kept unchanged.
+    UserWarning
+        If inferred consolidated volume durations vary across time points. In that case,
+        the returned coordinate omits `volume_acquisition_duration`.
+    """
+    slice_duration = slice_time_attrs.get("volume_acquisition_duration")
+    if not isinstance(slice_duration, int | float) or slice_duration <= 0:
+        warnings.warn(
+            "Cannot infer consolidated volume timing from `slice_time` because "
+            "`volume_acquisition_duration` is missing or non-positive. Keeping the "
+            "original `time` coordinate.",
+            stacklevel=find_stack_level(),
+        )
+        return time_coord
+
+    slice_reference = slice_time_attrs.get(
+        "volume_acquisition_reference",
+        time_coord.attrs.get("volume_acquisition_reference", "start"),
+    )
+    volume_reference = time_coord.attrs.get(
+        "volume_acquisition_reference", slice_reference
+    )
+    slice_onsets = convert_time_reference(
+        slice_time_values,
+        float(slice_duration),
+        from_reference=slice_reference,
+        to_reference="start",
+    )
+    volume_onsets = slice_onsets.min(axis=1)
+    volume_durations = slice_onsets.max(axis=1) - volume_onsets + float(slice_duration)
+    volume_times = convert_time_reference(
+        volume_onsets,
+        volume_durations,
+        from_reference="start",
+        to_reference=volume_reference,
+    )
+
+    time_attrs = dict(time_coord.attrs)
+    time_attrs["volume_acquisition_reference"] = volume_reference
+    if np.allclose(volume_durations, volume_durations[0], rtol=1e-5, atol=0):
+        time_attrs["volume_acquisition_duration"] = float(volume_durations[0])
+    else:
+        time_attrs.pop("volume_acquisition_duration", None)
+        warnings.warn(
+            "Consolidated volume acquisition durations vary across time points. "
+            "Omitting `time.attrs['volume_acquisition_duration']`.",
+            stacklevel=find_stack_level(),
+        )
+
+    return xr.DataArray(volume_times, dims=["time"], attrs=time_attrs)
 
 
 def consolidate_poses(
@@ -77,10 +158,11 @@ def consolidate_poses(
     Returns
     -------
     xarray.DataArray
-        DataArray with `pose` merged into `sweep_dim`, sorted by physical position.
-        The consolidated `sweep_dim` coordinate holds the projection of each voxel's
-        lab position (mm) onto the sweep axis. For inputs that carry a `pose_time`
-        coordinate, a consolidated `pose_time` with dims `("time", sweep_dim)` is
+        DataArray with `pose` merged into `sweep_dim`, sorted by physical position. The
+        consolidated `sweep_dim` coordinate holds the projection of each voxel's
+        physical position onto the sweep axis, expressed in the same units as the input
+        `sweep_dim` coordinate. For inputs that carry a `pose_time`
+        coordinate, a consolidated `slice_time` with dims `("time", sweep_dim)` is
         included: each slice inherits the timestamp of the pose it came from.
 
     Raises
@@ -129,7 +211,7 @@ def consolidate_poses(
     ]  # (npose, 3), sweep_dim direction in lab.
     t: npt.NDArray[np.float64] = affine[
         :, :3, 3
-    ]  # (npose, 3), per-pose translation (mm).
+    ]  # (npose, 3), per-pose translation in the affine/world-space units.
 
     # Shape (npose, n_sweep, 3) -> (npose*n_sweep, 3).
     lab_pos: npt.NDArray[np.float64] = (
@@ -179,14 +261,11 @@ def consolidate_poses(
         proj_sorted[0] + np.arange(n_consolidated) * mean_spacing
     )
 
-    new_sweep = xr.Variable(
-        sweep_dim,
-        proj_regular,
-        attrs={"units": "mm", "voxdim": float(abs(mean_spacing))},
-    )
+    new_sweep = xr.Variable(sweep_dim, proj_regular, attrs=da.coords[sweep_dim].attrs)
 
-    # After merging, sweep_dim is the projection along sweep_axis (already in mm lab
-    # space), so the sweep column becomes sweep_axis. The other spatial columns are
+    # After merging, sweep_dim is the projection along sweep_axis (already in affine/
+    # world-space units), so the sweep column becomes sweep_axis. The other spatial
+    # columns are
     # constant across poses; the translation is the perpendicular component of the first
     # sorted pose's translation.
     t0 = t[pose_idx[0]]
@@ -224,36 +303,59 @@ def consolidate_poses(
         **{str(d): da.coords[d] for d in other_dims},
     }
 
-    # Build axis-agnostic fancy index tuples so that pose_idx selects the pose axis and
-    # sweep_idx selects the sweep_dim axis, regardless of which spatial dim is being
-    # swept.  For 3D inputs dims are (pose, z, y, x); for 4D (time, pose, z, y, x).
-    # `sweep_dim_axis` is the axis of sweep_dim in da.values.
-    sweep_dim_axis = da.dims.index(sweep_dim)
-    pose_axis = da.dims.index("pose")
-
-    # Build a full-array index with slice(None) for every axis, then replace the pose
-    # and sweep axes with fancy indices. Broadcasting pose_idx and sweep_idx against
-    # each other gives the consolidated axis of length npose*n_sweep.
-    idx: list[slice | npt.NDArray] = cast(
-        list[slice | npt.NDArray], [slice(None)] * da.values.ndim
-    )
-    idx[pose_axis] = pose_idx
-    idx[sweep_dim_axis] = sweep_idx
+    # Use xarray's vectorized isel to select (pose, sweep_dim) pairs simultaneously.
+    # This stays dask-backed; dask does not support multi-axis fancy indexing via
+    # da.data[...] (raises NotImplementedError for N-d fancy indexing).
+    # The temporary dimension replaces both pose and sweep_dim; its position in the
+    # output matches out_dims, so we can use .data directly without renaming.
+    _consolidated = "__consolidated__"
+    data = da.isel(
+        {
+            "pose": xr.DataArray(pose_idx, dims=[_consolidated]),
+            sweep_dim: xr.DataArray(sweep_idx, dims=[_consolidated]),
+        }
+    ).data
 
     if "time" in da.dims:
         coords: dict[str, Any] = {"time": da.coords["time"]}
-        # Propagate per-slice timestamps if present: each consolidated slice inherits
-        # the timestamp of the pose it came from.
+        # Propagate per-slice timestamps if present: each consolidated slice inherits the
+        # timestamp of the pose it came from. The consolidated slice_time keeps the same
+        # acquisition reference metadata as the original pose_time coordinate.
         if "pose_time" in da.coords:
-            coords["pose_time"] = xr.DataArray(
-                da.coords["pose_time"].values[:, pose_idx],
+            slice_time_attrs = {
+                **da.coords["pose_time"].attrs,
+                "volume_acquisition_reference": da.coords["pose_time"].attrs.get(
+                    "volume_acquisition_reference",
+                    da.coords["time"].attrs.get(
+                        "volume_acquisition_reference",
+                        "start",
+                    ),
+                ),
+            }
+            if "volume_acquisition_duration" not in slice_time_attrs:
+                slice_duration = da.coords["time"].attrs.get(
+                    "volume_acquisition_duration"
+                )
+                if isinstance(slice_duration, int | float) and slice_duration > 0:
+                    slice_time_attrs["volume_acquisition_duration"] = float(
+                        slice_duration
+                    )
+
+            slice_time_values = np.asarray(da.coords["pose_time"].values)[:, pose_idx]
+            coords["slice_time"] = xr.DataArray(
+                slice_time_values,
                 dims=["time", sweep_dim],
-                attrs=da.coords["pose_time"].attrs,
+                attrs=slice_time_attrs,
+            )
+            coords["time"] = _build_consolidated_time_coordinate(
+                da.coords["time"],
+                slice_time_values,
+                slice_time_attrs,
             )
         coords.update(base_coords)
         out_dims = ["time", sweep_dim] + other_dims
         return xr.DataArray(
-            da.values[tuple(idx)],
+            data,
             dims=out_dims,
             coords=coords,
             attrs=new_attrs,
@@ -262,7 +364,7 @@ def consolidate_poses(
 
     out_dims = [sweep_dim] + other_dims
     return xr.DataArray(
-        da.values[tuple(idx)],
+        data,
         dims=out_dims,
         coords=base_coords,
         attrs=new_attrs,

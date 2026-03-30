@@ -163,10 +163,42 @@ class TestLoadNifti:
 
         loaded = load_nifti(path)
 
-        assert loaded.coords["slice_time"].dims == ("z",)
+        assert loaded.coords["slice_time"].dims == ("time", "z")
         np.testing.assert_allclose(
-            loaded.coords["slice_time"].values, [0.0, 0.1, 0.2, 0.3]
+            loaded.coords["slice_time"].values,
+            loaded.coords["time"].values[:, np.newaxis]
+            + np.array([0.0, 0.1, 0.2, 0.3]),
         )
+
+    def test_load_nifti_derives_volume_duration_from_repetition_time_and_delay_time(
+        self, tmp_path: Path
+    ) -> None:
+        """RepetitionTime and DelayTime imply a volume acquisition duration on load."""
+        data = np.random.default_rng(0).random((2, 3, 4, 5)).astype(np.float32)
+        path = tmp_path / "delay_time_sidecar.nii.gz"
+        img = nib.Nifti1Image(data, np.eye(4))
+        img.header.set_zooms((1.0, 1.0, 1.0, 2.0))
+        img.to_filename(path)
+
+        with open(tmp_path / "delay_time_sidecar.json", "w") as f:
+            json.dump(
+                {
+                    "RepetitionTime": 2.0,
+                    "DelayAfterTrigger": 0.5,
+                    "DelayTime": 0.25,
+                },
+                f,
+            )
+
+        loaded = load_nifti(path)
+
+        np.testing.assert_allclose(
+            loaded.coords["time"].values, [0.5, 2.5, 4.5, 6.5, 8.5]
+        )
+        assert loaded.coords["time"].attrs["volume_acquisition_reference"] == "start"
+        assert loaded.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1.75)
 
     def test_load_nifti_validation_runtime_error_warns(self, tmp_path: Path) -> None:
         """Unexpected sidecar validation failures degrade to a warning when loading."""
@@ -659,9 +691,17 @@ class TestSaveNifti:
         """A single time point is stored via `VolumeTiming`, not `RepetitionTime`."""
         da = sample_4d_volume.isel(time=slice(0, 1)).copy()
         da.coords["time"].attrs["volume_acquisition_duration"] = 0.25
-
         output_path = tmp_path / "single_volume.nii.gz"
-        save_nifti(da, output_path)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            save_nifti(da, output_path)
+
+        assert any(
+            "Coordinate 'time' has no `volume_acquisition_reference` attribute"
+            in str(w.message)
+            for w in caught
+        )
 
         sidecar_path = tmp_path / "single_volume.json"
         with open(sidecar_path) as f:
@@ -787,46 +827,72 @@ class TestSaveNifti:
         assert sidecar["VolumeTiming"] == pytest.approx([0.6, 2.1, 3.4, 5.2])
         assert sidecar["FrameAcquisitionDuration"] == pytest.approx(0.4)
 
-    def test_save_skips_non_serializable_2d_slice_time(
+    def test_save_serializes_consistent_2d_slice_time_coordinate(
         self, tmp_path, sample_4d_volume
     ) -> None:
-        """2D `slice_time` coordinates are omitted because BIDS cannot represent them."""
+        """A 2D absolute `slice_time` is exported when onset-relative timing is constant."""
         da = sample_4d_volume.copy()
+        time_values = da.coords["time"].values
         da = da.assign_coords(
             slice_time=xr.DataArray(
-                np.zeros((da.sizes["time"], da.sizes["z"])),
+                time_values[:, np.newaxis] + np.array([0.0, 0.1, 0.2, 0.3]),
                 dims=("time", "z"),
                 attrs={"units": "s"},
             )
         )
 
         output_path = tmp_path / "slice_time_2d.nii.gz"
-        save_nifti(da, output_path)
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            save_nifti(da, output_path)
+
+        assert any(
+            "Coordinate 'time' has no `volume_acquisition_reference` attribute"
+            in str(w.message)
+            for w in caught
+        )
 
         with open(tmp_path / "slice_time_2d.json") as f:
             sidecar = json.load(f)
 
-        assert "SliceTiming" not in sidecar
-        assert "SliceEncodingDirection" not in sidecar
+        assert sidecar["SliceTiming"] == pytest.approx([0.0, 0.1, 0.2, 0.3])
+        assert sidecar["SliceEncodingDirection"] == "k"
 
-    def test_save_serializes_1d_slice_time_coordinate(
+    def test_save_skips_inconsistent_2d_slice_time_coordinate(
         self, tmp_path, sample_4d_volume
     ) -> None:
-        """A 1D `slice_time` coordinate is exported to BIDS slice timing fields."""
-        da = sample_4d_volume.copy().assign_coords(
+        """A 2D `slice_time` is omitted when relative slice timing varies across volumes."""
+        da = sample_4d_volume.copy()
+        time_values = da.coords["time"].values
+        varying_offsets = np.tile(np.array([0.0, 0.1, 0.2, 0.3]), (da.sizes["time"], 1))
+        varying_offsets[1, -1] += 0.05
+        da = da.assign_coords(
             slice_time=xr.DataArray(
-                [0.0, 0.1, 0.2, 0.3], dims=("z",), attrs={"units": "s"}
+                time_values[:, np.newaxis] + varying_offsets,
+                dims=("time", "z"),
+                attrs={"units": "s"},
             )
         )
 
-        output_path = tmp_path / "slice_time_1d.nii.gz"
-        save_nifti(da, output_path)
+        output_path = tmp_path / "slice_time_2d_inconsistent.nii.gz"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            save_nifti(da, output_path)
 
-        with open(tmp_path / "slice_time_1d.json") as f:
+        assert any(
+            "Coordinate 'time' has no `volume_acquisition_reference` attribute"
+            in str(w.message)
+            for w in caught
+        )
+        assert any(
+            "cannot represent per-volume variation" in str(w.message) for w in caught
+        )
+
+        with open(tmp_path / "slice_time_2d_inconsistent.json") as f:
             sidecar = json.load(f)
 
-        assert sidecar["SliceTiming"] == pytest.approx([0.0, 0.1, 0.2, 0.3])
-        assert sidecar["SliceEncodingDirection"] == "k"
+        assert "SliceTiming" not in sidecar
+        assert "SliceEncodingDirection" not in sidecar
 
     def test_save_nifti_validation_runtime_error_warns(
         self, tmp_path, sample_4d_volume
@@ -1061,6 +1127,121 @@ class TestRoundtrip:
 
         loaded = load_nifti(nifti_path)
         np.testing.assert_allclose(loaded.coords["time"].values, time_values)
+
+    def test_save_end_referenced_scan_timing_uses_explicit_duration(self, tmp_path):
+        """Explicit end-reference duration avoids spurious validation warnings."""
+        rng = np.random.default_rng(0)
+        time_values = np.array([0.4, 2.8, 5.2, 7.6])
+        da = xr.DataArray(
+            rng.random((4, 4, 3, 2)).astype(np.float32),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_reference": "end",
+                        "volume_acquisition_duration": 0.4,
+                    },
+                ),
+                "slice_time": xr.DataArray(
+                    time_values[:, np.newaxis] + np.array([0.0, 1.8, 0.6, 1.2]),
+                    dims=("time", "z"),
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_reference": "end",
+                        "volume_acquisition_duration": 0.4,
+                    },
+                ),
+            },
+        )
+
+        output_path = tmp_path / "end_referenced_scan_timing.nii.gz"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            save_nifti(da, output_path)
+
+        assert not any(
+            "validation warning when saving" in str(w.message) for w in caught
+        )
+
+        with open(tmp_path / "end_referenced_scan_timing.json") as f:
+            sidecar = json.load(f)
+
+        assert sidecar["RepetitionTime"] == pytest.approx(2.4)
+        assert sidecar["DelayTime"] == pytest.approx(2.0)
+        assert "DelayAfterTrigger" not in sidecar
+        assert sidecar["SliceTiming"] == pytest.approx([0.0, 1.8, 0.6, 1.2])
+
+    def test_save_regular_timing_writes_delay_time_from_duration(self, tmp_path):
+        """Regular timing exports dead time when TR exceeds acquisition duration."""
+        rng = np.random.default_rng(0)
+        da = xr.DataArray(
+            rng.random((4, 4, 3, 2)).astype(np.float32),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    [0.0, 2.4, 4.8, 7.2],
+                    dims=["time"],
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_reference": "start",
+                        "volume_acquisition_duration": 2.2,
+                    },
+                ),
+                "z": xr.DataArray(
+                    np.arange(4) * 0.1, dims=["z"], attrs={"units": "mm"}
+                ),
+                "y": xr.DataArray(
+                    np.arange(3) * 0.1, dims=["y"], attrs={"units": "mm"}
+                ),
+                "x": xr.DataArray(
+                    np.arange(2) * 0.1, dims=["x"], attrs={"units": "mm"}
+                ),
+            },
+        )
+
+        output_path = tmp_path / "regular_delay_time.nii.gz"
+        save_nifti(da, output_path)
+
+        with open(tmp_path / "regular_delay_time.json") as f:
+            sidecar = json.load(f)
+
+        assert sidecar["RepetitionTime"] == pytest.approx(2.4)
+        assert sidecar["DelayTime"] == pytest.approx(0.2)
+        assert "FrameAcquisitionDuration" not in sidecar
+
+    def test_save_warns_when_time_reference_is_missing(self, tmp_path):
+        """Saving warns when time reference metadata is absent and onset is assumed."""
+        rng = np.random.default_rng(0)
+        da = xr.DataArray(
+            rng.random((4, 4, 3, 2)).astype(np.float32),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    [0.0, 1.0, 2.0, 3.0],
+                    dims=["time"],
+                    attrs={"units": "s", "volume_acquisition_duration": 0.5},
+                ),
+                "z": xr.DataArray(
+                    np.arange(4) * 0.1, dims=["z"], attrs={"units": "mm"}
+                ),
+                "y": xr.DataArray(
+                    np.arange(3) * 0.1, dims=["y"], attrs={"units": "mm"}
+                ),
+                "x": xr.DataArray(
+                    np.arange(2) * 0.1, dims=["x"], attrs={"units": "mm"}
+                ),
+            },
+        )
+
+        output_path = tmp_path / "missing_reference.nii.gz"
+        with pytest.warns(
+            UserWarning,
+            match="Coordinate 'time' has no `volume_acquisition_reference` attribute",
+        ):
+            save_nifti(da, output_path)
 
     def test_roundtrip_volume_timing(self, tmp_path):
         """Irregular time coord roundtrips via VolumeTiming; pixdim[4] is 0."""

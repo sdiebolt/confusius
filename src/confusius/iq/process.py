@@ -15,9 +15,9 @@ from confusius.iq.clutter_filters import (
     clutter_filter_svd_from_indices,
 )
 from confusius.timing import (
-    _TIMING_REF_FACTORS,
-    _get_representative_time_step,
-    _get_time_to_seconds_factor,
+    convert_time_reference,
+    get_representative_time_step,
+    get_time_coord_to_seconds_factor,
 )
 from confusius.validation import validate_iq, validate_mask
 
@@ -98,10 +98,10 @@ def _get_volume_acquisition_duration(iq: xr.DataArray) -> float:
             stacklevel=find_stack_level(),
         )
         return 1.0 / (
-            float(compound_sampling_frequency) * _get_time_to_seconds_factor(iq)
+            float(compound_sampling_frequency) * get_time_coord_to_seconds_factor(iq)
         )
 
-    time_step, approximate = _get_representative_time_step(iq, in_seconds=False)
+    time_step, approximate = get_representative_time_step(iq)
     if time_step is not None:
         warning = (
             "Using the representative `time` coordinate spacing to infer "
@@ -135,7 +135,7 @@ def _get_filter_sampling_frequency(
     clutter-filter window separately to allow for dead times or irregular sampling
     between windows.
     """
-    time_step, approximate = _get_representative_time_step(iq, in_seconds=True)
+    time_step, approximate = get_representative_time_step(iq, unit="s")
     if time_step is None:
         return None
 
@@ -297,14 +297,22 @@ def compute_processed_volume_timings(
     iq_volume_duration = _get_volume_acquisition_duration(iq)
     iq_volume_timings = np.asarray(iq.coords["time"].values)
 
-    for ref, name in (
-        (iq_time_reference, "iq_time_reference"),
-        (processed_time_reference, "processed_time_reference"),
-    ):
-        if ref not in _TIMING_REF_FACTORS:
-            raise ValueError(
-                f"Unknown {name}: {ref!r}. Must be 'start', 'center', or 'end'."
-            )
+    if iq_time_reference not in {"start", "center", "end"}:
+        raise ValueError(
+            f"Unknown iq_time_reference: {iq_time_reference!r}. Must be 'start', 'center', or 'end'."
+        )
+    if processed_time_reference not in {"start", "center", "end"}:
+        raise ValueError(
+            "Unknown processed_time_reference: "
+            f"{processed_time_reference!r}. Must be 'start', 'center', or 'end'."
+        )
+
+    window_starts = convert_time_reference(
+        iq_volume_timings,
+        iq_volume_duration,
+        from_reference=iq_time_reference,
+        to_reference="start",
+    )
 
     n_outer_windows = (
         len(iq_volume_timings) - clutter_window_width
@@ -343,13 +351,11 @@ def compute_processed_volume_timings(
     # requested output reference within the actual window span. The span is based on the
     # observed first/last timing plus one volume duration, so it remains correct when
     # there is dead time between acquisitions.
-    input_ref_factor = _TIMING_REF_FACTORS[iq_time_reference]
-    output_ref_factor = _TIMING_REF_FACTORS[processed_time_reference]
-
-    output_timings = (
-        inner_window_first_volume_timings
-        - input_ref_factor * iq_volume_duration
-        + output_ref_factor * inner_window_durations
+    output_timings = convert_time_reference(
+        window_starts[inner_window_first_volume_indices],
+        inner_window_durations,
+        from_reference="start",
+        to_reference=processed_time_reference,
     )
     return output_timings, inner_window_durations
 

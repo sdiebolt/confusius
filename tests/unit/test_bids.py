@@ -223,10 +223,25 @@ class TestValidation:
 
             # Should contain the error message
             assert "FrameAcquisitionDuration is REQUIRED" in formatted
+            assert "__root__" not in formatted
             # Should NOT contain verbose pydantic details
             assert "type=value_error" not in formatted
             assert "input_value=" not in formatted
             assert "errors.pydantic.dev" not in formatted
+
+    def test_format_validation_error_includes_field_name(self):
+        """Formatted validation errors include the failing field location."""
+        from confusius.bids.validation import format_validation_error
+
+        try:
+            bids.validate_metadata({"RepetitionTime": 1.0, "DelayAfterTrigger": -0.1})
+        except ValidationError as e:
+            formatted = format_validation_error(e)
+
+            assert (
+                "DelayAfterTrigger: Input should be greater than or equal to 0"
+                in formatted
+            )
 
 
 class TestSliceTimeCoordinate:
@@ -246,25 +261,31 @@ class TestSliceTimeCoordinate:
     def test_create_slice_time_coordinate(
         self, slice_encoding_direction, expected_dim, expected_values
     ):
-        """Valid slice encoding directions map to the correct dim and value order."""
+        """Valid slice encoding directions map to 2D absolute slice-time coordinates."""
         slice_timing = expected_values
         if slice_encoding_direction.endswith("-"):
             slice_timing = list(reversed(slice_timing))
+        volume_times = np.array([10.0, 11.0])
 
-        coord = bids.create_slice_time_coordinate(
+        coord = bids.create_slice_time_coordinate_from_bids(
+            volume_times=volume_times,
             slice_timing=slice_timing,
             slice_encoding_direction=slice_encoding_direction,
         )
 
-        assert coord.dims == (expected_dim,)
-        assert coord.shape == (3,)
+        assert coord.dims == ("time", expected_dim)
+        assert coord.shape == (2, 3)
         assert coord.attrs["units"] == "s"
-        np.testing.assert_array_equal(coord.values, expected_values)
+        np.testing.assert_array_equal(
+            coord.values,
+            volume_times[:, np.newaxis] + np.asarray(expected_values)[np.newaxis, :],
+        )
 
     def test_invalid_slice_encoding_direction(self):
         """Test that invalid direction raises error."""
         with pytest.raises(ValueError, match="Invalid SliceEncodingDirection"):
-            bids.create_slice_time_coordinate(
+            bids.create_slice_time_coordinate_from_bids(
+                volume_times=np.array([0.0]),
                 slice_timing=np.array([0.0, 0.1]),
                 slice_encoding_direction=cast(Any, "invalid"),
             )
@@ -272,8 +293,18 @@ class TestSliceTimeCoordinate:
     def test_slice_timing_must_be_1d(self):
         """Test that slice_timing input must be one-dimensional."""
         with pytest.raises(ValueError, match="SliceTiming must be 1D"):
-            bids.create_slice_time_coordinate(
+            bids.create_slice_time_coordinate_from_bids(
+                volume_times=np.array([0.0, 1.0]),
                 slice_timing=np.array([[0.0, 0.1], [0.2, 0.3]]),
+                slice_encoding_direction="k",
+            )
+
+    def test_volume_times_must_be_1d(self):
+        """Test that volume_times input must be one-dimensional."""
+        with pytest.raises(ValueError, match="volume_times must be 1D"):
+            bids.create_slice_time_coordinate_from_bids(
+                volume_times=np.array([[0.0], [1.0]]),
+                slice_timing=np.array([0.0, 0.1]),
                 slice_encoding_direction="k",
             )
 
@@ -284,26 +315,40 @@ class TestSliceTimeCoordinate:
     def test_extract_slice_timing(self, slice_encoding_direction, expected_direction):
         """Extracting slice timing preserves values and spatial direction."""
         slice_timing = np.array([0.0, 0.1, 0.2, 0.3])
-        coord = bids.create_slice_time_coordinate(
+        volume_times = np.array([0.0, 1.0, 2.0])
+        coord = bids.create_slice_time_coordinate_from_bids(
+            volume_times=volume_times,
             slice_timing=slice_timing,
             slice_encoding_direction=slice_encoding_direction,
         )
 
-        extracted_timing, direction = bids.extract_slice_timing_from_coordinate(coord)
+        extracted_timing, direction = bids.create_bids_slice_timing_from_coordinate(
+            coord, volume_times
+        )
 
         np.testing.assert_array_equal(extracted_timing, slice_timing)
         assert direction == expected_direction
 
     def test_extract_slice_timing_invalid_ndim(self):
-        """Test extraction rejects coordinates that are not 1D."""
-        coord = xr.DataArray(np.zeros((2, 3)), dims=["time", "z"])
+        """Test extraction rejects coordinates that are not 2D."""
+        coord = xr.DataArray(np.zeros(3), dims=["z"])
 
-        with pytest.raises(ValueError, match="must be 1D"):
-            bids.extract_slice_timing_from_coordinate(coord)
+        with pytest.raises(ValueError, match="must be 2D"):
+            bids.create_bids_slice_timing_from_coordinate(coord, np.array([0.0]))
 
     def test_extract_slice_timing_rejects_unknown_spatial_dimension(self):
         """Test extraction rejects unknown spatial dimensions."""
-        coord = xr.DataArray(np.zeros(3), dims=["phase"])
+        coord = xr.DataArray(np.zeros((2, 3)), dims=["time", "phase"])
 
         with pytest.raises(ValueError, match="must have one of spatial dimensions"):
-            bids.extract_slice_timing_from_coordinate(coord)
+            bids.create_bids_slice_timing_from_coordinate(coord, np.array([0.0, 1.0]))
+
+    def test_extract_slice_timing_rejects_inconsistent_relative_timings(self):
+        """Extraction rejects 2D absolute slice_time when relative timing varies."""
+        coord = xr.DataArray(
+            [[0.0, 0.1, 0.2], [1.0, 1.1, 1.25]],
+            dims=["time", "z"],
+        )
+
+        with pytest.raises(ValueError, match="varies across time points"):
+            bids.create_bids_slice_timing_from_coordinate(coord, np.array([0.0, 1.0]))

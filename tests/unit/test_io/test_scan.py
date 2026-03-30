@@ -10,26 +10,22 @@ import xarray as xr
 
 from confusius.io.scan import load_scan
 
-# ---------------------------------------------------------------------------
-# Synthetic fixture helpers
-# ---------------------------------------------------------------------------
-
 _RNG = np.random.default_rng(42)
 
-# Shared probe geometry: typical linear probe (sizeY=1).
 _SIZE_X = 8
 _SIZE_Y = 1
 _SIZE_Z = 12
 _NPOSE = 3
 _T = 5
-_DX = 0.0003  # 0.3 mm lateral pitch (meters)
-_DY = 0.0004  # elevation (meters)
-_DZ = 0.0002  # 0.2 mm axial pitch (meters)
+_FRAME_DURATION = 0.05
+_POSE_DURATION = 0.1
+_DX = 0.0003
+_DY = 0.0004
+_DZ = 0.0002
 _OX = -_DX * _SIZE_X / 2
 _OY = 0.0
-_OZ = -0.003  # probe z-axis origin (meters); negative so y_conf = -z_probe > 0
+_OZ = -0.003
 
-# voxelsToProbe: [dx, 0, 0, ox; 0, dy, 0, oy; 0, 0, -dz, oz; 0, 0, 0, 1]
 _VOXELS_TO_PROBE = np.array(
     [
         [_DX, 0.0, 0.0, _OX],
@@ -40,11 +36,9 @@ _VOXELS_TO_PROBE = np.array(
     dtype=np.float64,
 )
 
-# probeToLab: simple identity-like transform for a single pose.
 _PROBE_TO_LAB_SINGLE = np.eye(4, dtype=np.float64)
-_PROBE_TO_LAB_SINGLE[:3, 3] = [0.001, 0.002, 0.003]  # small translation (meters)
+_PROBE_TO_LAB_SINGLE[:3, 3] = [0.001, 0.002, 0.003]
 
-# probeToLab for multi-pose: (npose, 4, 4) — same rotation, varying translation.
 _PROBE_TO_LAB_MULTI = np.stack(
     [
         np.eye(4, dtype=np.float64)
@@ -53,14 +47,6 @@ _PROBE_TO_LAB_MULTI = np.stack(
     ]
 )
 
-# probeToLab for a single pose with a non-trivial (90° rotation around probe Y-axis)
-# rotation matrix.  Used to verify that _PHYSICAL_TO_PROBE_PERMUTATION permutes columns
-# correctly even when the rotation block is not the identity.
-#
-#   R_y90 = [[ 0, 0, 1, 0],   # x_lab =  z_probe
-#             [ 0, 1, 0, 0],   # y_lab =  y_probe
-#             [-1, 0, 0, 0],   # z_lab = -x_probe
-#             [ 0, 0, 0, 1]]
 _PROBE_TO_LAB_ROTATED = np.array(
     [
         [0.0, 0.0, 1.0, 0.005],
@@ -70,6 +56,11 @@ _PROBE_TO_LAB_ROTATED = np.array(
     ],
     dtype=np.float64,
 )
+
+
+def _end_referenced_times(n: int, duration: float) -> np.ndarray:
+    """Return regularly spaced end-referenced timestamps."""
+    return duration + np.arange(n, dtype=np.float64) * duration
 
 
 def _write_scan_metadata(
@@ -87,7 +78,6 @@ def _write_scan_metadata(
 ) -> None:
     """Write common metadata groups to a synthetic SCAN HDF5 file."""
     acq = f.create_group("acqMetaData")
-
     acq.create_dataset(
         "acquisitionMode", data=np.array([[mode.encode()]], dtype=object)
     )
@@ -133,237 +123,6 @@ def _write_scan_metadata(
         ("Tag", ""),
     ]:
         meta.create_dataset(key, data=np.array([[val.encode()]], dtype=object))
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def scan_2d_path(tmp_path: Path) -> Path:
-    """Create a synthetic 2Dscan HDF5 file (linear probe, sizeY=1)."""
-    path = tmp_path / "test_2dscan.scan"
-    time_data = np.linspace(0.0, (_T - 1) * 0.05, _T).reshape(1, _T)
-    data = _RNG.random((_T, _SIZE_Z, _SIZE_Y, _SIZE_X), dtype=np.float64)
-    with h5py.File(path, "w") as f:
-        f.create_dataset("/Data", data=data)
-        _write_scan_metadata(
-            f,
-            mode="2Dscan",
-            size_x=_SIZE_X,
-            size_y=_SIZE_Y,
-            size_z=_SIZE_Z,
-            npose=1,
-            nscan_repeat=None,
-            nblock_repeat=_T,
-            voxels_to_probe=_VOXELS_TO_PROBE,
-            probe_to_lab=_PROBE_TO_LAB_SINGLE,
-            time_data=time_data,
-        )
-    return path
-
-
-@pytest.fixture
-def scan_2d_transposed_time_path(tmp_path: Path) -> Path:
-    """Create a synthetic 2Dscan HDF5 file with time stored as (T, 1) instead of (1, T)."""
-    path = tmp_path / "test_2dscan_transposed_time.scan"
-    # Use (T, 1) orientation — some file versions store it this way.
-    time_data = np.linspace(0.0, (_T - 1) * 0.05, _T).reshape(_T, 1)
-    data = _RNG.random((_T, _SIZE_Z, _SIZE_Y, _SIZE_X), dtype=np.float64)
-    with h5py.File(path, "w") as f:
-        f.create_dataset("/Data", data=data)
-        _write_scan_metadata(
-            f,
-            mode="2Dscan",
-            size_x=_SIZE_X,
-            size_y=_SIZE_Y,
-            size_z=_SIZE_Z,
-            npose=1,
-            nscan_repeat=None,
-            nblock_repeat=_T,
-            voxels_to_probe=_VOXELS_TO_PROBE,
-            probe_to_lab=_PROBE_TO_LAB_SINGLE,
-            time_data=time_data,
-        )
-    return path
-
-
-@pytest.fixture
-def scan_3d_path(tmp_path: Path) -> Path:
-    """Create a synthetic 3Dscan HDF5 file (linear probe, sizeY=1)."""
-    path = tmp_path / "test_3dscan.scan"
-    time_data = np.zeros((_NPOSE, 1), dtype=np.float64)
-    data = _RNG.random((_NPOSE, 1, _SIZE_Z, _SIZE_Y, _SIZE_X), dtype=np.float64)
-    with h5py.File(path, "w") as f:
-        f.create_dataset("/Data", data=data)
-        _write_scan_metadata(
-            f,
-            mode="3Dscan",
-            size_x=_SIZE_X,
-            size_y=_SIZE_Y,
-            size_z=_SIZE_Z,
-            npose=_NPOSE,
-            nscan_repeat=None,
-            nblock_repeat=None,
-            voxels_to_probe=_VOXELS_TO_PROBE,
-            probe_to_lab=_PROBE_TO_LAB_MULTI,
-            time_data=time_data,
-        )
-    return path
-
-
-@pytest.fixture
-def scan_4d_path(tmp_path: Path) -> Path:
-    """Create a synthetic 4Dscan HDF5 file (linear probe, sizeY=1)."""
-    path = tmp_path / "test_4dscan.scan"
-    time_flat = np.arange(_T * _NPOSE, dtype=np.float64).reshape(_T * _NPOSE, 1) * 0.1
-    data = _RNG.random((_T, _NPOSE, 1, _SIZE_Z, _SIZE_Y, _SIZE_X), dtype=np.float64)
-    with h5py.File(path, "w") as f:
-        f.create_dataset("/Data", data=data)
-        _write_scan_metadata(
-            f,
-            mode="4Dscan",
-            size_x=_SIZE_X,
-            size_y=_SIZE_Y,
-            size_z=_SIZE_Z,
-            npose=_NPOSE,
-            nscan_repeat=_T,
-            nblock_repeat=None,
-            voxels_to_probe=_VOXELS_TO_PROBE,
-            probe_to_lab=_PROBE_TO_LAB_MULTI,
-            time_data=time_flat,
-        )
-    return path
-
-
-@pytest.fixture
-def scan_4d_multiblock_path(tmp_path: Path) -> Path:
-    """Create a synthetic 4Dscan HDF5 file with `nblockRepeat > 1`."""
-    path = tmp_path / "test_4dscan_multiblock.scan"
-    nscan_repeat = 2
-    nblock_repeat = 3
-    n_time = nscan_repeat * nblock_repeat
-    time_flat = (
-        np.arange(n_time * _NPOSE, dtype=np.float64).reshape(n_time * _NPOSE, 1) * 0.1
-    )
-    data = _RNG.random(
-        (nscan_repeat, _NPOSE, nblock_repeat, _SIZE_Z, _SIZE_Y, _SIZE_X),
-        dtype=np.float64,
-    )
-    with h5py.File(path, "w") as f:
-        f.create_dataset("/Data", data=data)
-        _write_scan_metadata(
-            f,
-            mode="4Dscan",
-            size_x=_SIZE_X,
-            size_y=_SIZE_Y,
-            size_z=_SIZE_Z,
-            npose=_NPOSE,
-            nscan_repeat=nscan_repeat,
-            nblock_repeat=nblock_repeat,
-            voxels_to_probe=_VOXELS_TO_PROBE,
-            probe_to_lab=_PROBE_TO_LAB_MULTI,
-            time_data=time_flat,
-        )
-    return path
-
-
-@pytest.fixture
-def scan_2d_rotated_path(tmp_path: Path) -> Path:
-    """Create a synthetic 2Dscan HDF5 file with a non-trivial probeToLab rotation.
-
-    ``probeToLab`` is a 90° rotation around the probe Y-axis combined with a small
-    translation.  This fixture is used to verify that ``physical_to_lab`` correctly
-    permutes and sign-flips the rotation columns, not just the translation.
-    """
-    path = tmp_path / "test_2dscan_rotated.scan"
-    time_data = np.linspace(0.0, (_T - 1) * 0.05, _T).reshape(1, _T)
-    data = _RNG.random((_T, _SIZE_Z, _SIZE_Y, _SIZE_X), dtype=np.float64)
-    with h5py.File(path, "w") as f:
-        f.create_dataset("/Data", data=data)
-        _write_scan_metadata(
-            f,
-            mode="2Dscan",
-            size_x=_SIZE_X,
-            size_y=_SIZE_Y,
-            size_z=_SIZE_Z,
-            npose=1,
-            nscan_repeat=None,
-            nblock_repeat=_T,
-            voxels_to_probe=_VOXELS_TO_PROBE,
-            probe_to_lab=_PROBE_TO_LAB_ROTATED,
-            time_data=time_data,
-        )
-    return path
-
-
-@pytest.fixture
-def scan_3d_matrix_path(tmp_path: Path) -> Path:
-    """Create a synthetic 3Dscan HDF5 file with matrix probe (sizeY=4)."""
-    size_y_matrix = 4
-    path = tmp_path / "test_3dscan_matrix.scan"
-    time_data = np.zeros((_NPOSE, 1), dtype=np.float64)
-    data = _RNG.random((_NPOSE, 1, _SIZE_Z, size_y_matrix, _SIZE_X), dtype=np.float64)
-    voxels_to_probe = _VOXELS_TO_PROBE.copy()
-    with h5py.File(path, "w") as f:
-        f.create_dataset("/Data", data=data)
-        _write_scan_metadata(
-            f,
-            mode="3Dscan",
-            size_x=_SIZE_X,
-            size_y=size_y_matrix,
-            size_z=_SIZE_Z,
-            npose=_NPOSE,
-            nscan_repeat=None,
-            nblock_repeat=None,
-            voxels_to_probe=voxels_to_probe,
-            probe_to_lab=_PROBE_TO_LAB_MULTI,
-            time_data=time_data,
-        )
-    return path
-
-
-@pytest.fixture
-def scan_2d(scan_2d_path: Path) -> xr.DataArray:
-    """Load a synthetic 2Dscan DataArray (linear probe, sizeY=1)."""
-    return load_scan(scan_2d_path)
-
-
-@pytest.fixture
-def scan_2d_transposed_time(scan_2d_transposed_time_path: Path) -> xr.DataArray:
-    """Load a synthetic 2Dscan DataArray with time stored as (T, 1)."""
-    return load_scan(scan_2d_transposed_time_path)
-
-
-@pytest.fixture
-def scan_2d_rotated(scan_2d_rotated_path: Path) -> xr.DataArray:
-    """Load a synthetic 2Dscan DataArray with a non-trivial probeToLab rotation."""
-    return load_scan(scan_2d_rotated_path)
-
-
-@pytest.fixture
-def scan_3d(scan_3d_path: Path) -> xr.DataArray:
-    """Load a synthetic 3Dscan DataArray (linear probe, sizeY=1)."""
-    return load_scan(scan_3d_path)
-
-
-@pytest.fixture
-def scan_3d_matrix(scan_3d_matrix_path: Path) -> xr.DataArray:
-    """Load a synthetic 3Dscan DataArray with a matrix probe (sizeY=4)."""
-    return load_scan(scan_3d_matrix_path)
-
-
-@pytest.fixture
-def scan_4d(scan_4d_path: Path) -> xr.DataArray:
-    """Load a synthetic 4Dscan DataArray (linear probe, sizeY=1)."""
-    return load_scan(scan_4d_path)
-
-
-@pytest.fixture
-def scan_4d_multiblock(scan_4d_multiblock_path: Path) -> xr.DataArray:
-    """Load a synthetic 4Dscan DataArray with repeated blocks."""
-    return load_scan(scan_4d_multiblock_path)
 
 
 # ---------------------------------------------------------------------------
@@ -509,7 +268,7 @@ class TestLoadScan2DTransposedTime:
         self, scan_2d_transposed_time: xr.DataArray
     ) -> None:
         """2Dscan time coord is correct when time is stored as (T, 1) instead of (1, T)."""
-        expected = np.linspace(0.0, (_T - 1) * 0.05, _T)
+        expected = _end_referenced_times(_T, _FRAME_DURATION)
         np.testing.assert_allclose(
             scan_2d_transposed_time.coords["time"].values, expected, rtol=1e-10
         )
@@ -614,10 +373,20 @@ class TestLoadScan4D:
         assert scan_4d.coords["time"].attrs.get("units") == "s"
         assert scan_4d.coords["time"].attrs.get("volume_acquisition_reference") == "end"
 
+    def test_time_coord_duration_inferred_from_first_timestamp(
+        self, scan_4d_offset_path: Path
+    ) -> None:
+        """4Dscan infers end-reference duration from the first block timestamp."""
+        scan_4d = load_scan(scan_4d_offset_path)
+
+        assert scan_4d.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(0.4)
+
     def test_time_coord_earliest_per_block(self, scan_4d: xr.DataArray) -> None:
         """4Dscan time coordinate equals earliest timestamp per block."""
-        time_flat = (
-            np.arange(_T * _NPOSE, dtype=np.float64).reshape(_T * _NPOSE, 1) * 0.1
+        time_flat = _end_referenced_times(_T * _NPOSE, _POSE_DURATION).reshape(
+            _T * _NPOSE, 1
         )
         time_mat = time_flat.reshape(_T, _NPOSE)
         expected = time_mat[np.arange(_T), np.argmin(time_mat, axis=1)]
@@ -641,11 +410,28 @@ class TestLoadScan4D:
     def test_pose_time_coord_units(self, scan_4d: xr.DataArray) -> None:
         """pose_time has units='s'."""
         assert scan_4d.coords["pose_time"].attrs.get("units") == "s"
+        assert (
+            scan_4d.coords["pose_time"].attrs.get("volume_acquisition_reference")
+            == "end"
+        )
+
+    def test_pose_time_duration_inferred_from_first_timestamp(
+        self, scan_4d_offset_path: Path
+    ) -> None:
+        """pose_time carries the same inferred timing metadata as time."""
+        scan_4d = load_scan(scan_4d_offset_path)
+
+        assert (
+            scan_4d.coords["pose_time"].attrs["volume_acquisition_reference"] == "end"
+        )
+        assert scan_4d.coords["pose_time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(0.4)
 
     def test_pose_time_coord_values(self, scan_4d: xr.DataArray) -> None:
         """pose_time values match the reshaped raw time array."""
-        time_flat = (
-            np.arange(_T * _NPOSE, dtype=np.float64).reshape(_T * _NPOSE, 1) * 0.1
+        time_flat = _end_referenced_times(_T * _NPOSE, _POSE_DURATION).reshape(
+            _T * _NPOSE, 1
         )
         expected = time_flat.reshape(_T, _NPOSE)
         np.testing.assert_allclose(
@@ -711,7 +497,7 @@ class TestLoadScanErrors:
     def test_unknown_mode_raises(self, tmp_path: Path) -> None:
         """load_scan raises ValueError for an unknown acquisitionMode."""
         path = tmp_path / "bad_mode.scan"
-        time_data = np.zeros((1, 1))
+        time_data = np.array([[float(_FRAME_DURATION)]])
         data = _RNG.random((_T, _SIZE_Z, _SIZE_Y, _SIZE_X), dtype=np.float64)
         with h5py.File(path, "w") as f:
             f.create_dataset("/Data", data=data)

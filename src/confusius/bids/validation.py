@@ -428,7 +428,11 @@ def format_validation_error(error: ValidationError) -> str:
     """
     error_messages = []
     for err in error.errors():
-        error_messages.append(f"  - {err['msg']}")
+        location = ".".join(str(part) for part in err.get("loc", ()))
+        if location:
+            error_messages.append(f"  - {location}: {err['msg']}")
+        else:
+            error_messages.append(f"  - {err['msg']}")
     return "\n".join(error_messages)
 
 

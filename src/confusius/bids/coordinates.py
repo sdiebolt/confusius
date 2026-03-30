@@ -28,20 +28,23 @@ _DIM_TO_SLICE_ENCODING_DIRECTION: Final[dict[str, str]] = {
 """Mapping from ConfUSIus dimension names to fUSI-BIDS `SliceEncodingDirection` values."""
 
 
-def create_slice_time_coordinate(
+def create_slice_time_coordinate_from_bids(
+    volume_times: npt.ArrayLike,
     slice_timing: npt.ArrayLike,
     slice_encoding_direction: Literal["i", "j", "k", "i-", "j-", "k-"],
     units: str = "s",
 ) -> xr.DataArray:
     """Create a `slice_time` coordinate from fUSI-BIDS `SliceTiming` metadata.
 
-    The `slice_time` coordinate stores the acquisition time of each slice within each
-    volume.
+    The `slice_time` coordinate stores the absolute acquisition time of each slice for
+    each volume.
 
     Parameters
     ----------
+    volume_times : (n_time,) array-like
+        Absolute onset time of each volume, in the same units as `slice_timing`.
     slice_timing : (n_slices,) array-like
-        Array of slice acquisition times within a volume.
+        Array of slice acquisition times relative to the onset of each volume.
     slice_encoding_direction : {"i", "j", "k", "i-", "j-", "k-"}
         Direction of slice acquisition: `"i"` → `x`, `"j"` → `y`, `"k"` → `z`. A
         trailing `-` indicates that `slice_timing` is defined in reverse order (the
@@ -53,19 +56,22 @@ def create_slice_time_coordinate(
 
     Returns
     -------
-    (n_slices,) xarray.DataArray
-        Slice time coordinates.
+    (n_time, n_slices) xarray.DataArray
+        Absolute slice time coordinates.
 
     Examples
     --------
     >>> import numpy as np
     >>> slice_timing = np.array([0.0, 0.1, 0.2, 0.3])  # 4 slices
-    >>> coord = create_slice_time_coordinate(slice_timing, slice_encoding_direction="k")
+    >>> volume_times = np.array([0.0, 1.0])
+    >>> coord = create_slice_time_coordinate(
+    ...     volume_times, slice_timing, slice_encoding_direction="k"
+    ... )
     >>> coord.dims
-    ('z',)
+    ('time', 'z')
 
     >>> coord.shape
-    (4,)
+    (2, 4)
     """
     if slice_encoding_direction not in _SLICE_ENCODING_DIRECTION_TO_DIM:
         raise ValueError(
@@ -75,26 +81,34 @@ def create_slice_time_coordinate(
 
     dim_name = _SLICE_ENCODING_DIRECTION_TO_DIM[slice_encoding_direction]
     slice_timing_arr = np.asarray(slice_timing)
+    volume_times_arr = np.asarray(volume_times)
 
     if slice_timing_arr.ndim != 1:
         raise ValueError(f"SliceTiming must be 1D, got shape {slice_timing_arr.shape}")
+    if volume_times_arr.ndim != 1:
+        raise ValueError(f"volume_times must be 1D, got shape {volume_times_arr.shape}")
 
     if slice_encoding_direction.endswith("-"):
         slice_timing_arr = slice_timing_arr[::-1]
 
-    return xr.DataArray(slice_timing_arr, dims=[dim_name], attrs={"units": units})
+    return xr.DataArray(
+        volume_times_arr[:, np.newaxis] + slice_timing_arr[np.newaxis, :],
+        dims=["time", dim_name],
+        attrs={"units": units},
+    )
 
 
-def extract_slice_timing_from_coordinate(
-    slice_time_coord: xr.DataArray,
+def create_bids_slice_timing_from_coordinate(
+    slice_time_coord: xr.DataArray, volume_times: npt.ArrayLike
 ) -> tuple[np.ndarray, str]:
     """Extract fUSI-BIDS `SliceTiming` metadata from a `slice_time` coordinate.
 
     Parameters
     ----------
-    slice_time_coord : (slice_encoding_direction,) xarray.DataArray
-        Slice time coordinate with dimension corresponding to the slice encoding
-        direction.
+    slice_time_coord : (time, slice_encoding_direction) xarray.DataArray
+        Absolute slice time coordinate.
+    volume_times : (n_time,) array-like
+        Absolute onset time of each volume, in the same units as `slice_time_coord`.
 
     Returns
     -------
@@ -106,27 +120,54 @@ def extract_slice_timing_from_coordinate(
     Raises
     ------
     ValueError
-        If the coordinate is not 1D or has an invalid spatial dimension.
+        If the coordinate is not 2D, has an invalid spatial dimension, or if the slice
+        timing varies across volumes after converting to onset-relative offsets.
 
     Examples
     --------
-    >>> slice_timing, direction = extract_slice_timing_from_coordinate(coord)
+    >>> slice_timing, direction = extract_slice_timing_from_coordinate(coord, volume_times)
     >>> slice_timing
     array([0. , 0.1, 0.2, 0.3])
     >>> direction
     'k'
     """
-    if len(slice_time_coord.dims) != 1:
+    if len(slice_time_coord.dims) != 2:
         raise ValueError(
-            f"slice_time coordinate must be 1D, got {len(slice_time_coord.dims)}D: "
+            f"slice_time coordinate must be 2D, got {len(slice_time_coord.dims)}D: "
             f"{slice_time_coord.dims}"
         )
 
-    spatial_dim = slice_time_coord.dims[0]
+    if "time" not in slice_time_coord.dims:
+        raise ValueError(
+            f"slice_time coordinate must include a 'time' dimension, got: {slice_time_coord.dims}"
+        )
+
+    spatial_dim = list(set(slice_time_coord.dims) - {"time"})[0]
     if spatial_dim not in _DIM_TO_SLICE_ENCODING_DIRECTION:
         raise ValueError(
             f"slice_time coordinate must have one of spatial dimensions "
             f"{list(_DIM_TO_SLICE_ENCODING_DIRECTION.keys())}, got: {slice_time_coord.dims}"
         )
 
-    return slice_time_coord.values, _DIM_TO_SLICE_ENCODING_DIRECTION[str(spatial_dim)]
+    volume_times_arr = np.asarray(volume_times)
+    if volume_times_arr.ndim != 1:
+        raise ValueError(f"volume_times must be 1D, got shape {volume_times_arr.shape}")
+    if volume_times_arr.shape[0] != slice_time_coord.sizes["time"]:
+        raise ValueError(
+            "volume_times length must match the time dimension of slice_time coordinate."
+        )
+
+    slice_time_values = np.asarray(
+        slice_time_coord.transpose("time", spatial_dim).values,
+        dtype=np.float64,
+    )
+    relative_slice_timing = slice_time_values - volume_times_arr[:, np.newaxis]
+    if not np.allclose(
+        relative_slice_timing, relative_slice_timing[[0]], equal_nan=True
+    ):
+        raise ValueError(
+            "slice_time coordinate varies across time points after converting to "
+            "volume-onset-relative offsets."
+        )
+
+    return relative_slice_timing[0], _DIM_TO_SLICE_ENCODING_DIRECTION[str(spatial_dim)]
