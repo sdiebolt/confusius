@@ -47,7 +47,7 @@ class _TimeOverlay:
                 return offset + layer_idx
         return None
 
-    def _read_time_units(self) -> str:
+    def _read_time_units(self) -> str | None:
         """Read time units from the first layer carrying xarray metadata."""
         for layer in self._viewer.layers:
             da = layer.metadata.get("xarray")
