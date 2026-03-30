@@ -2,15 +2,16 @@
 
 import dask.array as da
 import numpy as np
+import numpy.typing as npt
 import pytest
 import xarray as xr
-from numpy.testing import assert_allclose, assert_array_equal
+from numpy.testing import assert_allclose
 
 from confusius.iq.process import (
     compute_axial_velocity_volume,
     compute_bmode_volume,
     compute_power_doppler_volume,
-    compute_processed_volume_times,
+    compute_processed_volume_timings,
     process_iq_blocks,
     process_iq_to_axial_velocity,
     process_iq_to_bmode,
@@ -19,101 +20,232 @@ from confusius.iq.process import (
 
 
 class TestComputeProcessedVolumeTimes:
-    """Tests for compute_processed_volume_times function."""
+    """Tests for compute_processed_volume_timings function."""
+
+    @staticmethod
+    def _make_iq(
+        time_values: npt.ArrayLike,
+        *,
+        volume_acquisition_duration: float,
+        volume_acquisition_reference: str = "start",
+    ) -> xr.DataArray:
+        time_values = np.asarray(time_values, dtype=np.float64)
+        return xr.DataArray(
+            np.ones((time_values.size, 1, 1, 1), dtype=np.complex128),
+            dims=("time", "z", "y", "x"),
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=("time",),
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_duration": volume_acquisition_duration,
+                        "volume_acquisition_reference": volume_acquisition_reference,
+                    },
+                ),
+                "z": [0],
+                "y": [0],
+                "x": [0],
+            },
+        )
 
     @pytest.mark.parametrize(
-        ("timing_ref", "expected"),
+        ("output_ref", "expected"),
         [
-            ("start", [0.0]),
-            ("end", [0.9]),
-            ("center", [0.45]),  # Index 4.5 interpolated: 0.4*0.5 + 0.5*0.5 = 0.45.
+            ("start", [0.0]),  # onset of first frame
+            ("center", [0.5]),  # 0.0 + 0.5 * 10 * 0.1 = 0.5
+            ("end", [1.0]),  # 0.0 + 1.0 * 10 * 0.1 = 1.0
         ],
     )
-    def test_single_window_timing_reference(self, timing_ref, expected):
-        """Single window with different timing references."""
-        volume_times = np.arange(10) * 0.1  # 0.0, 0.1, ..., 0.9
-        result = compute_processed_volume_times(
-            volume_times,
+    def test_single_window_output_reference(self, output_ref, expected):
+        """Single window with different output timing references."""
+        iq = self._make_iq(np.arange(10) * 0.1, volume_acquisition_duration=0.1)
+        result, durations = compute_processed_volume_timings(
+            iq,
             clutter_window_width=10,
             clutter_window_stride=10,
             inner_window_width=10,
             inner_window_stride=10,
-            timing_reference=timing_ref,
+            processed_time_reference=output_ref,
         )
-        if timing_ref == "center":
-            assert_allclose(result, expected)
-        else:
-            assert_array_equal(result, expected)
+        assert_allclose(result, expected)
+        assert_allclose(durations, [1.0])
+
+    def test_defaults_to_input_time_reference(self):
+        """Processed timings reuse the input reference when none is provided."""
+        iq = self._make_iq(
+            np.arange(10) * 0.1,
+            volume_acquisition_duration=0.1,
+            volume_acquisition_reference="center",
+        )
+
+        result, durations = compute_processed_volume_timings(
+            iq,
+            clutter_window_width=10,
+            clutter_window_stride=10,
+            inner_window_width=10,
+            inner_window_stride=10,
+        )
+
+        assert_allclose(result, [0.45])
+        assert_allclose(durations, [1.0])
+
+    def test_single_frame_center(self):
+        """Single-frame window: center is onset + volume_duration / 2."""
+        # Verifies the bin model: a single frame at t=0 with duration 2 ms has
+        # its center at 1 ms, not 0 ms (which the old discrete midpoint gave).
+        iq = self._make_iq([0.0], volume_acquisition_duration=0.002)
+        result, durations = compute_processed_volume_timings(
+            iq,
+            clutter_window_width=1,
+            clutter_window_stride=1,
+            inner_window_width=1,
+            inner_window_stride=1,
+            processed_time_reference="center",
+        )
+        assert_allclose(result, [0.001])
+        assert_allclose(durations, [0.002])
 
     def test_multiple_windows_values(self):
         """Multiple windows produce correct timestamps."""
-        volume_times = np.arange(100) * 0.1
-        result = compute_processed_volume_times(
-            volume_times,
+        iq = self._make_iq(np.arange(100) * 0.1, volume_acquisition_duration=0.1)
+        result, durations = compute_processed_volume_timings(
+            iq,
             clutter_window_width=50,
             clutter_window_stride=50,
             inner_window_width=25,
             inner_window_stride=25,
-            timing_reference="center",
+            processed_time_reference="center",
         )
         # 2 outer windows (start at 0, 50), 2 inner windows each (offset 0, 25).
-        # Inner window centers: indices 12, 37, 62, 87.
-        assert_allclose(result, [1.2, 3.7, 6.2, 8.7])
+        # Centers: 0.0 + 0.5*25*0.1=1.25, 2.5+1.25=3.75, 5.0+1.25=6.25, 7.5+1.25=8.75.
+        assert_allclose(result, [1.25, 3.75, 6.25, 8.75])
+        assert_allclose(durations, [2.5, 2.5, 2.5, 2.5])
 
-    def test_nonuniform_spacing(self):
-        """Interpolation works correctly with non-uniform volume times."""
-        # Non-uniform timestamps: accelerating spacing.
-        volume_times = np.array([0.0, 0.1, 0.3, 0.6, 1.0])
-        result = compute_processed_volume_times(
-            volume_times,
-            clutter_window_width=5,
-            clutter_window_stride=5,
-            inner_window_width=5,
-            inner_window_stride=5,
-            timing_reference="center",
+    @pytest.mark.parametrize(
+        ("volume_ref", "output_ref", "expected"),
+        [
+            # Input timestamps are centers; recover onset: 0.0 - 0.5*0.1 = -0.05.
+            ("center", "start", [-0.05]),
+            # Input timestamps are ends; recover onset: 0.0 - 1.0*0.1 = -0.1.
+            ("end", "start", [-0.1]),
+            # Input timestamps are centers; output center: 0.0 + (0.5*10 - 0.5)*0.1 = 0.45.
+            ("center", "center", [0.45]),
+        ],
+    )
+    def test_volume_time_reference_conversion(self, volume_ref, output_ref, expected):
+        """volume_time_reference correctly shifts onset recovery."""
+        iq = self._make_iq(
+            np.arange(10) * 0.1,
+            volume_acquisition_duration=0.1,
+            volume_acquisition_reference=volume_ref,
         )
-        # Center index = 2.0 (integer), so result is volume_times[2] = 0.3.
-        assert_array_equal(result, [0.3])
-
-    def test_nonuniform_spacing_interpolated(self):
-        """Fractional center interpolates correctly with non-uniform times."""
-        volume_times = np.array([0.0, 0.1, 0.3, 0.6, 1.0, 1.5])
-        result = compute_processed_volume_times(
-            volume_times,
-            clutter_window_width=6,
-            clutter_window_stride=6,
-            inner_window_width=6,
-            inner_window_stride=6,
-            timing_reference="center",
+        result, _ = compute_processed_volume_timings(
+            iq,
+            clutter_window_width=10,
+            clutter_window_stride=10,
+            inner_window_width=10,
+            inner_window_stride=10,
+            processed_time_reference=output_ref,
         )
-        # Center index = 2.5, interpolate between times[2]=0.3 and times[3]=0.6.
-        assert_allclose(result, [0.45])
+        assert_allclose(result, expected)
 
-    def test_invalid_timing_reference_raises(self):
-        """Invalid timing_reference raises ValueError."""
-        volume_times = np.arange(10) * 0.1
-        with pytest.raises(ValueError, match="Unknown timing_reference"):
-            compute_processed_volume_times(
-                volume_times,
-                clutter_window_width=10,
-                clutter_window_stride=10,
-                inner_window_width=10,
-                inner_window_stride=10,
-                timing_reference="invalid",  # type: ignore
+    @pytest.mark.parametrize(
+        "bad_ref_kwarg", ["iq_time_reference", "processed_time_reference"]
+    )
+    def test_invalid_reference_raises(self, bad_ref_kwarg):
+        """Invalid timing reference raises ValueError."""
+        iq = self._make_iq(np.arange(10) * 0.1, volume_acquisition_duration=0.1)
+        if bad_ref_kwarg == "iq_time_reference":
+            iq = iq.assign_coords(
+                time=xr.DataArray(
+                    iq.coords["time"].values,
+                    dims=("time",),
+                    attrs={
+                        **iq.coords["time"].attrs,
+                        "volume_acquisition_reference": "invalid",
+                    },
+                )
             )
+            kwargs = dict(processed_time_reference="start")
+        else:
+            kwargs = dict(processed_time_reference="invalid")
+
+        kwargs.update(
+            clutter_window_width=10,
+            clutter_window_stride=10,
+            inner_window_width=10,
+            inner_window_stride=10,
+        )
+        with pytest.raises(ValueError, match=bad_ref_kwarg):
+            compute_processed_volume_timings(iq, **kwargs)
 
     def test_matches_docstring_example(self):
-        """Result matches the example from the docstring."""
-        volume_times = np.arange(100) * 0.1
-        result = compute_processed_volume_times(
-            volume_times,
+        """Result matches the examples from the docstring."""
+        iq = self._make_iq(np.arange(100) * 0.1, volume_acquisition_duration=0.1)
+        kwargs = dict(
             clutter_window_width=50,
             clutter_window_stride=50,
             inner_window_width=50,
             inner_window_stride=50,
-            timing_reference="center",
+            processed_time_reference="start",
         )
-        assert_allclose(result, [2.45, 7.45])
+        output_times, output_durations = compute_processed_volume_timings(iq, **kwargs)
+        assert_allclose(
+            output_times,
+            [0.0, 5.0],
+        )
+        assert_allclose(output_durations, [5.0, 5.0])
+        output_times, output_durations = compute_processed_volume_timings(
+            iq, **{**kwargs, "processed_time_reference": "center"}
+        )
+        assert_allclose(
+            output_times,
+            [2.5, 7.5],
+        )
+        assert_allclose(output_durations, [5.0, 5.0])
+
+    def test_uses_actual_window_span_when_there_is_dead_time(self):
+        """Window timestamps use the observed first/last spacing, not n * duration."""
+        iq = self._make_iq([0.0, 2.0, 4.0], volume_acquisition_duration=1.0)
+
+        assert_allclose(
+            compute_processed_volume_timings(
+                iq,
+                clutter_window_width=3,
+                clutter_window_stride=3,
+                inner_window_width=3,
+                inner_window_stride=3,
+                processed_time_reference="center",
+            )[0],
+            [2.5],
+        )
+        assert_allclose(
+            compute_processed_volume_timings(
+                iq,
+                clutter_window_width=3,
+                clutter_window_stride=3,
+                inner_window_width=3,
+                inner_window_stride=3,
+                processed_time_reference="end",
+            )[0],
+            [5.0],
+        )
+
+    def test_returns_varying_window_durations(self):
+        """Returned window durations reflect gaps between acquisitions."""
+        iq = self._make_iq([0.0, 1.0, 3.0, 4.0, 7.0], volume_acquisition_duration=0.5)
+
+        _, durations = compute_processed_volume_timings(
+            iq,
+            clutter_window_width=5,
+            clutter_window_stride=5,
+            inner_window_width=2,
+            inner_window_stride=1,
+            processed_time_reference="start",
+        )
+
+        assert_allclose(durations, [1.5, 2.5, 1.5, 3.5])
 
 
 class TestComputePowerDopplerVolume:
@@ -262,9 +394,9 @@ class TestComputeAxialVelocityVolume:
 class TestProcessIqBlocks:
     """Tests for process_iq_blocks function."""
 
-    def test_defaults_window_width_and_stride_to_chunk_size(self, sample_iq_dataset):
+    def test_defaults_window_width_and_stride_to_chunk_size(self, sample_iq_dataarray):
         """Missing window params default to the time chunk size."""
-        iq = da.from_array(sample_iq_dataset["iq"].values, chunks=(5, 4, 6, 8))
+        iq = da.from_array(sample_iq_dataarray.values, chunks=(5, 4, 6, 8))
 
         def process_func(block: np.ndarray, **kwargs) -> np.ndarray:
             return block.mean(axis=0, keepdims=True)
@@ -273,9 +405,9 @@ class TestProcessIqBlocks:
 
         assert result.shape == (4, 4, 6, 8)
 
-    def test_stride_greater_than_width_raises(self, sample_iq_dataset):
+    def test_stride_greater_than_width_raises(self, sample_iq_dataarray):
         """window_stride > window_width raises ValueError."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
         dask_iq = da.from_array(iq.data)
 
         with pytest.raises(ValueError, match="must be less than or equal"):
@@ -286,9 +418,9 @@ class TestProcessIqBlocks:
                 window_stride=10,
             )
 
-    def test_warns_when_frames_dropped(self, sample_iq_dataset):
+    def test_warns_when_frames_dropped(self, sample_iq_dataarray):
         """Warns when input volumes don't fit into complete windows."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
         dask_iq = da.from_array(iq.data)
 
         with pytest.warns(UserWarning, match="input volumes will be dropped"):
@@ -335,10 +467,10 @@ class TestProcessIqToPowerDoppler:
         with pytest.raises(TypeError, match="complex-valued"):
             process_iq_to_power_doppler(iq)
 
-    def test_output_has_correct_attributes(self, sample_iq_dataset):
+    def test_output_has_correct_attributes(self, sample_iq_dataarray):
         """Output DataArray has expected attributes."""
         result = process_iq_to_power_doppler(
-            sample_iq_dataset["iq"],
+            sample_iq_dataarray,
             clutter_window_width=10,
             clutter_window_stride=10,
             low_cutoff=1,
@@ -348,28 +480,63 @@ class TestProcessIqToPowerDoppler:
         assert result.name == "power_doppler"
         assert result.attrs["units"] == "a.u."
         assert result.attrs["clutter_filters"] == "Index-based SVD [1, 8["
-        assert result.attrs["clutter_filter_window_duration"] == pytest.approx(1.0)
-        assert result.attrs["clutter_filter_window_stride"] == pytest.approx(1.0)
-        assert result.attrs["power_doppler_integration_duration"] == pytest.approx(1.0)
-        assert result.attrs["power_doppler_integration_stride"] == pytest.approx(1.0)
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1.0)
+        assert result.coords["time"].attrs["volume_acquisition_reference"] == "start"
 
-    def test_uses_compound_sampling_frequency_from_attrs(self, sample_iq_dataset):
-        """Uses compound_sampling_frequency attribute when fs not provided."""
-        # Update the attribute on the iq DataArray.
-        sample_iq_dataset["iq"].attrs["compound_sampling_frequency"] = 100.0
+    def test_butterworth_uses_time_coord_step_as_fs(self, sample_iq_dataarray):
+        """Butterworth filter design uses the time coordinate step, not scanner provenance."""
+        iq = sample_iq_dataarray.copy()
+        iq.attrs["compound_sampling_frequency"] = 100.0
 
-        # Should not raise even with Butterworth (which requires fs).
+        # Time coord step is 0.1 s → fs = 10 Hz, so Nyquist is 5 Hz. If the code used
+        # compound_sampling_frequency instead, 30 Hz would incorrectly look valid.
+        with pytest.raises(ValueError, match="must be in range"):
+            process_iq_to_power_doppler(
+                iq,
+                clutter_window_width=20,
+                filter_method="butterworth",
+                low_cutoff=30.0,
+            )
+
+    def test_duration_metadata_from_actual_timestamps(self, sample_iq_dataarray):
+        """volume_acquisition_duration is computed from actual window timestamps."""
         result = process_iq_to_power_doppler(
-            sample_iq_dataset["iq"],
+            sample_iq_dataarray,
             clutter_window_width=20,
-            filter_method="butterworth",
-            low_cutoff=5.0,
+            clutter_window_stride=5,
+            doppler_window_width=4,
+            doppler_window_stride=2,
         )
-        assert result is not None
 
-    def test_duration_metadata_uses_time_coordinate_units(self, sample_iq_dataset):
-        """Duration metadata is converted from the time coordinate units to seconds."""
-        iq = sample_iq_dataset["iq"].assign_coords(
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(0.4)
+
+    def test_duration_metadata_set_without_time_coord_units(self, sample_iq_dataarray):
+        """volume_acquisition_duration is always set even when time coord has no units."""
+        iq = sample_iq_dataarray.assign_coords(
+            time=xr.DataArray(np.arange(20) * 0.1, dims=("time",))
+        )
+
+        with pytest.warns(
+            UserWarning, match="no `units` attribute|compound_sampling_frequency"
+        ):
+            result = process_iq_to_bmode(
+                iq, bmode_window_width=10, bmode_window_stride=5
+            )
+
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1.0)
+        assert result.coords["time"].attrs["volume_acquisition_reference"] == "start"
+
+    def test_duration_metadata_preserves_time_coordinate_units(
+        self, sample_iq_dataarray
+    ):
+        """Window timing metadata stays in the native time-coordinate units."""
+        iq = sample_iq_dataarray.assign_coords(
             time=xr.DataArray(
                 np.arange(20) * 100.0,
                 dims=("time",),
@@ -377,36 +544,42 @@ class TestProcessIqToPowerDoppler:
             )
         )
 
-        result = process_iq_to_power_doppler(
-            iq,
-            clutter_window_width=10,
-            clutter_window_stride=5,
-            doppler_window_width=4,
-            doppler_window_stride=2,
-        )
-
-        assert result.attrs["clutter_filter_window_duration"] == pytest.approx(1.0)
-        assert result.attrs["clutter_filter_window_stride"] == pytest.approx(0.5)
-        assert result.attrs["power_doppler_integration_duration"] == pytest.approx(0.4)
-        assert result.attrs["power_doppler_integration_stride"] == pytest.approx(0.2)
-
-    def test_duration_metadata_warns_when_time_units_missing(self, sample_iq_dataset):
-        """Missing time units warn and default to seconds for duration metadata."""
-        iq = sample_iq_dataset["iq"].assign_coords(
-            time=xr.DataArray(np.arange(20) * 0.1, dims=("time",))
-        )
-
-        with pytest.warns(UserWarning, match="Assuming seconds"):
+        with pytest.warns(UserWarning, match="compound_sampling_frequency"):
             result = process_iq_to_bmode(
                 iq, bmode_window_width=10, bmode_window_stride=5
             )
 
-        assert result.attrs["bmode_integration_duration"] == pytest.approx(1.0)
-        assert result.attrs["bmode_integration_stride"] == pytest.approx(0.5)
+        assert_allclose(result.coords["time"].values, [0.0, 500.0, 1000.0])
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1000.0)
+        assert result.attrs["bmode_integration_duration"] == pytest.approx(1000.0)
 
-    def test_duration_metadata_warns_when_time_is_non_uniform(self, sample_iq_dataset):
-        """Non-uniform time coordinates use the median step with a warning."""
-        iq = sample_iq_dataset["iq"].assign_coords(
+    def test_varying_window_durations_warn_and_store_median(self, sample_iq_dataarray):
+        """Variable output-window durations warn and store the median metadata value."""
+        iq = sample_iq_dataarray.isel(time=slice(0, 5)).assign_coords(
+            time=xr.DataArray([0.0, 1.0, 3.0, 4.0, 7.0], dims=("time",))
+        )
+
+        with pytest.warns(
+            UserWarning,
+            match=(
+                "no `units` attribute|compound_sampling_frequency|"
+                "B-mode integration duration varies"
+            ),
+        ):
+            result = process_iq_to_bmode(
+                iq, bmode_window_width=2, bmode_window_stride=1
+            )
+
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1.6)
+        assert result.attrs["bmode_integration_duration"] == pytest.approx(1.6)
+
+    def test_butterworth_non_uniform_time_raises(self, sample_iq_dataarray):
+        """Butterworth filtering rejects non-uniform time coordinates."""
+        iq = sample_iq_dataarray.assign_coords(
             time=xr.DataArray(
                 [0.0, 0.1, 0.25, 0.35, 0.5] + list(np.arange(5, 20) * 0.1),
                 dims=("time",),
@@ -414,35 +587,110 @@ class TestProcessIqToPowerDoppler:
             )
         )
 
-        with pytest.warns(UserWarning, match="non-uniform sampling"):
-            result = process_iq_to_power_doppler(
+        with pytest.raises(ValueError, match="regularly sampled `time` coordinate"):
+            process_iq_to_power_doppler(
                 iq,
                 clutter_window_width=4,
                 clutter_window_stride=2,
+                filter_method="butterworth",
                 doppler_window_width=2,
                 doppler_window_stride=1,
             )
 
-        assert result.attrs["clutter_filter_window_duration"] == pytest.approx(0.4)
-
-    def test_duration_metadata_is_omitted_for_single_time_point(
-        self, sample_iq_dataset
+    def test_single_time_point_has_volume_acquisition_duration(
+        self, sample_iq_dataarray
     ) -> None:
-        """Single-volume inputs do not emit duration metadata derived from time."""
-        iq = sample_iq_dataset["iq"].isel(time=slice(0, 1))
+        """Single-volume inputs still emit volume_acquisition_duration on the time coordinate."""
+        iq = sample_iq_dataarray.isel(time=slice(0, 1))
 
         result = process_iq_to_bmode(iq, bmode_window_width=1, bmode_window_stride=1)
 
-        assert "bmode_integration_duration" not in result.attrs
-        assert "bmode_integration_stride" not in result.attrs
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1.0 / iq.attrs["compound_sampling_frequency"])
+        assert result.coords["time"].attrs["volume_acquisition_reference"] == "start"
 
-    def test_accessor_delegates_to_process_iq_to_power_doppler(self, sample_iq_dataset):
+    def test_duration_falls_back_to_compound_sampling_frequency_with_warning(
+        self, sample_iq_dataarray
+    ) -> None:
+        """Missing explicit duration falls back to compound_sampling_frequency with warning."""
+        iq = sample_iq_dataarray.copy()
+        iq.coords["time"].attrs.pop("volume_acquisition_duration", None)
+
+        with pytest.warns(UserWarning, match="compound_sampling_frequency"):
+            result = process_iq_to_bmode(
+                iq, bmode_window_width=1, bmode_window_stride=1
+            )
+
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1.0 / iq.attrs["compound_sampling_frequency"])
+
+    def test_duration_falls_back_to_time_spacing_with_warning(
+        self, sample_iq_dataarray
+    ) -> None:
+        """Missing explicit duration and scanner rate falls back to time spacing."""
+        iq = sample_iq_dataarray.copy()
+        iq.coords["time"].attrs.pop("volume_acquisition_duration", None)
+        iq.attrs.pop("compound_sampling_frequency", None)
+
+        with pytest.warns(
+            UserWarning, match="representative `time` coordinate spacing"
+        ):
+            result = process_iq_to_bmode(
+                iq, bmode_window_width=1, bmode_window_stride=1
+            )
+
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(0.1)
+
+    def test_duration_irregular_time_spacing_warns_about_median_approximation(
+        self, sample_iq_dataarray
+    ) -> None:
+        """Irregular time-spacing fallback warns that the inferred duration is approximate."""
+        iq = sample_iq_dataarray.copy()
+        iq.coords["time"].attrs.pop("volume_acquisition_duration", None)
+        iq.attrs.pop("compound_sampling_frequency", None)
+        iq = iq.assign_coords(
+            time=xr.DataArray(
+                [0.0, 0.1, 0.25, 0.45] + list(np.arange(4, 20) * 0.1),
+                dims=("time",),
+                attrs={"units": "s"},
+            )
+        )
+
+        with pytest.warns(UserWarning, match="median approximation"):
+            result = process_iq_to_bmode(
+                iq, bmode_window_width=1, bmode_window_stride=1
+            )
+
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(np.median(np.diff(iq.coords["time"].values)))
+
+    def test_single_time_point_without_duration_metadata_raises(
+        self, sample_iq_dataarray
+    ) -> None:
+        """A single time point without duration provenance cannot infer acquisition duration."""
+        iq = sample_iq_dataarray.isel(time=slice(0, 1)).copy()
+        iq.coords["time"].attrs.pop("volume_acquisition_duration", None)
+        iq.attrs.pop("compound_sampling_frequency", None)
+
+        with pytest.raises(
+            ValueError, match="Cannot determine volume acquisition duration"
+        ):
+            process_iq_to_bmode(iq, bmode_window_width=1, bmode_window_stride=1)
+
+    def test_accessor_delegates_to_process_iq_to_power_doppler(
+        self, sample_iq_dataarray
+    ):
         """Xarray accessor calls process_iq_to_power_doppler with the correct arguments."""
         from unittest.mock import patch
 
         import confusius  # noqa: F401 — registers the fusi accessor.
 
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
 
         with patch("confusius.xarray.iq.process_iq_to_power_doppler") as mock_fn:
             iq.fusi.iq.process_to_power_doppler(
@@ -474,18 +722,18 @@ class TestProcessIqToPowerDoppler:
 class TestProcessIqToAxialVelocity:
     """Tests for process_iq_to_axial_velocity function."""
 
-    def test_missing_required_attributes_raises(self, sample_iq_dataset):
+    def test_missing_required_attributes_raises(self, sample_iq_dataarray):
         """Raises ValueError when required attributes are missing."""
         # Remove required attribute from the iq DataArray.
-        sample_iq_dataset["iq"].attrs.pop("compound_sampling_frequency", None)
+        sample_iq_dataarray.attrs.pop("transmit_frequency", None)
 
         with pytest.raises(ValueError, match="Missing required DataArray attributes"):
-            process_iq_to_axial_velocity(sample_iq_dataset["iq"])
+            process_iq_to_axial_velocity(sample_iq_dataarray)
 
-    def test_output_has_correct_attributes(self, sample_iq_dataset):
+    def test_output_has_correct_attributes(self, sample_iq_dataarray):
         """Output DataArray has expected attributes."""
         result = process_iq_to_axial_velocity(
-            sample_iq_dataset["iq"],
+            sample_iq_dataarray,
             clutter_window_width=10,
             clutter_window_stride=10,
             lag=2,
@@ -495,29 +743,51 @@ class TestProcessIqToAxialVelocity:
         assert result.name == "axial_velocity"
         assert result.attrs["units"] == "m/s"
         assert result.attrs["clutter_filters"] == "Index-based SVD"
-        assert result.attrs["clutter_filter_window_duration"] == pytest.approx(1.0)
-        assert result.attrs["clutter_filter_window_stride"] == pytest.approx(1.0)
-        assert result.attrs["axial_velocity_integration_duration"] == pytest.approx(1.0)
-        assert result.attrs["axial_velocity_integration_stride"] == pytest.approx(1.0)
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1.0)
+        assert result.coords["time"].attrs["volume_acquisition_reference"] == "start"
         assert result.attrs["axial_velocity_lag"] == 2
         assert result.attrs["axial_velocity_absolute"] is True
 
-    def test_uses_attrs_for_parameters(self, sample_iq_dataset):
-        """Uses DataArray attributes for fs, transmit_frequency and beamforming_sound_velocity."""
+    def test_uses_attrs_for_parameters(self, sample_iq_dataarray):
+        """Uses DataArray attributes for transmit frequency and sound velocity."""
         # Set specific attribute values on the iq DataArray to verify they're used.
-        sample_iq_dataset["iq"].attrs["compound_sampling_frequency"] = 100.0
-        sample_iq_dataset["iq"].attrs["transmit_frequency"] = 10e6
-        sample_iq_dataset["iq"].attrs["beamforming_sound_velocity"] = 1500.0
+        sample_iq_dataarray.attrs["transmit_frequency"] = 10e6
+        sample_iq_dataarray.attrs["beamforming_sound_velocity"] = 1500.0
 
-        result = process_iq_to_axial_velocity(sample_iq_dataset["iq"])
+        result = process_iq_to_axial_velocity(sample_iq_dataarray)
 
         assert result.attrs["transmit_frequency"] == 10e6
         assert result.attrs["beamforming_sound_velocity"] == 1500.0
 
-    def test_svd_energy_filter_method(self, sample_iq_dataset) -> None:
+    def test_axial_velocity_uses_time_coord_without_compound_sampling_frequency(
+        self, sample_iq_dataarray
+    ) -> None:
+        """Axial velocity works without compound_sampling_frequency when timing lives on the time coord."""
+        iq = sample_iq_dataarray.copy()
+        iq.attrs.pop("compound_sampling_frequency", None)
+        iq = iq.assign_coords(
+            time=xr.DataArray(
+                iq.coords["time"].values,
+                dims=("time",),
+                attrs={
+                    **iq.coords["time"].attrs,
+                    "volume_acquisition_duration": 0.1,
+                },
+            )
+        )
+
+        result = process_iq_to_axial_velocity(iq)
+
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(2.0)
+
+    def test_svd_energy_filter_method(self, sample_iq_dataarray) -> None:
         """Energy-based SVD filtering produces an axial velocity output."""
         result = process_iq_to_axial_velocity(
-            sample_iq_dataset["iq"],
+            sample_iq_dataarray,
             clutter_window_width=10,
             filter_method="svd_energy",
             low_cutoff=0.1,
@@ -526,10 +796,10 @@ class TestProcessIqToAxialVelocity:
 
         assert result.name == "axial_velocity"
 
-    def test_svd_cumulative_energy_filter_method(self, sample_iq_dataset) -> None:
+    def test_svd_cumulative_energy_filter_method(self, sample_iq_dataarray) -> None:
         """Cumulative-energy SVD filtering produces a power Doppler output."""
         result = process_iq_to_power_doppler(
-            sample_iq_dataset["iq"],
+            sample_iq_dataarray,
             clutter_window_width=10,
             filter_method="svd_cumulative_energy",
             low_cutoff=0.1,
@@ -539,26 +809,26 @@ class TestProcessIqToAxialVelocity:
         assert result.name == "power_doppler"
 
     def test_default_clutter_window_width_uses_time_chunk_size(
-        self, sample_iq_dataset
+        self, sample_iq_dataarray
     ) -> None:
         """Missing clutter window width defaults to the time chunk size."""
-        iq = sample_iq_dataset["iq"].copy(
-            data=da.from_array(sample_iq_dataset["iq"].values, chunks=(5, 4, 6, 8))
+        iq = sample_iq_dataarray.copy(
+            data=da.from_array(sample_iq_dataarray.values, chunks=(5, 4, 6, 8))
         )
 
         result = process_iq_to_power_doppler(iq)
 
-        assert result.attrs["clutter_filter_window_duration"] == pytest.approx(0.5)
+        assert result is not None
 
     def test_accessor_delegates_to_process_iq_to_axial_velocity(
-        self, sample_iq_dataset
+        self, sample_iq_dataarray
     ):
         """Xarray accessor calls process_iq_to_axial_velocity with the correct arguments."""
         from unittest.mock import patch
 
         import confusius  # noqa: F401 — registers the fusi accessor.
 
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
 
         with patch("confusius.xarray.iq.process_iq_to_axial_velocity") as mock_fn:
             iq.fusi.iq.process_to_axial_velocity(
@@ -595,11 +865,11 @@ class TestProcessIqToAxialVelocity:
         )
 
     def test_axial_velocity_output_uses_prefixed_metadata_names(
-        self, sample_iq_dataset
+        self, sample_iq_dataarray
     ):
         """Axial-velocity-specific attrs use explicit `axial_velocity_` prefixes."""
         result = process_iq_to_axial_velocity(
-            sample_iq_dataset["iq"],
+            sample_iq_dataarray,
             lag=2,
             absolute_velocity=True,
             spatial_kernel=3,
@@ -620,10 +890,10 @@ class TestDataArrayClutterMask:
     """Tests for DataArray clutter mask support in wrapper functions."""
 
     def test_dataarray_mask_matches_reference_power_doppler(
-        self, sample_iq_dataset, spatial_mask
+        self, sample_iq_dataarray, spatial_mask
     ):
         """DataArray mask matches numpy reference for power Doppler."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
         n_time = iq.sizes["time"]
 
         # Create DataArray mask with matching coordinates.
@@ -659,10 +929,10 @@ class TestDataArrayClutterMask:
         assert_allclose(result.values[0], expected[0])
 
     def test_dataarray_mask_matches_reference_axial_velocity(
-        self, sample_iq_dataset, spatial_mask
+        self, sample_iq_dataarray, spatial_mask
     ):
         """DataArray mask matches numpy reference for axial velocity."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
         n_time = iq.sizes["time"]
 
         # Create DataArray mask with matching coordinates.
@@ -701,10 +971,10 @@ class TestDataArrayClutterMask:
         assert_allclose(result.values[0], expected[0])
 
     def test_dataarray_mask_coordinate_mismatch_raises(
-        self, sample_iq_dataset, spatial_mask
+        self, sample_iq_dataarray, spatial_mask
     ):
         """DataArray mask with mismatched coordinates raises ValueError."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
 
         # Create mask with different coordinates.
         mask_dataarray = xr.DataArray(
@@ -726,10 +996,10 @@ class TestDataArrayClutterMask:
             )
 
     def test_dataarray_mask_missing_coordinate_raises(
-        self, sample_iq_dataset, spatial_mask
+        self, sample_iq_dataarray, spatial_mask
     ):
         """DataArray mask missing a coordinate raises ValueError."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
 
         # Create mask missing 'z' coordinate.
         mask_dataarray = xr.DataArray(
@@ -749,9 +1019,9 @@ class TestDataArrayClutterMask:
                 high_cutoff=8,
             )
 
-    def test_dataarray_mask_shape_mismatch_raises(self, sample_iq_dataset):
+    def test_dataarray_mask_shape_mismatch_raises(self, sample_iq_dataarray):
         """DataArray mask with wrong shape raises ValueError."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
 
         # Create mask with wrong shape.
         wrong_mask = np.ones((2, 2, 2), dtype=bool)
@@ -833,22 +1103,24 @@ class TestProcessIqToBmode:
         with pytest.raises(TypeError, match="complex-valued"):
             process_iq_to_bmode(iq)
 
-    def test_output_has_correct_attributes(self, sample_iq_dataset):
+    def test_output_has_correct_attributes(self, sample_iq_dataarray):
         """Output DataArray has expected attributes."""
         result = process_iq_to_bmode(
-            sample_iq_dataset["iq"],
+            sample_iq_dataarray,
             bmode_window_width=10,
             bmode_window_stride=10,
         )
 
         assert result.name == "bmode"
         assert result.attrs["units"] == "a.u."
-        assert result.attrs["bmode_integration_duration"] == pytest.approx(1.0)
-        assert result.attrs["bmode_integration_stride"] == pytest.approx(1.0)
+        assert result.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(1.0)
+        assert result.coords["time"].attrs["volume_acquisition_reference"] == "start"
 
-    def test_matches_reference_implementation(self, sample_iq_dataset):
+    def test_matches_reference_implementation(self, sample_iq_dataarray):
         """Output matches reference mean magnitude computation."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
         n_time = iq.sizes["time"]
 
         result = process_iq_to_bmode(
@@ -860,9 +1132,9 @@ class TestProcessIqToBmode:
         expected = np.mean(np.abs(iq.values), axis=0)
         assert_allclose(result.values[0], expected)
 
-    def test_default_window_uses_chunk_size(self, sample_iq_dataset):
+    def test_default_window_uses_chunk_size(self, sample_iq_dataarray):
         """Default window width falls back to the IQ chunk size."""
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
         n_time = iq.sizes["time"]
 
         # Chunk along time so chunksize[0] is known.
@@ -873,13 +1145,13 @@ class TestProcessIqToBmode:
 
         assert result.sizes["time"] == 1
 
-    def test_accessor_delegates_to_process_iq_to_bmode(self, sample_iq_dataset):
+    def test_accessor_delegates_to_process_iq_to_bmode(self, sample_iq_dataarray):
         """Xarray accessor calls process_iq_to_bmode with the correct arguments."""
         from unittest.mock import patch
 
         import confusius  # noqa: F401 — registers the fusi accessor.
 
-        iq = sample_iq_dataset["iq"]
+        iq = sample_iq_dataarray
 
         with patch("confusius.xarray.iq.process_iq_to_bmode") as mock_fn:
             iq.fusi.iq.process_to_bmode(bmode_window_width=10, bmode_window_stride=5)

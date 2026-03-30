@@ -8,15 +8,14 @@ from confusius._dims import SPATIAL_DIMS, TIME_DIM
 _REQUIRED_DIMS = (TIME_DIM, *SPATIAL_DIMS)
 """Required dimensions and coordinates that all IQ data must have."""
 
-_REQUIRED_ATTRS = (
-    "compound_sampling_frequency",
+_AXIAL_VELOCITY_REQUIRED_ATTRS = (
     "transmit_frequency",
     "beamforming_sound_velocity",
 )
-"""Required attributes that all IQ data must have."""
+"""Required attributes for IQ data used in axial velocity computation."""
 
 
-def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
+def validate_iq(iq: xr.DataArray, require_attrs: bool = False) -> None:
     """Validate that a DataArray contains valid IQ data.
 
     This function performs validation of an IQ DataArray to ensure it meets all
@@ -27,9 +26,8 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
     2. **Coordinates**: All dimensions must have corresponding coordinates.
     3. **Data type**: The data must be complex-valued (`complex64` or `complex128`).
     4. **Attributes** (optional): If `require_attrs` is `True`, the DataArray must have
-       the following attributes:
+       the following attributes needed for axial velocity computation:
 
-       - `compound_sampling_frequency`: Volume acquisition rate in Hz.
        - `transmit_frequency`: Ultrasound probe central frequency in Hz.
        - `beamforming_sound_velocity`: Speed of sound assumed during beamforming in
          meters per second.
@@ -39,10 +37,10 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
     iq : xarray.DataArray
         Input DataArray to validate. Must have dimensions `(time, z, y, x)` and
         the required structure and attributes.
-    require_attrs : bool, default: True
+    require_attrs : bool, default: False
         Whether to validate that all required attributes
-        (`compound_sampling_frequency`, `transmit_frequency`,
-        `beamforming_sound_velocity`) are present in the DataArray attributes.
+        (`transmit_frequency`, `beamforming_sound_velocity`) are present in the
+        DataArray attributes.
 
     Raises
     ------
@@ -70,12 +68,11 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
     ...         "x": np.arange(8),
     ...     },
     ...     attrs={
-    ...         "compound_sampling_frequency": 1000.0,
     ...         "transmit_frequency": 15e6,
     ...         "beamforming_sound_velocity": 1540.0,
     ...     },
     ... )
-    >>> validate_iq(iq)
+    >>> validate_iq(iq, require_attrs=True)
 
     Skip attribute validation for intermediate processing:
 
@@ -105,9 +102,10 @@ def validate_iq(iq: xr.DataArray, require_attrs: bool = True) -> None:
         )
 
     if require_attrs:
-        missing_attrs = set(_REQUIRED_ATTRS) - set(iq.attrs.keys())
+        missing_attrs = set(_AXIAL_VELOCITY_REQUIRED_ATTRS) - set(iq.attrs.keys())
         if missing_attrs:
             raise ValueError(
                 f"Missing required DataArray attributes: {missing_attrs}. "
-                f"All IQ data must have attributes: {_REQUIRED_ATTRS}."
+                "Axial velocity computation requires attributes: "
+                f"{_AXIAL_VELOCITY_REQUIRED_ATTRS}."
             )

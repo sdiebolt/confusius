@@ -396,6 +396,7 @@ class TestLoadScan2D:
         assert scan_2d.coords["time"].dims == ("time",)
         assert len(scan_2d.coords["time"]) == _T
         assert scan_2d.coords["time"].attrs.get("units") == "s"
+        assert scan_2d.coords["time"].attrs.get("volume_acquisition_reference") == "end"
 
     def test_spatial_coords_present(self, scan_2d: xr.DataArray) -> None:
         """2Dscan has x, y, z spatial coordinates."""
@@ -611,6 +612,7 @@ class TestLoadScan4D:
         assert scan_4d.coords["time"].dims == ("time",)
         assert len(scan_4d.coords["time"]) == _T
         assert scan_4d.coords["time"].attrs.get("units") == "s"
+        assert scan_4d.coords["time"].attrs.get("volume_acquisition_reference") == "end"
 
     def test_time_coord_earliest_per_block(self, scan_4d: xr.DataArray) -> None:
         """4Dscan time coordinate equals earliest timestamp per block."""

@@ -440,10 +440,10 @@ class ConfUSIusWidget(QWidget):
             except ValueError:
                 pass
 
-        def _activate(idx: int) -> None:
+        def _activate_panel(panel_index: int) -> None:
             # Clicking the already-open panel collapses it (all closed).
-            already_open = panels[idx].isVisible()
-            target = -1 if already_open else idx  # -1 means all collapsed
+            already_open = panels[panel_index].isVisible()
+            target = -1 if already_open else panel_index  # -1 means all collapsed
 
             # Available height shared between panels during animation.
             available_h = max(container.height() - sum(b.height() for b in btns), 50)
@@ -496,7 +496,7 @@ class ConfUSIusWidget(QWidget):
                     a.start()
 
         for i, btn in enumerate(btns):
-            btn.clicked.connect(lambda _checked, i=i: _activate(i))
+            btn.clicked.connect(lambda _checked, i=i: _activate_panel(i))
 
         # Store for icon re-tinting on theme change.
         self._accordion_btns = list(zip(btns, [e[1] for e in tab_entries]))

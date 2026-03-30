@@ -38,8 +38,8 @@ _MATRIX_TRANSFORMS = {
 
 
 def _striu2mat(
-    striu: npt.NDArray[np.float64],
-) -> npt.NDArray[np.float64]:
+    striu: npt.NDArray[np.floating],
+) -> npt.NDArray[np.floating]:
     """Construct a shear matrix from the upper triangular vector.
 
     Parameters
@@ -77,11 +77,11 @@ def _striu2mat(
 
 
 def compose_affine(
-    T: npt.NDArray[np.float64],
-    R: npt.NDArray[np.float64],
-    Z: npt.NDArray[np.float64],
-    S: npt.NDArray[np.float64] | None = None,
-) -> npt.NDArray[np.float64]:
+    T: npt.NDArray[np.floating],
+    R: npt.NDArray[np.floating],
+    Z: npt.NDArray[np.floating],
+    S: npt.NDArray[np.floating] | None = None,
+) -> npt.NDArray[np.floating]:
     """Compose translations, rotations, zooms, and shears into an affine matrix.
 
     Parameters
@@ -123,12 +123,12 @@ def compose_affine(
 
 
 def decompose_affine(
-    A44: npt.NDArray[np.float64],
+    A44: npt.NDArray[np.floating],
 ) -> tuple[
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
-    npt.NDArray[np.float64],
+    npt.NDArray[np.floating],
+    npt.NDArray[np.floating],
+    npt.NDArray[np.floating],
+    npt.NDArray[np.floating],
 ]:
     """Decompose a 4x4 homogeneous affine into translation, rotation, zoom, shear.
 
@@ -196,7 +196,7 @@ def decompose_affine(
 
 
 def _affine_to_sitk_linear_transform(
-    affine: npt.NDArray[np.float64],
+    affine: npt.NDArray[np.floating],
 ) -> "AffineTransform":
     """Convert a homogeneous affine matrix to a SimpleITK `AffineTransform`.
 
@@ -223,7 +223,7 @@ def _affine_to_sitk_linear_transform(
 
 def _sitk_linear_transform_to_affine(
     transform: "sitk.Transform",
-) -> npt.NDArray[np.float64]:
+) -> npt.NDArray[np.floating]:
     """Convert a SimpleITK linear transform to a homogeneous affine matrix.
 
     Handles `TranslationTransform`, `Euler2DTransform`, `Euler3DTransform`,

@@ -436,6 +436,10 @@ def convert_echoframe_dat_to_zarr(
     zarr_group.create_array("time", data=time_values, dimension_names=["time"])
     zarr_group["time"].attrs["units"] = "s"
     zarr_group["time"].attrs["long_name"] = "Time"
+    zarr_group["time"].attrs["volume_acquisition_reference"] = "start"
+    zarr_group["time"].attrs["volume_acquisition_duration"] = float(
+        meta["plane_wave_angles"].size / meta["pulse_repetition_frequency"]
+    )
 
     # z coordinate is the stacking dimension (size 1 for 2D data).
     z_values = np.array([0.0])

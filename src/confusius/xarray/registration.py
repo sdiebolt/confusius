@@ -51,7 +51,7 @@ class FUSIRegistrationAccessor:
         show_progress: bool = False,
         plot_metric: bool = True,
         plot_composite: bool = True,
-    ) -> "tuple[xr.DataArray, npt.NDArray[np.float64] | xr.DataArray | None]":
+    ) -> "tuple[xr.DataArray, npt.NDArray[np.floating] | xr.DataArray | None]":
         """Register this volume to a fixed reference volume.
 
         Parameters

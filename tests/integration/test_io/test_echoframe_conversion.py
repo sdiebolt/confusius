@@ -42,6 +42,7 @@ class TestEchoFrameConversion:
             assert "iq" in ds
             assert ds["iq"].shape[0] == 6
             assert ds["iq"].dtype == np.complex64
+
             assert np.all(np.isfinite(ds["iq"].values))
 
             iq = ds["iq"].values
@@ -54,6 +55,10 @@ class TestEchoFrameConversion:
             np.testing.assert_allclose(ds["time"].values, np.arange(6) / 1000.0)
             assert ds["time"].attrs["units"] == "s"
             assert ds["time"].attrs["long_name"] == "Time"
+            assert ds["time"].attrs["volume_acquisition_reference"] == "start"
+            assert ds["time"].attrs["volume_acquisition_duration"] == pytest.approx(
+                5 / 5000.0
+            )
 
             np.testing.assert_allclose(ds["x"].values, np.linspace(0, 0.4, 4))
             assert ds["x"].attrs["units"] == "mm"
@@ -267,8 +272,7 @@ class TestEchoFrameConversion:
 
         zarr_group = zarr.open_group(output_path, mode="r")
         iq_array = zarr_group["iq"]
-        iq_metadata = iq_array.metadata
-        assert hasattr(iq_metadata, "shards") or "shards" in dir(iq_metadata)
+        assert iq_array.shards == (6, 1, 6, 4)
 
     def test_cleanup_on_error(self, synthetic_echoframe_session, tmp_path):
         """Test that incomplete zarr store is cleaned up on error.

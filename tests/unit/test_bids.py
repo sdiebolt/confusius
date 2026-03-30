@@ -145,7 +145,7 @@ class TestValidation:
 
     def test_missing_timing_warning(self):
         """Test that missing timing fields trigger a warning when time-related fields are present."""
-        # Provide time-related fields but no RepetitionTime or VolumeTiming
+        # Provide time-related fields but no RepetitionTime or VolumeTiming.
         with pytest.warns(UserWarning, match="RepetitionTime or VolumeTiming"):
             bids.validate_metadata(
                 {
@@ -157,7 +157,7 @@ class TestValidation:
 
     def test_invalid_repetition_time(self):
         """Test that invalid RepetitionTime raises error."""
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="greater than 0"):
             bids.validate_metadata({"RepetitionTime": -1.0})
 
     def test_repetition_time_and_volume_timing_mutually_exclusive(self):
@@ -232,43 +232,41 @@ class TestValidation:
 class TestSliceTimeCoordinate:
     """Test slice timing coordinate creation and extraction."""
 
-    def test_create_slice_time_z_direction(self):
-        """Test creating slice_time for z encoding direction."""
-        slice_timing = np.array([0.0, 0.1, 0.2, 0.3])
+    @pytest.mark.parametrize(
+        ("slice_encoding_direction", "expected_dim", "expected_values"),
+        [
+            ("i", "x", [0.0, 0.1, 0.2]),
+            ("j", "y", [0.0, 0.1, 0.2]),
+            ("k", "z", [0.0, 0.1, 0.2]),
+            ("i-", "x", [0.2, 0.1, 0.0]),
+            ("j-", "y", [0.2, 0.1, 0.0]),
+            ("k-", "z", [0.2, 0.1, 0.0]),
+        ],
+    )
+    def test_create_slice_time_coordinate(
+        self, slice_encoding_direction, expected_dim, expected_values
+    ):
+        """Valid slice encoding directions map to the correct dim and value order."""
+        slice_timing = expected_values
+        if slice_encoding_direction.endswith("-"):
+            slice_timing = list(reversed(slice_timing))
+
         coord = bids.create_slice_time_coordinate(
             slice_timing=slice_timing,
-            n_time=10,
-            slice_encoding_direction="k",
-            spatial_shape=(4, 64, 64),
+            slice_encoding_direction=slice_encoding_direction,
         )
 
-        assert coord.dims == ("time", "z")
-        assert coord.shape == (10, 4)
+        assert coord.dims == (expected_dim,)
+        assert coord.shape == (3,)
         assert coord.attrs["units"] == "s"
-        np.testing.assert_array_equal(coord.values, np.tile(slice_timing, (10, 1)))
-
-    def test_create_slice_time_y_direction(self):
-        """Test creating slice_time for y encoding direction."""
-        slice_timing = np.array([0.0, 0.1, 0.2])
-        coord = bids.create_slice_time_coordinate(
-            slice_timing=slice_timing,
-            n_time=5,
-            slice_encoding_direction="j",
-            spatial_shape=(32, 3, 64),
-        )
-
-        assert coord.dims == ("time", "y")
-        assert coord.shape == (5, 3)
-        np.testing.assert_array_equal(coord.values, np.tile(slice_timing, (5, 1)))
+        np.testing.assert_array_equal(coord.values, expected_values)
 
     def test_invalid_slice_encoding_direction(self):
         """Test that invalid direction raises error."""
         with pytest.raises(ValueError, match="Invalid SliceEncodingDirection"):
             bids.create_slice_time_coordinate(
                 slice_timing=np.array([0.0, 0.1]),
-                n_time=5,
                 slice_encoding_direction=cast(Any, "invalid"),
-                spatial_shape=(2, 64, 64),
             )
 
     def test_slice_timing_must_be_1d(self):
@@ -276,118 +274,36 @@ class TestSliceTimeCoordinate:
         with pytest.raises(ValueError, match="SliceTiming must be 1D"):
             bids.create_slice_time_coordinate(
                 slice_timing=np.array([[0.0, 0.1], [0.2, 0.3]]),
-                n_time=5,
                 slice_encoding_direction="k",
-                spatial_shape=(2, 64, 64),
             )
 
-    def test_mismatched_slice_count(self):
-        """Test that mismatched slice count raises error."""
-        with pytest.raises(ValueError, match="does not match"):
-            bids.create_slice_time_coordinate(
-                slice_timing=np.array([0.0, 0.1, 0.2]),  # 3 slices
-                n_time=5,
-                slice_encoding_direction="k",
-                spatial_shape=(4, 64, 64),  # But z=4
-            )
-
-    def test_extract_slice_timing(self):
-        """Test extracting slice timing from coordinate."""
+    @pytest.mark.parametrize(
+        ("slice_encoding_direction", "expected_direction"),
+        [("i", "i"), ("j", "j"), ("k", "k")],
+    )
+    def test_extract_slice_timing(self, slice_encoding_direction, expected_direction):
+        """Extracting slice timing preserves values and spatial direction."""
         slice_timing = np.array([0.0, 0.1, 0.2, 0.3])
         coord = bids.create_slice_time_coordinate(
             slice_timing=slice_timing,
-            n_time=10,
-            slice_encoding_direction="k",
-            spatial_shape=(4, 64, 64),
+            slice_encoding_direction=slice_encoding_direction,
         )
 
         extracted_timing, direction = bids.extract_slice_timing_from_coordinate(coord)
 
         np.testing.assert_array_equal(extracted_timing, slice_timing)
-        assert direction == "k"
+        assert direction == expected_direction
 
     def test_extract_slice_timing_invalid_ndim(self):
-        """Test extraction rejects coordinates without exactly two dimensions."""
-        coord = xr.DataArray(np.array([0.0, 0.1, 0.2]), dims=["z"])
+        """Test extraction rejects coordinates that are not 1D."""
+        coord = xr.DataArray(np.zeros((2, 3)), dims=["time", "z"])
 
-        with pytest.raises(ValueError, match="must have 2 dimensions"):
-            bids.extract_slice_timing_from_coordinate(coord)
-
-    def test_extract_slice_timing_requires_single_spatial_dim(self):
-        """Test extraction rejects coordinates without a time dimension."""
-        coord = xr.DataArray(np.zeros((3, 4)), dims=["z", "y"])
-
-        with pytest.raises(ValueError, match="exactly one spatial dimension"):
+        with pytest.raises(ValueError, match="must be 1D"):
             bids.extract_slice_timing_from_coordinate(coord)
 
     def test_extract_slice_timing_rejects_unknown_spatial_dimension(self):
         """Test extraction rejects unknown spatial dimensions."""
-        coord = xr.DataArray(np.zeros((2, 3)), dims=["time", "phase"])
+        coord = xr.DataArray(np.zeros(3), dims=["phase"])
 
-        with pytest.raises(ValueError, match="Unknown spatial dimension"):
+        with pytest.raises(ValueError, match="must have one of spatial dimensions"):
             bids.extract_slice_timing_from_coordinate(coord)
-
-    def test_extract_slice_timing_warns_when_it_varies_across_time(self):
-        """Test extraction warns and uses first volume when timing varies."""
-        coord = xr.DataArray(
-            np.array(
-                [
-                    [0.0, 0.1, 0.2],
-                    [0.0, 0.1, 0.25],
-                ]
-            ),
-            dims=["time", "z"],
-            attrs={"units": "s"},
-        )
-
-        with pytest.warns(UserWarning, match="varies across time points"):
-            extracted_timing, direction = bids.extract_slice_timing_from_coordinate(
-                coord
-            )
-
-        np.testing.assert_array_equal(extracted_timing, [0.0, 0.1, 0.2])
-        assert direction == "k"
-
-
-class TestIntegrationWithNifti:
-    """Integration tests with NIfTI loading/saving."""
-
-    def test_save_load_roundtrip(self, tmp_path):
-        """Test that BIDS metadata round-trips through NIfTI save/load."""
-        import confusius as cf
-
-        # Create test data with BIDS metadata
-        data = np.random.rand(5, 10, 10, 10).astype(np.float32)
-        da = xr.DataArray(
-            data,
-            dims=["time", "z", "y", "x"],
-            coords={
-                "time": xr.DataArray(
-                    np.arange(5) * 1.5, dims=["time"], attrs={"units": "s"}
-                ),
-                "z": xr.DataArray(
-                    np.arange(10) * 0.1, dims=["z"], attrs={"units": "mm"}
-                ),
-                "y": xr.DataArray(
-                    np.arange(10) * 0.1, dims=["y"], attrs={"units": "mm"}
-                ),
-                "x": xr.DataArray(
-                    np.arange(10) * 0.1, dims=["x"], attrs={"units": "mm"}
-                ),
-            },
-            attrs={
-                "task_name": "rest",
-                "manufacturer": "Verasonics",
-                "probe_central_frequency": 15.0,
-            },
-        )
-
-        # Save and reload
-        nifti_path = tmp_path / "test.nii.gz"
-        cf.io.save_nifti(da, nifti_path)
-        loaded = cf.io.load_nifti(nifti_path)
-
-        # Check that BIDS metadata is preserved
-        assert loaded.attrs["task_name"] == "rest"
-        assert loaded.attrs["manufacturer"] == "Verasonics"
-        assert loaded.attrs["probe_central_frequency"] == 15.0

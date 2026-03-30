@@ -1,77 +1,19 @@
 """Volume resampling utilities for fUSI data."""
 
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import numpy as np
-
-if TYPE_CHECKING:
-    import SimpleITK as sitk
 import numpy.typing as npt
 import xarray as xr
 
-from confusius._utils import _compute_origin, _compute_spacing
+from confusius.registration._utils import dataarray_to_sitk_image, set_sitk_thread_count
 from confusius.registration.bspline import _dataarray_to_sitk_bspline
-from confusius.registration.volume import _sitk_thread_count
-
-
-def _dataarray_to_sitk_image(
-    da: xr.DataArray,
-) -> tuple["sitk.Image", Sequence[str]]:  # noqa: F821
-    """Convert a spatial or spatial+time DataArray to a SimpleITK image.
-
-    Uses the transpose convention: `da.values.T` is passed to `GetImageFromArray`,
-    so that the first DataArray axis maps to SimpleITK's physical x-axis. For 3D+t data
-    with a time dimension, the time dimension is converted to a vector image channel
-    dimension.
-
-    Parameters
-    ----------
-    da : xarray.DataArray
-        2D or 3D spatial DataArray, or 3D+t or 2D+t DataArray with a time dimension.
-        Spacing and origin are derived from its coordinates; missing coordinates warn
-        and fall back to spacing `1.0` and origin `0.0`.
-
-    Returns
-    -------
-    SimpleITK.Image
-        SimpleITK image with spacing and origin set from the DataArray coordinates. For
-        3D+t input, returns a vector image where time is the vector dimension.
-    spatial_dims : sequence of str
-        Names of the spatial dimensions.
-    """
-    import SimpleITK as sitk
-
-    spacing_dict = _compute_spacing(da)
-    origin_dict = _compute_origin(da)
-
-    spatial_dims = [str(d) for d in da.dims if str(d) != "time"]
-    has_time = "time" in da.dims
-
-    spacing = tuple(
-        s if s is not None else 1.0 for d, s in spacing_dict.items() if str(d) != "time"
-    )
-    origin = tuple(o for d, o in origin_dict.items() if str(d) != "time")
-
-    if has_time:
-        data = da.values
-        time_idx = da.dims.index("time")
-        # SimpleITK expects the vector dimension to be the last axis, so we move it to
-        # the start and the transpose in GetImageFromArray will put it last.
-        data = np.moveaxis(data, time_idx, 0)
-        image = sitk.GetImageFromArray(data.T, isVector=True)
-    else:
-        image = sitk.GetImageFromArray(da.values.T)
-
-    image.SetSpacing(spacing)
-    image.SetOrigin(origin)
-
-    return image, spatial_dims
 
 
 def resample_volume(
     moving: xr.DataArray,
-    transform: "npt.NDArray[np.float64] | xr.DataArray",
+    transform: "npt.NDArray[np.floating] | xr.DataArray",
     *,
     shape: Sequence[int],
     spacing: Sequence[float],
@@ -166,7 +108,7 @@ def resample_volume(
     else:
         tx = _dataarray_to_sitk_bspline(transform)
 
-    moving_sitk, _ = _dataarray_to_sitk_image(moving)
+    moving_sitk = dataarray_to_sitk_image(moving)
 
     # SimpleITK will automatically create a vector output if the input is a vector
     # image.
@@ -183,7 +125,7 @@ def resample_volume(
     else:
         raise ValueError(f"Invalid interpolation: {interpolation}")
 
-    with _sitk_thread_count(sitk_threads):
+    with set_sitk_thread_count(sitk_threads):
         result_sitk = sitk.Resample(
             moving_sitk,
             ref,
@@ -192,8 +134,8 @@ def resample_volume(
             default_value,
             moving_sitk.GetPixelID(),
         )
-        # .T restores DataArray axis order, inverse of the .T applied in
-        # _dataarray_to_sitk.
+        # .T restores DataArray axis order, inverse of the .T used to build the SITK
+        # image.
         registered_arr = sitk.GetArrayFromImage(result_sitk).T
 
     coords = {
@@ -218,7 +160,7 @@ def resample_volume(
 def resample_like(
     moving: xr.DataArray,
     reference: xr.DataArray,
-    transform: "npt.NDArray[np.float64] | xr.DataArray",
+    transform: "npt.NDArray[np.floating] | xr.DataArray",
     interpolation: Literal["linear", "nearest", "bspline"] = "linear",
     default_value: float = 0.0,
     sitk_threads: int = -1,
@@ -273,12 +215,9 @@ def resample_like(
             f"'reference' must be 2D or 3D; got {reference.ndim}D array with dims {reference.dims}."
         )
 
-    spacing_dict = _compute_spacing(reference)
-    origin_dict = _compute_origin(reference)
-
     shape = list(reference.sizes[str(d)] for d in reference.dims)
-    spacing = [s if s is not None else 1.0 for s in spacing_dict.values()]
-    origin = list(origin_dict.values())
+    spacing = [s if s is not None else 1.0 for s in reference.fusi.spacing.values()]
+    origin = list(reference.fusi.origin.values())
     dims = [str(d) for d in reference.dims]
 
     result = resample_volume(

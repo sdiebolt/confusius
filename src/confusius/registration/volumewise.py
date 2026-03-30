@@ -123,7 +123,7 @@ def register_volumewise(
 
     with joblib_progress("Registering volumes...", total=n_frames):
         results = cast(
-            "list[tuple[xr.DataArray, npt.NDArray[np.float64] | None]]",
+            "list[tuple[xr.DataArray, npt.NDArray[np.floating] | None]]",
             Parallel(n_jobs=n_jobs)(
                 delayed(register_volume)(
                     volume,
@@ -153,7 +153,7 @@ def register_volumewise(
 
     arr = data_moved.values
     output = np.zeros_like(arr)
-    affines: list[npt.NDArray[np.float64] | None] = []
+    affines: list[npt.NDArray[np.floating] | None] = []
     for t, (registered_da, frame_affine) in enumerate(results):
         output[t] = registered_da.values
         affines.append(frame_affine)

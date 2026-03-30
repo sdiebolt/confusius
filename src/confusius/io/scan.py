@@ -293,6 +293,13 @@ def load_scan(
                 f"Unknown acquisitionMode: {mode!r}. Expected one of '2Dscan',"
                 " '3Dscan', '4Dscan'."
             )
+
+        name_parts = [
+            attrs["iconeus_subject"],
+            attrs["iconeus_session"],
+            attrs["iconeus_scan"],
+        ]
+        data_array.name = "_".join(p for p in name_parts if p) or path.stem
     except Exception:
         h5.close()
         raise
@@ -346,16 +353,17 @@ def _load_2dscan(
     time_vals = time_raw.squeeze()
 
     coords: dict[str, Any] = {
-        "time": xr.DataArray(time_vals, dims=["time"], attrs={"units": "s"}),
+        "time": xr.DataArray(
+            time_vals,
+            dims=["time"],
+            # Iconeus SCAN files store the end-of-block timestamp.
+            attrs={"units": "s", "volume_acquisition_reference": "end"},
+        ),
         **spatial_coords,
     }
 
     return xr.DataArray(
-        data_lazy,
-        dims=["time", "z", "y", "x"],
-        coords=coords,
-        attrs=attrs,
-        name="scan_data",
+        data_lazy, dims=["time", "z", "y", "x"], coords=coords, attrs=attrs
     )
 
 
@@ -412,11 +420,7 @@ def _load_3dscan(
     }
 
     return xr.DataArray(
-        data_lazy,
-        dims=["pose", "z", "y", "x"],
-        coords=coords,
-        attrs=attrs,
-        name="scan_data",
+        data_lazy, dims=["pose", "z", "y", "x"], coords=coords, attrs=attrs
     )
 
 
@@ -500,16 +504,17 @@ def _load_4dscan(
     )
 
     coords: dict[str, Any] = {
-        "time": xr.DataArray(block_time, dims=["time"], attrs={"units": "s"}),
+        "time": xr.DataArray(
+            block_time,
+            dims=["time"],
+            # Iconeus SCAN files store the end-of-block timestamp.
+            attrs={"units": "s", "volume_acquisition_reference": "end"},
+        ),
         "pose": xr.DataArray(pose_vals, dims=["pose"]),
         "pose_time": pose_time,
         **spatial_coords,
     }
 
     return xr.DataArray(
-        data_lazy,
-        dims=["time", "pose", "z", "y", "x"],
-        coords=coords,
-        attrs=attrs,
-        name="scan_data",
+        data_lazy, dims=["time", "pose", "z", "y", "x"], coords=coords, attrs=attrs
     )

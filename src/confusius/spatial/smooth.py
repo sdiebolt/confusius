@@ -7,8 +7,6 @@ import numpy as np
 import scipy.ndimage
 import xarray as xr
 
-from confusius._utils import _compute_spacing
-
 _FWHM_TO_SIGMA = 1.0 / (2.0 * np.sqrt(2.0 * np.log(2.0)))
 """FWM to Gaussian sigma conversion factor."""
 
@@ -154,7 +152,7 @@ def smooth_volume(
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        spacing = _compute_spacing(data)
+        spacing = data.fusi.spacing
 
     smooth_spacing: dict[str, float] = {}
     for dim in smooth_dims:

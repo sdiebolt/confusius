@@ -364,8 +364,8 @@ class AUTCDATsLoader:
                 for frame_label in dat.acquisition_block_indices:
                     self.block_index_to_file[frame_label] = dat_path
 
-                if task_id is not None:
-                    progress.update(task_id, advance=1)  # type: ignore[union-attr]
+                if progress is not None and task_id is not None:
+                    progress.update(task_id, advance=1)
 
     def __getitem__(
         self, slice_object: int | slice | tuple[int | slice, ...]
@@ -711,6 +711,11 @@ def convert_autc_dats_to_zarr(
     zarr_group.create_array("time", data=time_values, dimension_names=["time"])
     zarr_group["time"].attrs["units"] = "s"
     zarr_group["time"].attrs["long_name"] = "Time"
+    zarr_group["time"].attrs["volume_acquisition_reference"] = "start"
+    if plane_wave_angles is not None and pulse_repetition_frequency is not None:
+        zarr_group["time"].attrs["volume_acquisition_duration"] = float(
+            np.asarray(plane_wave_angles).size / pulse_repetition_frequency
+        )
 
     # z coordinate is the stacking dimension (size 1 for 2D data).
     z_values = np.array([0.0])
@@ -770,12 +775,19 @@ def convert_autc_dats_to_zarr(
 
     if transmit_frequency is not None:
         zarr_iq.attrs["transmit_frequency"] = transmit_frequency
+    if probe_n_elements is not None:
         zarr_iq.attrs["probe_number_of_elements"] = probe_n_elements
+    if probe_pitch is not None:
         zarr_iq.attrs["probe_pitch"] = probe_pitch
+    if beamforming_sound_velocity is not None:
         zarr_iq.attrs["beamforming_sound_velocity"] = beamforming_sound_velocity
+    if plane_wave_angles is not None:
         zarr_iq.attrs["plane_wave_angles"] = np.asarray(plane_wave_angles).tolist()
+    if compound_sampling_frequency is not None:
         zarr_iq.attrs["compound_sampling_frequency"] = compound_sampling_frequency
+    if pulse_repetition_frequency is not None:
         zarr_iq.attrs["pulse_repetition_frequency"] = pulse_repetition_frequency
+    if beamforming_method is not None:
         zarr_iq.attrs["beamforming_method"] = beamforming_method
 
     first_block = skip_first_blocks
@@ -809,8 +821,8 @@ def convert_autc_dats_to_zarr(
             output_end = (end_block - skip_first_blocks) * n_frames
             zarr_iq[output_start:output_end] = batch_data
 
-            if task_id is not None:
-                progress.update(task_id, advance=1)  # type: ignore[union-attr]
+            if progress is not None and task_id is not None:
+                progress.update(task_id, advance=1)
 
         # Consolidate metadata for faster opening with Xarray.
         # Suppress warning about consolidated metadata not being in Zarr v3 spec yet.

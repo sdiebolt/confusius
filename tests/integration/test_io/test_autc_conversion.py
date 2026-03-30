@@ -46,7 +46,7 @@ class TestAUTCConversion:
             plane_wave_angles=np.array([-15.0, 0.0, 15.0]),
             compound_sampling_frequency=500.0,
             pulse_repetition_frequency=1500.0,
-            beamforming_method="MV",
+            beamforming_method="Fourier",
             block_times=block_times,
             show_progress=False,
         )
@@ -57,6 +57,7 @@ class TestAUTCConversion:
             assert "iq" in ds
             assert ds["iq"].shape[0] == 12
             assert ds["iq"].dtype == np.complex64
+
             assert np.all(np.isfinite(ds["iq"].values))
 
             iq = ds["iq"].values
@@ -90,6 +91,10 @@ class TestAUTCConversion:
 
             assert ds["time"].attrs["units"] == "s"
             assert ds["time"].attrs["long_name"] == "Time"
+            assert ds["time"].attrs["volume_acquisition_reference"] == "start"
+            assert ds["time"].attrs["volume_acquisition_duration"] == pytest.approx(
+                3 / 1500.0
+            )
 
             assert ds["z"].attrs["units"] == "mm"
             assert ds["z"].attrs["long_name"] == "Elevation"
@@ -111,7 +116,7 @@ class TestAUTCConversion:
             assert ds["iq"].attrs["plane_wave_angles"] == [-15.0, 0.0, 15.0]
             assert ds["iq"].attrs["compound_sampling_frequency"] == 500.0
             assert ds["iq"].attrs["pulse_repetition_frequency"] == 1500.0
-            assert ds["iq"].attrs["beamforming_method"] == "MV"
+            assert ds["iq"].attrs["beamforming_method"] == "Fourier"
 
     def test_overwrite_existing(self, synthetic_autc_session, tmp_path):
         """Test overwriting existing Zarr output."""
@@ -197,8 +202,8 @@ class TestAUTCConversion:
     def test_with_sharding(self, synthetic_autc_session, tmp_path):
         """Test conversion with Zarr sharding enabled.
 
-        Verifies that sharding configuration produces valid output and that
-        shard files are created on disk.
+        Verifies that sharding configuration produces valid output and that shard files
+        are created on disk.
         """
         output_path = tmp_path / "output.zarr"
 
@@ -222,8 +227,7 @@ class TestAUTCConversion:
 
         zarr_group = zarr.open_group(output_path, mode="r")
         iq_array = zarr_group["iq"]
-        iq_metadata = iq_array.metadata
-        assert hasattr(iq_metadata, "shards") or "shards" in dir(iq_metadata)
+        assert iq_array.shards == (6, 1, 6, 4)
 
     def test_cleanup_on_error(self, synthetic_autc_session, tmp_path):
         """Test that incomplete zarr store is cleaned up on error.

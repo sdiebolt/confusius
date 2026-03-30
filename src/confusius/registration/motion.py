@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 
 def extract_motion_parameters(
-    affines: Sequence[NDArray[np.float64] | None],
+    affines: Sequence[NDArray[np.floating] | None],
 ) -> NDArray[np.floating]:
     """Extract motion parameters from affine matrices.
 
@@ -100,12 +100,12 @@ def extract_motion_parameters(
 
 
 def _decompose_affine_2d(
-    A33: NDArray[np.float64],
+    A33: NDArray[np.floating],
 ) -> tuple[
-    NDArray[np.float64],
-    NDArray[np.float64],
-    NDArray[np.float64],
-    NDArray[np.float64],
+    NDArray[np.floating],
+    NDArray[np.floating],
+    NDArray[np.floating],
+    NDArray[np.floating],
 ]:
     """Decompose a (3, 3) 2D homogeneous affine into T, R, Z, S.
 
@@ -141,7 +141,7 @@ def _decompose_affine_2d(
 
 
 def _rotation_matrix_to_euler_xyz(
-    R: NDArray[np.float64],
+    R: NDArray[np.floating],
 ) -> tuple[float, float, float]:
     """Extract XYZ Euler angles from a (3, 3) rotation matrix.
 
@@ -176,7 +176,7 @@ def _rotation_matrix_to_euler_xyz(
 
 
 def compute_framewise_displacement(
-    affines: Sequence[NDArray[np.float64] | None],
+    affines: Sequence[NDArray[np.floating] | None],
     reference: "xr.DataArray",
     mask: NDArray[np.bool_] | None = None,
 ) -> dict[str, NDArray[np.floating]]:
@@ -208,13 +208,11 @@ def compute_framewise_displacement(
         - `"max_fd"`: Maximum framewise displacement per frame.
         - `"rms_fd"`: RMS framewise displacement per frame.
     """
-    from confusius._utils import _compute_origin, _compute_spacing
-
     n_frames = len(affines)
     ndim = reference.ndim
 
-    spacing_dict = _compute_spacing(reference)
-    origin_dict = _compute_origin(reference)
+    spacing_dict = reference.fusi.spacing
+    origin_dict = reference.fusi.origin
 
     coords_1d = []
     for dim in (str(d) for d in reference.dims):
@@ -261,7 +259,7 @@ def compute_framewise_displacement(
 
 
 def create_motion_dataframe(
-    affines: Sequence[NDArray[np.float64] | None],
+    affines: Sequence[NDArray[np.floating] | None],
     reference: "xr.DataArray",
     mask: NDArray[np.bool_] | None = None,
     time_coords: NDArray[np.floating] | None = None,

@@ -3,6 +3,7 @@
 import json
 import warnings
 from pathlib import Path
+from unittest.mock import patch
 
 import nibabel as nib
 import numpy as np
@@ -89,7 +90,7 @@ class TestLoadNifti:
         np.testing.assert_array_equal(da.values, expected_data.transpose(2, 1, 0))
 
     def test_load_4d_nifti(self, nifti_4d_path: tuple[Path, np.ndarray]) -> None:
-        """Loading 4D NIfTI creates DataArray with time dimension."""
+        """Loading 4D NIfTI creates a time coordinate from the NIfTI header TR."""
         nifti_path, expected_data = nifti_4d_path
         da = load_nifti(nifti_path)
 
@@ -97,6 +98,9 @@ class TestLoadNifti:
         assert da.dims == ("time", "z", "y", "x")
         assert da.shape == (6, 8, 10, 12)
         assert da.dtype == np.float64
+        np.testing.assert_array_equal(
+            da.coords["time"].values, np.arange(6, dtype=float)
+        )
         np.testing.assert_array_equal(da.values, expected_data.transpose(3, 2, 1, 0))
 
     def test_load_5d_nifti_uses_dim4_for_extra_dimension(self, tmp_path: Path) -> None:
@@ -138,7 +142,46 @@ class TestLoadNifti:
 
         assert "units" not in da.coords["z"].attrs
         assert "units" not in da.coords["y"].attrs
-        assert "units" not in da.coords["x"].attrs
+
+    def test_load_nifti_creates_slice_time_coordinate_from_sidecar(
+        self, tmp_path: Path
+    ) -> None:
+        """Slice timing sidecar metadata becomes a `slice_time` coordinate on load."""
+        data = np.random.default_rng(0).random((2, 3, 4, 5)).astype(np.float32)
+        path = tmp_path / "slice_time_sidecar.nii.gz"
+        nib.Nifti1Image(data, np.eye(4)).to_filename(path)
+
+        with open(tmp_path / "slice_time_sidecar.json", "w") as f:
+            json.dump(
+                {
+                    "RepetitionTime": 1.0,
+                    "SliceTiming": [0.0, 0.1, 0.2, 0.3],
+                    "SliceEncodingDirection": "k",
+                },
+                f,
+            )
+
+        loaded = load_nifti(path)
+
+        assert loaded.coords["slice_time"].dims == ("z",)
+        np.testing.assert_allclose(
+            loaded.coords["slice_time"].values, [0.0, 0.1, 0.2, 0.3]
+        )
+
+    def test_load_nifti_validation_runtime_error_warns(self, tmp_path: Path) -> None:
+        """Unexpected sidecar validation failures degrade to a warning when loading."""
+        data = np.random.default_rng(0).random((4, 3, 2)).astype(np.float32)
+        path = tmp_path / "bad_sidecar_validation.nii.gz"
+        nib.Nifti1Image(data, np.eye(4)).to_filename(path)
+
+        with open(tmp_path / "bad_sidecar_validation.json", "w") as f:
+            json.dump({"RepetitionTime": 1.0}, f)
+
+        with patch(
+            "confusius.io.nifti.validate_metadata", side_effect=RuntimeError("boom")
+        ):
+            with pytest.warns(UserWarning, match="validation warning: boom"):
+                load_nifti(path)
 
     def test_load_nifti_both_affines_stores_qform_attrs(self, tmp_path: Path) -> None:
         """Loading a NIfTI with both valid affines stores qform orientation attr."""
@@ -502,6 +545,19 @@ class TestSaveNifti:
     ) -> None:
         """Processing metadata uses BIDS fields or ConfUSIus-prefixed equivalents."""
         da = sample_4d_volume.copy()
+        # Use non-uniform time to force VolumeTiming (instead of RepetitionTime) in the
+        # sidecar — BIDS disallows FrameAcquisitionDuration alongside RepetitionTime.
+        da = da.assign_coords(
+            time=xr.DataArray(
+                [0.0, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.6],
+                dims=["time"],
+                attrs={
+                    "units": "s",
+                    "volume_acquisition_duration": 0.3,
+                    "volume_acquisition_reference": "start",
+                },
+            )
+        )
         da.attrs.update(
             {
                 "long_name": "Power Doppler intensity",
@@ -510,17 +566,16 @@ class TestSaveNifti:
                 "clutter_filters": "Index-based SVD [50, +inf[",
                 "clutter_filter_window_duration": 0.6,
                 "clutter_filter_window_stride": 0.6,
-                "power_doppler_integration_duration": 0.3,
-                "power_doppler_integration_stride": 0.3,
-                "axial_velocity_integration_duration": 0.2,
-                "axial_velocity_integration_stride": 0.1,
-                "bmode_integration_duration": 0.4,
-                "bmode_integration_stride": 0.2,
+                "axial_velocity_lag": 2,
+                "axial_velocity_absolute": True,
+                "axial_velocity_spatial_kernel": 3,
+                "axial_velocity_estimation_method": "angle_average",
             }
         )
 
         output_path = tmp_path / "processing_metadata.nii.gz"
-        save_nifti(da, output_path)
+        with pytest.warns(UserWarning, match="non-uniform sampling"):
+            save_nifti(da, output_path)
 
         sidecar_path = tmp_path / "processing_metadata.json"
         with open(sidecar_path) as f:
@@ -529,21 +584,18 @@ class TestSaveNifti:
         assert sidecar["ClutterFilters"] == "Index-based SVD [50, +inf["
         assert sidecar["ClutterFilterWindowDuration"] == pytest.approx(0.6)
         assert sidecar["ClutterFilterWindowStride"] == pytest.approx(0.6)
-        assert sidecar["PowerDopplerIntegrationDuration"] == pytest.approx(0.3)
-        assert sidecar["PowerDopplerIntegrationStride"] == pytest.approx(0.3)
-        assert sidecar["ConfUSIusAxialVelocityIntegrationDuration"] == pytest.approx(
-            0.2
-        )
-        assert sidecar["ConfUSIusAxialVelocityIntegrationStride"] == pytest.approx(0.1)
-        assert sidecar["ConfUSIusBmodeIntegrationDuration"] == pytest.approx(0.4)
-        assert sidecar["ConfUSIusBmodeIntegrationStride"] == pytest.approx(0.2)
+        assert sidecar["FrameAcquisitionDuration"] == pytest.approx(0.3)
+        assert sidecar["ConfUSIusAxialVelocityLag"] == 2
+        assert sidecar["ConfUSIusAxialVelocityAbsolute"] is True
+        assert sidecar["ConfUSIusAxialVelocitySpatialKernel"] == 3
+        assert sidecar["ConfUSIusAxialVelocityEstimationMethod"] == "angle_average"
         assert sidecar["ConfUSIusLongName"] == "Power Doppler intensity"
         assert sidecar["ConfUSIusCmap"] == "gray"
-        assert "FrameAcquisitionDuration" not in sidecar
         assert "long_name" not in sidecar
         assert "clutter_filters" not in sidecar
         assert "clutter_filter_window_duration" not in sidecar
-        assert "power_doppler_integration_duration" not in sidecar
+        assert "volume_acquisition_duration" not in sidecar
+        assert "volume_acquisition_reference" not in sidecar
 
     def test_save_maps_probe_and_beamforming_metadata(
         self, tmp_path, sample_3d_volume
@@ -606,7 +658,7 @@ class TestSaveNifti:
     ) -> None:
         """A single time point is stored via `VolumeTiming`, not `RepetitionTime`."""
         da = sample_4d_volume.isel(time=slice(0, 1)).copy()
-        da.attrs["frame_acquisition_duration"] = 0.25
+        da.coords["time"].attrs["volume_acquisition_duration"] = 0.25
 
         output_path = tmp_path / "single_volume.nii.gz"
         save_nifti(da, output_path)
@@ -649,21 +701,146 @@ class TestSaveNifti:
         loaded = nib.load(output_path)
         assert isinstance(loaded, nib.nifti2.Nifti2Image)
 
-    def test_save_invalid_bids_metadata_warns(self, tmp_path, sample_4d_volume) -> None:
-        """Saving warns when derived sidecar metadata fails fUSI-BIDS validation."""
+    def test_save_valid_derived_metadata_emits_no_validation_warning(
+        self, tmp_path, sample_4d_volume
+    ) -> None:
+        """Valid derived timing metadata does not trigger BIDS validation warnings."""
         da = sample_4d_volume.copy()
-        da.attrs["frame_acquisition_duration"] = 0.25
+        da.coords["time"].attrs["volume_acquisition_duration"] = 0.25
 
         output_path = tmp_path / "invalid_metadata.nii.gz"
-        with pytest.warns(UserWarning, match="validation warning when saving"):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
             save_nifti(da, output_path)
+
+        assert not any(
+            "validation warning when saving" in str(w.message) for w in caught
+        )
 
         sidecar_path = tmp_path / "invalid_metadata.json"
         with open(sidecar_path) as f:
             sidecar = json.load(f)
 
         assert sidecar["RepetitionTime"] == pytest.approx(0.5)
-        assert sidecar["FrameAcquisitionDuration"] == 0.25
+        assert "FrameAcquisitionDuration" not in sidecar
+
+    def test_save_regular_center_reference_converts_delay_to_onset(self, tmp_path):
+        """Regular timings with center reference are written as onset-based BIDS timings."""
+        time_values = np.array([0.5, 1.0, 1.5, 2.0])
+        original = xr.DataArray(
+            np.random.default_rng(0).random((4, 2, 2, 2)).astype(np.float32),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_reference": "center",
+                        "volume_acquisition_duration": 0.5,
+                    },
+                )
+            },
+        )
+
+        nifti_path = tmp_path / "center_reference.nii.gz"
+        with pytest.warns(UserWarning, match="spacing is undefined"):
+            save_nifti(original, nifti_path)
+
+        with open(tmp_path / "center_reference.json") as f:
+            sidecar = json.load(f)
+
+        assert sidecar["RepetitionTime"] == pytest.approx(0.5)
+        assert sidecar["DelayAfterTrigger"] == pytest.approx(0.25)
+
+    def test_save_irregular_end_reference_converts_volume_timing_to_onset(
+        self, tmp_path
+    ):
+        """Irregular timings with end reference are written as onset-based VolumeTiming."""
+        time_values = np.array([1.0, 2.5, 3.8, 5.6])
+        original = xr.DataArray(
+            np.random.default_rng(0).random((4, 2, 2, 2)).astype(np.float32),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_reference": "end",
+                        "volume_acquisition_duration": 0.4,
+                    },
+                ),
+                "z": [0.0, 1.0],
+                "y": [0.0, 1.0],
+                "x": [0.0, 1.0],
+            },
+        )
+
+        nifti_path = tmp_path / "end_reference_irregular.nii.gz"
+        with pytest.warns(UserWarning, match="non-uniform sampling"):
+            save_nifti(original, nifti_path)
+
+        with open(tmp_path / "end_reference_irregular.json") as f:
+            sidecar = json.load(f)
+
+        assert sidecar["VolumeTiming"] == pytest.approx([0.6, 2.1, 3.4, 5.2])
+        assert sidecar["FrameAcquisitionDuration"] == pytest.approx(0.4)
+
+    def test_save_skips_non_serializable_2d_slice_time(
+        self, tmp_path, sample_4d_volume
+    ) -> None:
+        """2D `slice_time` coordinates are omitted because BIDS cannot represent them."""
+        da = sample_4d_volume.copy()
+        da = da.assign_coords(
+            slice_time=xr.DataArray(
+                np.zeros((da.sizes["time"], da.sizes["z"])),
+                dims=("time", "z"),
+                attrs={"units": "s"},
+            )
+        )
+
+        output_path = tmp_path / "slice_time_2d.nii.gz"
+        save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_2d.json") as f:
+            sidecar = json.load(f)
+
+        assert "SliceTiming" not in sidecar
+        assert "SliceEncodingDirection" not in sidecar
+
+    def test_save_serializes_1d_slice_time_coordinate(
+        self, tmp_path, sample_4d_volume
+    ) -> None:
+        """A 1D `slice_time` coordinate is exported to BIDS slice timing fields."""
+        da = sample_4d_volume.copy().assign_coords(
+            slice_time=xr.DataArray(
+                [0.0, 0.1, 0.2, 0.3], dims=("z",), attrs={"units": "s"}
+            )
+        )
+
+        output_path = tmp_path / "slice_time_1d.nii.gz"
+        save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_1d.json") as f:
+            sidecar = json.load(f)
+
+        assert sidecar["SliceTiming"] == pytest.approx([0.0, 0.1, 0.2, 0.3])
+        assert sidecar["SliceEncodingDirection"] == "k"
+
+    def test_save_nifti_validation_runtime_error_warns(
+        self, tmp_path, sample_4d_volume
+    ) -> None:
+        """Unexpected sidecar validation failures degrade to a warning when saving."""
+        output_path = tmp_path / "save_validation_runtime_error.nii.gz"
+
+        with patch(
+            "confusius.io.nifti.validate_metadata", side_effect=RuntimeError("boom")
+        ):
+            with pytest.warns(
+                UserWarning, match="validation warning when saving: boom"
+            ):
+                save_nifti(sample_4d_volume, output_path)
 
     def test_explicit_qform_overrides_attrs(self, tmp_path):
         """Explicit physical_to_qform= kwarg takes precedence over attrs['affines']['physical_to_qform']."""
@@ -889,41 +1066,55 @@ class TestRoundtrip:
         """Irregular time coord roundtrips via VolumeTiming; pixdim[4] is 0."""
         time_values = np.array([0.0, 1.5, 2.8, 4.6])  # non-uniform spacing
         rng = np.random.default_rng(0)
-        # FrameAcquisitionDuration must be provided when VolumeTiming is used (per fUSI-BIDS)
         original = xr.DataArray(
             rng.random((4, 6, 4, 2)).astype(np.float32),
             dims=["time", "z", "y", "x"],
-            coords={"time": time_values},
-            attrs={"frame_acquisition_duration": 4.6},
+            coords={
+                "time": xr.DataArray(
+                    time_values,
+                    dims=["time"],
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_duration": 4.6,
+                        "volume_acquisition_reference": "start",
+                    },
+                ),
+                "z": np.arange(6) * 0.1,
+                "y": np.arange(4) * 0.1,
+                "x": np.arange(2) * 0.1,
+            },
         )
 
         nifti_path = tmp_path / "volume_timing.nii.gz"
-        with pytest.warns(
-            UserWarning,
-            match="non-uniform sampling|spacing is undefined",
-        ):
+        with pytest.warns(UserWarning, match="non-uniform sampling"):
             save_nifti(original, nifti_path)
 
         sidecar_path = tmp_path / "volume_timing.json"
         with open(sidecar_path) as f:
             sidecar = json.load(f)
         assert sidecar["VolumeTiming"] == pytest.approx(time_values.tolist())
+        assert sidecar["FrameAcquisitionDuration"] == pytest.approx(4.6)
         assert "RepetitionTime" not in sidecar
         assert nib.load(nifti_path).header.get_zooms()[3] == pytest.approx(0.0)
 
         loaded = load_nifti(nifti_path)
         np.testing.assert_allclose(loaded.coords["time"].values, time_values)
-        assert "VolumeTiming" not in loaded.attrs
+        assert loaded.coords["time"].attrs[
+            "volume_acquisition_duration"
+        ] == pytest.approx(4.6)
 
-    def test_save_infers_frame_acquisition_duration_from_processing_attrs(
+    def test_save_uses_time_coordinate_frame_acquisition_duration(
         self, tmp_path, sample_4d_volume
     ) -> None:
-        """Irregular timings infer `FrameAcquisitionDuration` from processing metadata."""
+        """Irregular timings use `time.attrs['volume_acquisition_duration']`."""
         original = sample_4d_volume.isel(time=slice(0, 4)).copy()
         original = original.assign_coords(
-            time=xr.DataArray([0.0, 1.5, 2.8, 4.6], dims=["time"], attrs={"units": "s"})
+            time=xr.DataArray(
+                [0.0, 1.5, 2.8, 4.6],
+                dims=["time"],
+                attrs={"units": "s", "volume_acquisition_duration": 1.5},
+            )
         )
-        original.attrs["power_doppler_integration_duration"] = 1.5
 
         nifti_path = tmp_path / "inferred_frame_duration.nii.gz"
         with warnings.catch_warnings(record=True) as caught:
@@ -993,10 +1184,15 @@ class TestRoundtrip:
         )
 
     def test_roundtrip_4d(self, tmp_path, sample_4d_volume):
-        """Save and load preserves 4D data."""
-        # Add non-derived BIDS metadata to the fixture data.
+        """Save/load roundtrip preserves 4D data and non-derived BIDS attrs."""
         original = sample_4d_volume.copy()
-        original.attrs["task_name"] = "test"
+        original.attrs.update(
+            {
+                "task_name": "rest",
+                "manufacturer": "Verasonics",
+                "probe_central_frequency": 15.0,
+            }
+        )
 
         nifti_path = tmp_path / "roundtrip_4d.nii.gz"
         save_nifti(original, nifti_path)
@@ -1004,6 +1200,9 @@ class TestRoundtrip:
         loaded = load_nifti(nifti_path)
 
         np.testing.assert_allclose(np.asarray(loaded), original.values)
+        assert loaded.attrs["task_name"] == "rest"
+        assert loaded.attrs["manufacturer"] == "Verasonics"
+        assert loaded.attrs["probe_central_frequency"] == 15.0
 
     def test_roundtrip_preserves_units(self, tmp_path, sample_3d_volume):
         """Spatial units survive a save/load roundtrip."""

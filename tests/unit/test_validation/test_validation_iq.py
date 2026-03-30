@@ -23,7 +23,6 @@ class TestValidateIq:
                 "x": np.arange(8),
             },
             attrs={
-                "compound_sampling_frequency": 1000.0,
                 "transmit_frequency": 15.625e6,
                 "beamforming_sound_velocity": 1540.0,
             },
@@ -48,7 +47,6 @@ class TestValidateIq:
                 "y": np.arange(6),
             },
             attrs={
-                "compound_sampling_frequency": 1000.0,
                 "transmit_frequency": 15.625e6,
                 "beamforming_sound_velocity": 1540.0,
             },
@@ -67,7 +65,6 @@ class TestValidateIq:
     @pytest.mark.parametrize(
         "missing_attr",
         [
-            "compound_sampling_frequency",
             "transmit_frequency",
             "beamforming_sound_velocity",
         ],
@@ -78,12 +75,12 @@ class TestValidateIq:
         del iq.attrs[missing_attr]
 
         with pytest.raises(ValueError, match="Missing required DataArray attributes"):
-            validate_iq(iq)
+            validate_iq(iq, require_attrs=True)
 
     def test_require_attrs_false_skips_attribute_validation(self, valid_iq_dataarray):
         """require_attrs=False skips attribute validation."""
         iq = valid_iq_dataarray.copy()
-        del iq.attrs["compound_sampling_frequency"]
+        del iq.attrs["transmit_frequency"]
 
         # Should not raise when require_attrs=False.
         validate_iq(iq, require_attrs=False)
@@ -91,12 +88,12 @@ class TestValidateIq:
     def test_multiple_missing_attributes_in_error_message(self, valid_iq_dataarray):
         """Error message lists all missing attributes."""
         iq = valid_iq_dataarray.copy()
-        del iq.attrs["compound_sampling_frequency"]
         del iq.attrs["transmit_frequency"]
+        del iq.attrs["beamforming_sound_velocity"]
 
         with pytest.raises(ValueError) as exc_info:
-            validate_iq(iq)
+            validate_iq(iq, require_attrs=True)
 
         error_msg = str(exc_info.value)
-        assert "compound_sampling_frequency" in error_msg
         assert "transmit_frequency" in error_msg
+        assert "beamforming_sound_velocity" in error_msg

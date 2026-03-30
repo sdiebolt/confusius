@@ -9,7 +9,7 @@ import numpy as np
 import xarray as xr
 from napari.utils.colormaps import DirectLabelColormap
 
-from confusius._utils import _compute_spacing_best_effort, find_stack_level
+from confusius._utils import find_stack_level, get_coordinate_spacings_best_effort
 from confusius.atlas._structures import _build_atlas_cmap_and_norm
 from confusius.extract import extract_with_mask
 from confusius.signal import clean
@@ -1439,7 +1439,7 @@ def plot_napari(
             "Ensure 'dim_order' contains all spatial dimension names."
         )
 
-    spacing, non_uniform = _compute_spacing_best_effort(data)
+    spacing, non_uniform = get_coordinate_spacings_best_effort(data)
     for dim in non_uniform:
         warnings.warn(
             f"'{dim}' has non-uniform spacing; using median {spacing[dim]:.4g} "

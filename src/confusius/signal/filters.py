@@ -7,7 +7,7 @@ import numpy as np
 import scipy.signal
 import xarray as xr
 
-from confusius._utils import _compute_spacing
+from confusius._utils import get_coordinate_spacings
 from confusius.validation import validate_time_series
 
 
@@ -242,7 +242,9 @@ def filter_butterworth(
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        spacing = _compute_spacing(signals, uniformity_tolerance=uniformity_tolerance)
+        spacing = get_coordinate_spacings(
+            signals, uniformity_tolerance=uniformity_tolerance
+        )
 
     time_spacing = spacing["time"]
     if time_spacing is None:

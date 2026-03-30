@@ -1,15 +1,16 @@
 """Volume-to-volume registration for fUSI data."""
 
-import os
 from collections.abc import Sequence
-from contextlib import contextmanager
-from typing import TYPE_CHECKING, Generator, Literal, overload
+from typing import TYPE_CHECKING, Literal, overload
 
 import numpy as np
 import numpy.typing as npt
 import xarray as xr
 
-from confusius._utils import _compute_origin, _compute_spacing
+from confusius.registration._utils import (
+    dataarray_to_sitk_image,
+    set_sitk_thread_count,
+)
 from confusius.registration.affines import (
     _affine_to_sitk_linear_transform,
     _sitk_linear_transform_to_affine,
@@ -17,58 +18,6 @@ from confusius.registration.affines import (
 
 if TYPE_CHECKING:
     import SimpleITK as sitk
-
-
-@contextmanager
-def _sitk_thread_count(n: int) -> Generator[None, None, None]:
-    """Temporarily override SimpleITK's global thread count.
-
-    Follows joblib's `n_jobs` sign convention: positive values are used
-    directly; negative values are interpreted as `max(1, n_cpus + 1 + n)`,
-    so `-1` means all CPUs, `-2` means all minus one, and so on.
-
-    Saves the current value on entry and restores it on exit, even if an
-    exception is raised inside the `with` block.
-    """
-    import SimpleITK as sitk
-
-    if n < 0:
-        n = max(1, (os.cpu_count() or 1) + 1 + n)
-
-    prev = sitk.ProcessObject.GetGlobalDefaultNumberOfThreads()
-    sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(n)
-    try:
-        yield
-    finally:
-        sitk.ProcessObject.SetGlobalDefaultNumberOfThreads(prev)
-
-
-def _dataarray_to_sitk(da: xr.DataArray) -> "sitk.Image":
-    """Convert a spatial DataArray to a SimpleITK image.
-
-    Uses the transpose convention: `da.values.T` is passed to `GetImageFromArray`,
-    so that the first DataArray axis maps to SimpleITK's physical x-axis. The DataArray
-    must be spatial-only (no `time` dimension).
-
-    Parameters
-    ----------
-    da : xarray.DataArray
-        2D or 3D spatial DataArray. Spacing and origin are derived from its coordinates;
-        missing coordinates warn and fall back to spacing `1.0` and origin `0.0`.
-
-    Returns
-    -------
-    SimpleITK.Image
-        SimpleITK image with spacing and origin set from the DataArray coordinates.
-    """
-    import SimpleITK as sitk
-
-    spacing = tuple(s if s is not None else 1.0 for s in _compute_spacing(da).values())
-    origin = tuple(_compute_origin(da).values())
-    image = sitk.GetImageFromArray(da.values.T)
-    image.SetSpacing(spacing)
-    image.SetOrigin(origin)
-    return image
 
 
 def _validate_register_volume_inputs(
@@ -279,7 +228,7 @@ def register_volume(  # numpydoc ignore=GL08,PR01,RT01
     convergence_window_size: int = ...,
     centering_initialization: Literal["geometry", "moments", "none"] = ...,
     optimizer_weights: list[float] | None = ...,
-    initial_transform: "npt.NDArray[np.float64] | None" = ...,
+    initial_transform: "npt.NDArray[np.floating] | None" = ...,
     mesh_size: tuple[int, int, int] = ...,
     use_multi_resolution: bool = ...,
     shrink_factors: Sequence[int] = ...,
@@ -290,7 +239,7 @@ def register_volume(  # numpydoc ignore=GL08,PR01,RT01
     show_progress: bool = ...,
     plot_metric: bool = ...,
     plot_composite: bool = ...,
-) -> "tuple[xr.DataArray, npt.NDArray[np.float64]]":
+) -> "tuple[xr.DataArray, npt.NDArray[np.floating]]":
     """Overload for linear transforms (translation/rigid/affine)."""
     ...
 
@@ -311,7 +260,7 @@ def register_volume(  # numpydoc ignore=GL08,PR01,RT01
     convergence_window_size: int = ...,
     centering_initialization: Literal["geometry", "moments", "none"] = ...,
     optimizer_weights: list[float] | None = ...,
-    initial_transform: "npt.NDArray[np.float64] | None" = ...,
+    initial_transform: "npt.NDArray[np.floating] | None" = ...,
     mesh_size: tuple[int, int, int] = ...,
     use_multi_resolution: bool = ...,
     shrink_factors: Sequence[int] = ...,
@@ -342,7 +291,7 @@ def register_volume(  # numpydoc ignore=GL08,PR01,RT01
     convergence_window_size: int = ...,
     centering_initialization: Literal["geometry", "moments", "none"] = ...,
     optimizer_weights: list[float] | None = ...,
-    initial_transform: "npt.NDArray[np.float64] | None" = ...,
+    initial_transform: "npt.NDArray[np.floating] | None" = ...,
     mesh_size: tuple[int, int, int] = ...,
     use_multi_resolution: bool = ...,
     shrink_factors: Sequence[int] = ...,
@@ -353,7 +302,7 @@ def register_volume(  # numpydoc ignore=GL08,PR01,RT01
     show_progress: bool = ...,
     plot_metric: bool = ...,
     plot_composite: bool = ...,
-) -> "tuple[xr.DataArray, npt.NDArray[np.float64]]":
+) -> "tuple[xr.DataArray, npt.NDArray[np.floating]]":
     """Overload for default transform (rigid, returns affine)."""
     ...
 
@@ -373,7 +322,7 @@ def register_volume(
     convergence_window_size: int = 10,
     centering_initialization: Literal["geometry", "moments", "none"] = "geometry",
     optimizer_weights: list[float] | None = None,
-    initial_transform: "npt.NDArray[np.float64] | None" = None,
+    initial_transform: "npt.NDArray[np.floating] | None" = None,
     mesh_size: tuple[int, int, int] = (10, 10, 10),
     use_multi_resolution: bool = False,
     shrink_factors: Sequence[int] = (6, 2, 1),
@@ -384,7 +333,7 @@ def register_volume(
     show_progress: bool = False,
     plot_metric: bool = True,
     plot_composite: bool = True,
-) -> "tuple[xr.DataArray, npt.NDArray[np.float64] | xr.DataArray]":
+) -> "tuple[xr.DataArray, npt.NDArray[np.floating] | xr.DataArray]":
     """Register a single 2D or 3D volume to a fixed reference.
 
     Voxel spacing and origin are automatically extracted from the DataArray coordinates.
@@ -563,8 +512,8 @@ def register_volume(
         resample_interpolation=resample_interpolation,
     )
 
-    fixed_sitk = _dataarray_to_sitk(fixed)
-    moving_sitk = _dataarray_to_sitk(moving)
+    fixed_sitk = dataarray_to_sitk_image(fixed)
+    moving_sitk = dataarray_to_sitk_image(moving)
 
     # SimpleITK's multi-resolution pyramid and interpolation fail when any spatial
     # dimension is smaller than 4 voxels (common for 2D+t fUSI recordings with a 1-voxel
@@ -600,14 +549,14 @@ def register_volume(
     if fixed_mask is not None:
         # Convert boolean mask to uint8 for SimpleITK
         fixed_mask_uint8 = fixed_mask.astype(np.uint8)
-        fixed_mask_sitk = _dataarray_to_sitk(fixed_mask_uint8)
+        fixed_mask_sitk = dataarray_to_sitk_image(fixed_mask_uint8)
         # Expand mask if image was expanded
         fixed_mask_sitk = _expand_thin_dims(fixed_mask_sitk)
         registration.SetMetricFixedMask(fixed_mask_sitk)
     if moving_mask is not None:
         # Convert boolean mask to uint8 for SimpleITK
         moving_mask_uint8 = moving_mask.astype(np.uint8)
-        moving_mask_sitk = _dataarray_to_sitk(moving_mask_uint8)
+        moving_mask_sitk = dataarray_to_sitk_image(moving_mask_uint8)
         # Expand mask if image was expanded
         moving_mask_sitk = _expand_thin_dims(moving_mask_sitk)
         registration.SetMetricMovingMask(moving_mask_sitk)
@@ -704,7 +653,7 @@ def register_volume(
         registration.AddCommand(sitk.sitkIterationEvent, plotter.update)
         registration.AddCommand(sitk.sitkEndEvent, plotter.close)
 
-    with _sitk_thread_count(sitk_threads):
+    with set_sitk_thread_count(sitk_threads):
         sitk_optimized_transform = registration.Execute(fixed_reg, moving_reg)
 
     # When resampling, the output lives on the fixed grid; otherwise the moving volume
@@ -713,8 +662,8 @@ def register_volume(
         interp = (
             sitk.sitkLinear if resample_interpolation == "linear" else sitk.sitkBSpline
         )
-        # .T restores numpy axis order (inverse of the .T in _dataarray_to_sitk).
-        with _sitk_thread_count(sitk_threads):
+        # .T restores numpy axis order, inverse of the .T used to build the SITK image.
+        with set_sitk_thread_count(sitk_threads):
             registered_arr = sitk.GetArrayFromImage(
                 sitk.Resample(
                     moving_sitk,
@@ -741,7 +690,7 @@ def register_volume(
     if transform_type == "bspline":
         from confusius.registration.bspline import _sitk_bspline_to_dataarray
 
-        optimized_transform: npt.NDArray[np.float64] | xr.DataArray = (
+        optimized_transform: npt.NDArray[np.floating] | xr.DataArray = (
             _sitk_bspline_to_dataarray(
                 sitk_optimized_transform, pre_affine=initial_transform
             )

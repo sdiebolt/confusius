@@ -5,7 +5,7 @@ from typing import Any
 
 import xarray as xr
 
-from confusius._utils import _compute_origin, _compute_spacing
+from confusius._utils import get_coordinate_origins, get_coordinate_spacings
 from confusius.xarray.affine import FUSIAffineAccessor
 from confusius.xarray.connectivity import FUSIConnectivityAccessor
 from confusius.xarray.extract import FUSIExtractAccessor
@@ -179,7 +179,7 @@ class FUSIAccessor:
         >>> data.fusi.spacing
         {'y': 0.2, 'x': 0.1}
         """
-        return _compute_spacing(self._obj)
+        return get_coordinate_spacings(self._obj)
 
     @property
     def origin(self) -> dict[str, float]:
@@ -206,7 +206,7 @@ class FUSIAccessor:
         >>> data.fusi.origin
         {'y': 0.0, 'x': 0.0}
         """
-        return _compute_origin(self._obj)
+        return get_coordinate_origins(self._obj)
 
     @property
     def affine(self) -> FUSIAffineAccessor:

@@ -51,23 +51,26 @@ def spatial_mask_small(rng, sample_iq_block_4d_small):
 
 
 @pytest.fixture
-def sample_iq_dataset(rng):
-    """Create sample xarray Dataset with IQ data.
+def sample_iq_dataarray(rng):
+    """Create sample xarray DataArray with IQ data.
 
-    Shape: (20, 4, 6, 8) with proper coordinates and required attributes
-    on the iq DataArray (consistent with how conversion functions store data).
+    Shape: (20, 4, 6, 8) with proper coordinates and required attributes.
     """
-    import xarray as xr
-
     shape = (20, 4, 6, 8)
     data = rng.random(shape) + 1j * rng.random(shape)
 
-    iq_data = xr.DataArray(
+    return xr.DataArray(
         data,
         dims=("time", "z", "y", "x"),
         coords={
             "time": xr.DataArray(
-                np.arange(20) * 0.1, dims=("time",), attrs={"units": "s"}
+                np.arange(20) * 0.1,
+                dims=("time",),
+                attrs={
+                    "units": "s",
+                    "volume_acquisition_duration": 0.1,
+                    "volume_acquisition_reference": "start",
+                },
             ),
             "z": np.arange(4) * 0.1,
             "y": np.arange(6) * 0.05,
@@ -79,17 +82,6 @@ def sample_iq_dataset(rng):
             "beamforming_sound_velocity": 1540.0,
         },
     )
-
-    return xr.Dataset({"iq": iq_data})
-
-
-@pytest.fixture
-def sample_iq_dataarray(sample_iq_dataset):
-    """Return the IQ DataArray from sample_iq_dataset.
-
-    Shape: (20, 4, 6, 8) with proper coordinates and required attributes.
-    """
-    return sample_iq_dataset["iq"]
 
 
 @pytest.fixture

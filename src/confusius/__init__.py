@@ -14,6 +14,7 @@ __all__ = [
     "registration",
     "signal",
     "spatial",
+    "timing",
     "validation",
     "xarray",
     "__version__",
@@ -35,6 +36,7 @@ from confusius import (
     registration,
     signal,
     spatial,
+    timing,
     validation,
     xarray,
 )

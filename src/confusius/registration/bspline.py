@@ -40,7 +40,7 @@ if TYPE_CHECKING:
 
 def _sitk_bspline_to_dataarray(
     transform: "sitk.Transform",
-    pre_affine: npt.NDArray[np.float64] | None = None,
+    pre_affine: npt.NDArray[np.floating] | None = None,
 ) -> xr.DataArray:
     """Convert a SimpleITK B-spline (or composite) transform to a DataArray.
 
