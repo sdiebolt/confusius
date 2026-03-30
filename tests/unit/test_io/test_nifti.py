@@ -677,6 +677,97 @@ class TestSaveNifti:
             [0.0, 0.0, 0.0, 1.0],
         ]
 
+    def test_save_sidecar_omits_affines_written_to_header(
+        self, tmp_path, sample_3d_volume
+    ):
+        """Affines already written to qform/sform are omitted from the sidecar."""
+        template_affine = np.array(
+            [
+                [1.0, 0.0, 0.0, 4.0],
+                [0.0, 1.0, 0.0, 5.0],
+                [0.0, 0.0, 1.0, 6.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        scanner_affine = np.array(
+            [
+                [0.0, 0.0, 1.0, 1.0],
+                [0.0, 1.0, 0.0, 2.0],
+                [1.0, 0.0, 0.0, 3.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        lab_affine = np.array(
+            [
+                [1.0, 0.0, 0.0, -1.0],
+                [0.0, 1.0, 0.0, -2.0],
+                [0.0, 0.0, 1.0, -3.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        da = sample_3d_volume.drop_vars("time").copy()
+        da.attrs["affines"] = {
+            "physical_to_template": template_affine,
+            "physical_to_scanner": scanner_affine,
+            "physical_to_lab": lab_affine,
+        }
+
+        output_path = tmp_path / "selected_affines.nii.gz"
+        save_nifti(
+            da,
+            output_path,
+            sform="physical_to_template",
+            qform="physical_to_scanner",
+        )
+
+        sidecar_path = tmp_path / "selected_affines.json"
+        with open(sidecar_path) as f:
+            sidecar = json.load(f)
+
+        assert sidecar["ConfUSIusAffines"] == {
+            "physical_to_lab": [
+                [1.0, 0.0, 0.0, -1.0],
+                [0.0, 1.0, 0.0, -2.0],
+                [0.0, 0.0, 1.0, -3.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        }
+
+    def test_save_sidecar_keeps_qform_affine_when_qform_not_written(self, tmp_path):
+        """A stored qform affine stays in the sidecar when `qform_code` is 0."""
+        qform_affine = np.array(
+            [
+                [1.0, 0.0, 0.0, 4.0],
+                [0.0, 1.0, 0.0, 5.0],
+                [0.0, 0.0, 1.0, 6.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        )
+        da = xr.DataArray(
+            np.zeros((4, 3, 2), dtype=np.float32),
+            dims=["z", "y", "x"],
+            coords={
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+            },
+            attrs={"affines": {"physical_to_qform": qform_affine}},
+        )
+
+        output_path = tmp_path / "qform_not_written.nii.gz"
+        save_nifti(da, output_path, qform_code=0)
+
+        sidecar_path = tmp_path / "qform_not_written.json"
+        with open(sidecar_path) as f:
+            sidecar = json.load(f)
+
+        assert sidecar["ConfUSIusAffines"]["physical_to_qform"] == [
+            [1.0, 0.0, 0.0, 4.0],
+            [0.0, 1.0, 0.0, 5.0],
+            [0.0, 0.0, 1.0, 6.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+
     def test_save_invalid_time_units_raises(self, tmp_path, sample_4d_volume):
         """Saving rejects unsupported time units."""
         da = sample_4d_volume.copy()
@@ -908,12 +999,10 @@ class TestSaveNifti:
             ):
                 save_nifti(sample_4d_volume, output_path)
 
-    def test_explicit_qform_overrides_attrs(self, tmp_path):
-        """Explicit physical_to_qform= kwarg takes precedence over attrs['affines']['physical_to_qform']."""
+    def test_named_qform_selects_requested_affine(self, tmp_path):
+        """`qform=` selects the requested affine key from `attrs['affines']`."""
         data = np.zeros((4, 3, 2), dtype=np.float32)
-        # Diagonal physical_to_qform (ConfUSIus convention, identity rotation).
-        physical_to_qform = np.diag([1.0, 1.0, 1.0, 1.0])
-        # Store a different affine in attrs that should be overridden.
+        selected_affine = np.diag([1.0, 1.0, 1.0, 1.0])
         different_affine = np.diag([9.0, 9.0, 9.0, 1.0])
         da = xr.DataArray(
             data,
@@ -923,19 +1012,44 @@ class TestSaveNifti:
                 "y": np.arange(3) * 1.0,
                 "x": np.arange(2) * 1.0,
             },
-            attrs={"affines": {"physical_to_qform": different_affine}},
+            attrs={
+                "affines": {
+                    "physical_to_qform": different_affine,
+                    "physical_to_template": selected_affine,
+                }
+            },
         )
-        output_path = tmp_path / "explicit_qform.nii.gz"
-        save_nifti(da, output_path, physical_to_qform=physical_to_qform)
+        output_path = tmp_path / "selected_qform.nii.gz"
+        save_nifti(da, output_path, qform="physical_to_template")
 
         loaded = nib.load(output_path)
         q = loaded.header.get_qform()
-        # physical_to_qform is the identity rotation, so the qform rotation block
-        # should be identity scaled by the voxel spacing (1.0), not the 9× one.
         np.testing.assert_allclose(q[:3, :3], np.eye(3), atol=1e-6)
 
-    def test_explicit_sform_sets_sform_code(self, tmp_path):
-        """Providing physical_to_sform= writes a sform with code=1 even if attrs has sform_code=0."""
+    def test_default_qform_key_from_attrs_used_when_no_kwarg(self, tmp_path):
+        """When `qform` is omitted, `physical_to_qform` is used if present."""
+        data = np.zeros((4, 3, 2), dtype=np.float32)
+        physical_to_qform = np.eye(4)
+        da = xr.DataArray(
+            data,
+            dims=["z", "y", "x"],
+            coords={
+                "z": np.arange(4) * 3.0,
+                "y": np.arange(3) * 3.0,
+                "x": np.arange(2) * 3.0,
+            },
+            attrs={"affines": {"physical_to_qform": physical_to_qform}},
+        )
+        output_path = tmp_path / "default_qform_key.nii.gz"
+        save_nifti(da, output_path)
+
+        loaded = nib.load(output_path)
+        np.testing.assert_allclose(
+            loaded.header.get_qform()[:3, :3], np.diag([3.0, 3.0, 3.0]), atol=1e-6
+        )
+
+    def test_named_sform_sets_sform_code(self, tmp_path):
+        """Providing `sform=` writes a sform with code=1 by default."""
         data = np.zeros((4, 3, 2), dtype=np.float32)
         physical_to_sform = np.diag([2.0, 2.0, 2.0, 1.0])
         da = xr.DataArray(
@@ -946,14 +1060,15 @@ class TestSaveNifti:
                 "y": np.arange(3) * 2.0,
                 "x": np.arange(2) * 2.0,
             },
+            attrs={"affines": {"physical_to_template": physical_to_sform}},
         )
-        output_path = tmp_path / "explicit_sform.nii.gz"
-        save_nifti(da, output_path, physical_to_sform=physical_to_sform)
+        output_path = tmp_path / "named_sform.nii.gz"
+        save_nifti(da, output_path, sform="physical_to_template")
 
         loaded = nib.load(output_path)
         assert loaded.header.get_sform(coded=True)[1] == 1
 
-    def test_explicit_sform_code_kwarg_overrides_attrs(self, tmp_path):
+    def test_named_sform_code_kwarg_overrides_attrs(self, tmp_path):
         """sform_code= kwarg takes precedence over attrs['sform_code']."""
         data = np.zeros((4, 3, 2), dtype=np.float32)
         physical_to_sform = np.diag([1.0, 1.0, 1.0, 1.0])
@@ -971,7 +1086,7 @@ class TestSaveNifti:
             },
         )
         output_path = tmp_path / "sform_code_override.nii.gz"
-        save_nifti(da, output_path, physical_to_sform=physical_to_sform, sform_code=2)
+        save_nifti(da, output_path, sform="physical_to_sform", sform_code=2)
 
         loaded = nib.load(output_path)
         assert loaded.header.get_sform(coded=True)[1] == 2
@@ -1020,8 +1135,30 @@ class TestSaveNifti:
         assert loaded.header.get_qform(coded=True)[1] == 2
         assert loaded.header.get_sform(coded=True)[1] == 2
 
+    def test_invalid_qform_key_raises(self, tmp_path):
+        """Selecting a missing qform key raises a clear error."""
+        data = np.zeros((4, 3, 2), dtype=np.float32)
+        da = xr.DataArray(
+            data,
+            dims=["z", "y", "x"],
+            coords={
+                "z": np.arange(4) * 1.0,
+                "y": np.arange(3) * 1.0,
+                "x": np.arange(2) * 1.0,
+            },
+            attrs={"affines": {"physical_to_template": np.eye(4)}},
+        )
+
+        with pytest.raises(
+            ValueError,
+            match=r"qform='physical_to_scanner' not found in data_array.attrs\['affines'\]",
+        ):
+            save_nifti(
+                da, tmp_path / "invalid_qform_key.nii.gz", qform="physical_to_scanner"
+            )
+
     def test_no_sform_kwarg_writes_no_sform(self, tmp_path):
-        """Without physical_to_sform= and no attrs sform, the saved file has sform_code=0."""
+        """Without `sform=` and no attrs `physical_to_sform`, the saved file has sform_code=0."""
         data = np.zeros((4, 3, 2), dtype=np.float32)
         da = xr.DataArray(
             data,

@@ -1048,26 +1048,160 @@ def _build_nifti_timing_metadata(
     return timing_metadata, tr_pixdim
 
 
-def _resolve_nifti_affines_and_codes(
+def _resolve_nifti_affine_key(
+    stored_affines: dict[str, Any],
+    *,
+    form_name: Literal["qform", "sform"],
+    selected_key: str | None,
+    default_key: str,
+) -> str | None:
+    """Resolve the affine key to serialize for a NIfTI xform field.
+
+    Parameters
+    ----------
+    stored_affines : dict[str, Any]
+        Affines stored in `data_array.attrs["affines"]`.
+    form_name : {"qform", "sform"}
+        Name of the NIfTI xform field being resolved.
+    selected_key : str, optional
+        Explicit affine key requested by the caller.
+    default_key : str
+        Fallback affine key to use when `selected_key` is not provided.
+
+    Returns
+    -------
+    str or None
+        Selected affine key, or `None` when neither the explicit key nor the fallback
+        key is available.
+
+    Raises
+    ------
+    ValueError
+        If an explicit `selected_key` is requested but is not present in
+        `stored_affines`.
+    """
+    affine_key = selected_key if selected_key is not None else default_key
+    if affine_key in stored_affines:
+        return affine_key
+
+    if selected_key is not None:
+        raise ValueError(
+            f"{form_name}={selected_key!r} not found in data_array.attrs['affines']."
+        )
+
+    return None
+
+
+def _resolve_nifti_xform_code(
     data_array: xr.DataArray,
     *,
-    physical_to_qform: npt.NDArray[np.floating] | None,
-    physical_to_sform: npt.NDArray[np.floating] | None,
-    qform_code: int | None,
-    sform_code: int | None,
-) -> tuple[
-    dict[str, Any], npt.NDArray[np.floating], npt.NDArray[np.floating] | None, int, int
-]:
-    """Resolve affines and xform codes for NIfTI serialization.
+    form_name: Literal["qform", "sform"],
+    code: int | None,
+    has_affine: bool,
+) -> int:
+    """Resolve the NIfTI qform/sform code to write.
 
     Parameters
     ----------
     data_array : xarray.DataArray
         Array being serialized.
-    physical_to_qform : (4, 4) numpy.ndarray, optional
-        Explicit qform affine override.
-    physical_to_sform : (4, 4) numpy.ndarray, optional
-        Explicit sform affine override.
+    form_name : {"qform", "sform"}
+        Name of the NIfTI xform field being resolved.
+    code : int, optional
+        Explicit qform/sform code override.
+    has_affine : bool
+        Whether a stored affine was selected for this xform field.
+
+    Returns
+    -------
+    int
+        Resolved xform code. Explicit `code` takes precedence, then the corresponding
+        `data_array.attrs["<form_name>_code"]` value when present. Otherwise qform
+        defaults to `1`, while sform defaults to `1` only when an affine is available
+        and `0` when no sform affine will be written.
+    """
+    if code is not None:
+        return code
+
+    attr_name = f"{form_name}_code"
+    if attr_name in data_array.attrs:
+        return int(data_array.attrs[attr_name])
+
+    if form_name == "qform":
+        return 1
+
+    return 1 if has_affine else 0
+
+
+def _build_selected_nifti_affine(
+    data_array: xr.DataArray,
+    *,
+    spatial_zooms: list[float],
+    stored_affines: dict[str, Any],
+    affine_key: str | None,
+) -> npt.NDArray[np.floating]:
+    """Build a NIfTI header affine from a selected stored affine key.
+
+    Parameters
+    ----------
+    data_array : xarray.DataArray
+        Array being serialized.
+    spatial_zooms : list[float]
+        Spatial voxel sizes for the NIfTI `x`, `y`, and `z` axes.
+    stored_affines : dict[str, Any]
+        Affines stored in `data_array.attrs["affines"]`.
+    affine_key : str, optional
+        Key of the stored ConfUSIus physical-to-world affine to encode. When `None`, a
+        diagonal NIfTI affine is built directly from coordinate origin and spacing.
+
+    Returns
+    -------
+    (4, 4) numpy.ndarray
+        NIfTI voxel-to-world affine in NIfTI axis order.
+    """
+    origin = np.array(
+        [
+            float(data_array.coords[dim][0]) if dim in data_array.coords else 0.0
+            for dim in ("x", "y", "z")
+        ]
+    )
+    zooms = np.array(spatial_zooms)
+    transform = (
+        _validate_affine_matrix(stored_affines[affine_key], name=affine_key)
+        if affine_key is not None
+        else None
+    )
+    return _build_nifti_affine(transform, origin, zooms)
+
+
+def _prepare_nifti_xforms(
+    data_array: xr.DataArray,
+    *,
+    spatial_zooms: list[float],
+    qform: str | None,
+    sform: str | None,
+    qform_code: int | None,
+    sform_code: int | None,
+) -> tuple[
+    dict[str, Any],
+    npt.NDArray[np.floating],
+    npt.NDArray[np.floating] | None,
+    int,
+    int,
+    set[str],
+]:
+    """Prepare qform/sform affines, codes, and sidecar omission keys.
+
+    Parameters
+    ----------
+    data_array : xarray.DataArray
+        Array being serialized.
+    spatial_zooms : list[float]
+        Spatial voxel sizes for the NIfTI `x`, `y`, and `z` axes.
+    qform : str, optional
+        Explicit affine key to use for qform serialization.
+    sform : str, optional
+        Explicit affine key to use for sform serialization.
     qform_code : int, optional
         Explicit qform code override.
     sform_code : int, optional
@@ -1076,68 +1210,110 @@ def _resolve_nifti_affines_and_codes(
     Returns
     -------
     stored_affines : dict[str, Any]
-        Original affines mapping stored in `data_array.attrs`.
+        Affines stored in `data_array.attrs["affines"]`.
     qform_affine : (4, 4) numpy.ndarray
-        Resolved qform affine in NIfTI axis order.
+        Final qform affine to write to the NIfTI header.
     sform_affine : (4, 4) numpy.ndarray or None
-        Resolved sform affine in NIfTI axis order, or `None` when no sform is written.
+        Final sform affine to write to the NIfTI header, or `None` when no sform is
+        written.
     resolved_qform_code : int
-        Final qform code written to the header.
+        Final qform code.
     resolved_sform_code : int
-        Final sform code written to the header.
+        Final sform code.
+    written_header_affine_keys : set[str]
+        Keys from `stored_affines` that were actually written into the NIfTI header and
+        should therefore be omitted from `ConfUSIusAffines` in the sidecar.
     """
-    spatial_zooms = _get_spatial_zooms(data_array)
-    T = np.array(
-        [
-            float(data_array.coords[dim][0]) if dim in data_array.coords else 0.0
-            for dim in ("x", "y", "z")
-        ]
-    )
-    Z = np.array(spatial_zooms)
-
     stored_affines: dict[str, Any] = data_array.attrs.get("affines", {})
-    qform_matrix = (
-        physical_to_qform
-        if physical_to_qform is not None
-        else stored_affines.get("physical_to_qform")
-    )
-    sform_matrix = (
-        physical_to_sform
-        if physical_to_sform is not None
-        else stored_affines.get("physical_to_sform")
-    )
+    selected_keys = {"qform": qform, "sform": sform}
+    explicit_codes = {"qform": qform_code, "sform": sform_code}
+    default_affine_keys = {
+        "qform": "physical_to_qform",
+        "sform": "physical_to_sform",
+    }
+    resolved_codes: dict[str, int] = {}
+    header_affines: dict[str, npt.NDArray[np.floating] | None] = {}
+    written_header_affine_keys: set[str] = set()
 
-    if qform_code is not None:
-        resolved_qform_code = qform_code
-    elif "qform_code" in data_array.attrs:
-        resolved_qform_code = int(data_array.attrs["qform_code"])
-    else:
-        resolved_qform_code = 1
+    for form_name in ("qform", "sform"):
+        resolved_key = _resolve_nifti_affine_key(
+            stored_affines,
+            form_name=form_name,
+            selected_key=selected_keys[form_name],
+            default_key=default_affine_keys[form_name],
+        )
+        resolved_code = _resolve_nifti_xform_code(
+            data_array,
+            form_name=form_name,
+            code=explicit_codes[form_name],
+            has_affine=resolved_key is not None,
+        )
 
-    if sform_code is not None:
-        resolved_sform_code = sform_code
-    elif "sform_code" in data_array.attrs:
-        resolved_sform_code = int(data_array.attrs["sform_code"])
-    else:
-        resolved_sform_code = 1 if sform_matrix is not None else 0
+        header_affines[form_name] = (
+            _build_selected_nifti_affine(
+                data_array,
+                spatial_zooms=spatial_zooms,
+                stored_affines=stored_affines,
+                affine_key=resolved_key,
+            )
+            if form_name == "qform" or resolved_code > 0
+            else None
+        )
+        resolved_codes[form_name] = resolved_code
 
-    qform_affine = _build_nifti_affine(qform_matrix, T, Z)
-    sform_affine = (
-        _build_nifti_affine(sform_matrix, T, Z) if resolved_sform_code > 0 else None
-    )
+        if resolved_code > 0 and resolved_key is not None:
+            written_header_affine_keys.add(resolved_key)
+
+    # We're guaranteed that qform isn't None since we always build a fallback affine for
+    # it.
+    assert header_affines["qform"] is not None
     return (
         stored_affines,
-        qform_affine,
-        sform_affine,
-        resolved_qform_code,
-        resolved_sform_code,
+        header_affines["qform"],
+        header_affines["sform"],
+        resolved_codes["qform"],
+        resolved_codes["sform"],
+        written_header_affine_keys,
     )
+
+
+def _validate_affine_matrix(
+    affine: npt.ArrayLike, *, name: str
+) -> npt.NDArray[np.floating]:
+    """Return a validated 4x4 affine matrix.
+
+    Parameters
+    ----------
+    affine : array-like
+        Candidate affine matrix.
+    name : str
+        Affine key used to report validation errors.
+
+    Returns
+    -------
+    (4, 4) numpy.ndarray
+        Validated affine matrix as a float array.
+
+    Raises
+    ------
+    ValueError
+        If `affine` does not have shape `(4, 4)`.
+    """
+    affine_array = np.asarray(affine, dtype=float)
+    if affine_array.shape != (4, 4):
+        raise ValueError(
+            f"data_array.attrs['affines'][{name!r}] must have shape (4, 4), got "
+            f"{affine_array.shape}."
+        )
+
+    return affine_array
 
 
 def _build_nifti_sidecar_metadata(
     data_array: xr.DataArray,
     timing_metadata: dict[str, Any],
     stored_affines: dict[str, Any],
+    written_header_affine_keys: set[str],
 ) -> dict[str, Any]:
     """Build the JSON sidecar payload before BIDS field conversion.
 
@@ -1149,6 +1325,9 @@ def _build_nifti_sidecar_metadata(
         Timing-related metadata returned by `_build_nifti_timing_metadata`.
     stored_affines : dict[str, Any]
         Affines stored in `data_array.attrs["affines"]`.
+    written_header_affine_keys : set of str
+        Keys from `data_array.attrs["affines"]` that were actually written into the
+        NIfTI qform and/or sform header fields.
 
     Returns
     -------
@@ -1165,7 +1344,7 @@ def _build_nifti_sidecar_metadata(
     extra_affines = {
         k: np.asarray(v).tolist()
         for k, v in stored_affines.items()
-        if k not in ("physical_to_sform", "physical_to_qform")
+        if k not in written_header_affine_keys
     }
     if extra_affines:
         sidecar_attrs["affines"] = extra_affines
@@ -1255,8 +1434,8 @@ def save_nifti(
     path: str | Path,
     nifti_version: NiftiVersion = 1,
     *,
-    physical_to_qform: "npt.NDArray[np.floating] | None" = None,
-    physical_to_sform: "npt.NDArray[np.floating] | None" = None,
+    qform: str | None = None,
+    sform: str | None = None,
     qform_code: int | None = None,
     sform_code: int | None = None,
 ) -> None:
@@ -1276,18 +1455,14 @@ def save_nifti(
     nifti_version : {1, 2}, default: 1
         NIfTI format version to use. Version 2 is a simple extension to support
         larger files and arrays with dimension sizes greater than 32,767.
-    physical_to_qform : (4, 4) numpy.ndarray, optional
-        Affine mapping physical coordinates (as stored in the DataArray coordinates) to
-        the NIfTI qform space, in ConfUSIus `(z, y, x)` convention. When provided,
-        takes precedence over `data_array.attrs["affines"]["physical_to_qform"]`. When
-        not provided, the value from `attrs["affines"]` is used if present, otherwise
-        a diagonal affine derived from voxel spacing is written.
-    physical_to_sform : (4, 4) numpy.ndarray, optional
-        Affine mapping physical coordinates (as stored in the DataArray coordinates) to
-        the NIfTI sform space, in ConfUSIus `(z, y, x)` convention. When provided,
-        takes precedence over `data_array.attrs["affines"]["physical_to_sform"]`. When
-        not provided, the value from `attrs["affines"]` is used if present; if neither
-        is available, no sform is written.
+    qform : str, optional
+        Key in `data_array.attrs["affines"]` to write into the NIfTI qform. When not
+        provided, `"physical_to_qform"` is used if present; otherwise qform falls back
+        to a diagonal affine derived from voxel spacing.
+    sform : str, optional
+        Key in `data_array.attrs["affines"]` to write into the NIfTI sform. When not
+        provided, `"physical_to_sform"` is used if present; otherwise no sform is
+        written.
     qform_code : int, optional
         NIfTI qform code to write. When provided, takes precedence over
         `data_array.attrs["qform_code"]`. When not provided, the value from
@@ -1315,6 +1490,7 @@ def save_nifti(
     >>> da = xr.DataArray(np.random.rand(10, 32, 1, 64),
     ...                   dims=["time", "z", "y", "x"])
     >>> cf.io.save_nifti(da, "output.nii.gz")
+    >>> cf.io.save_nifti(da, "output.nii.gz", sform="physical_to_template")
     """
     path = Path(path)
     if not path.name.endswith(".nii") and not path.name.endswith(".nii.gz"):
@@ -1335,10 +1511,12 @@ def save_nifti(
         sform_affine,
         resolved_qform_code,
         resolved_sform_code,
-    ) = _resolve_nifti_affines_and_codes(
+        written_header_affine_keys,
+    ) = _prepare_nifti_xforms(
         data_array,
-        physical_to_qform=physical_to_qform,
-        physical_to_sform=physical_to_sform,
+        spatial_zooms=spatial_zooms,
+        qform=qform,
+        sform=sform,
         qform_code=qform_code,
         sform_code=sform_code,
     )
@@ -1357,7 +1535,7 @@ def save_nifti(
     nifti_img.to_filename(path)
 
     sidecar_attrs = _build_nifti_sidecar_metadata(
-        data_array, timing_metadata, stored_affines
+        data_array, timing_metadata, stored_affines, written_header_affine_keys
     )
 
     if path.suffix == ".gz":
