@@ -195,7 +195,7 @@ def decompose_affine(
     return T, Rmat, np.array([sx, sy, sz]), np.array([sxy, sxz, syz])
 
 
-def _affine_to_sitk_linear_transform(
+def affine_to_sitk_linear_transform(
     affine: npt.NDArray[np.floating],
 ) -> "AffineTransform":
     """Convert a homogeneous affine matrix to a SimpleITK `AffineTransform`.
@@ -221,7 +221,7 @@ def _affine_to_sitk_linear_transform(
     return tx
 
 
-def _sitk_linear_transform_to_affine(
+def sitk_linear_transform_to_affine(
     transform: "sitk.Transform",
 ) -> npt.NDArray[np.floating]:
     """Convert a SimpleITK linear transform to a homogeneous affine matrix.
@@ -287,7 +287,7 @@ def _sitk_linear_transform_to_affine(
         assert isinstance(transform, sitk.CompositeTransform)
         A = np.eye(ndim + 1)
         for i in range(transform.GetNumberOfTransforms()):
-            A = A @ _sitk_linear_transform_to_affine(transform.GetNthTransform(i))
+            A = A @ sitk_linear_transform_to_affine(transform.GetNthTransform(i))
         return A
 
     if name == "IdentityTransform":

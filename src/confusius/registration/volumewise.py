@@ -105,7 +105,8 @@ def register_volumewise(
     Returns
     -------
     xarray.DataArray
-        Registered data with same coordinates and attributes as input.
+        Registered data with the same coordinates as input, input attributes, and added
+        motion metadata in `attrs["reference_time"]` and `attrs["motion_params"]`.
     """
     from joblib import Parallel, delayed
     from joblib_progress import joblib_progress
@@ -172,7 +173,6 @@ def register_volumewise(
         attrs=data.attrs.copy(),
     )
 
-    result.attrs["registration"] = "volumewise"
     result.attrs["reference_time"] = reference_time
     result.attrs["motion_params"] = motion_df
 

@@ -22,14 +22,18 @@ class TestRegisterVolumeValidation:
         moving = sample_2d_dataarray_spatial.copy()
         moving.values[0, 0] = float("nan")
         with pytest.raises(ValueError, match="NaN"):
-            register_volume(moving, sample_2d_dataarray_spatial, transform_type="translation")
+            register_volume(
+                moving, sample_2d_dataarray_spatial, transform_type="translation"
+            )
 
     def test_nan_in_fixed_raises(self, sample_2d_dataarray_spatial):
         """fixed with NaN values raises ValueError."""
         fixed = sample_2d_dataarray_spatial.copy()
         fixed.values[0, 0] = float("nan")
         with pytest.raises(ValueError, match="NaN"):
-            register_volume(sample_2d_dataarray_spatial, fixed, transform_type="translation")
+            register_volume(
+                sample_2d_dataarray_spatial, fixed, transform_type="translation"
+            )
 
     def test_wrong_ndim_1d_raises(self):
         """1D input raises ValueError."""
@@ -49,7 +53,9 @@ class TestRegisterVolumeValidation:
         """Different shapes do not raise an error."""
         moving = sample_2d_dataarray_spatial.isel(y=slice(16), x=slice(16))
         result, _ = register_volume(
-            moving, sample_2d_dataarray_spatial, transform_type="translation",
+            moving,
+            sample_2d_dataarray_spatial,
+            transform_type="translation",
             resample=False,
         )
         assert result.shape == moving.shape
@@ -101,6 +107,26 @@ class TestRegisterVolumeOutput:
         )
         assert_allclose(
             result.coords["x"].values, sample_2d_dataarray_spatial.coords["x"].values
+        )
+
+    def test_resample_true_inherits_fixed_affines(self, sample_2d_dataarray_spatial):
+        """resample=True output inherits physical-space affines from `fixed`."""
+        moving = sample_2d_dataarray_spatial.isel(y=slice(16), x=slice(16)).copy()
+        fixed = sample_2d_dataarray_spatial.copy()
+        moving.attrs["affines"] = {"physical_to_lab": np.diag([2.0, 2.0, 1.0])}
+        fixed.attrs["affines"] = {"physical_to_lab": np.diag([3.0, 3.0, 1.0])}
+
+        result, _ = register_volume(
+            moving,
+            fixed,
+            transform_type="translation",
+            resample=True,
+        )
+
+        assert "registration" not in result.attrs
+        assert_allclose(
+            result.attrs["affines"]["physical_to_lab"],
+            fixed.attrs["affines"]["physical_to_lab"],
         )
 
 
@@ -527,6 +553,21 @@ class TestResampleLike:
         )
         assert_allclose(
             result.coords["x"].values, sample_2d_dataarray_spatial.coords["x"].values
+        )
+
+    def test_inherits_reference_affines(self, sample_2d_dataarray_spatial):
+        """resample_like output inherits physical-space affines from `reference`."""
+        moving = sample_2d_dataarray_spatial.isel(y=slice(16), x=slice(16)).copy()
+        reference = sample_2d_dataarray_spatial.copy()
+        moving.attrs["affines"] = {"physical_to_lab": np.diag([2.0, 2.0, 1.0])}
+        reference.attrs["affines"] = {"physical_to_lab": np.diag([3.0, 3.0, 1.0])}
+
+        result = resample_like(moving, reference, np.eye(3))
+
+        assert "registration" not in result.attrs
+        assert_allclose(
+            result.attrs["affines"]["physical_to_lab"],
+            reference.attrs["affines"]["physical_to_lab"],
         )
 
     def test_matches_register_volume_resample_2d(

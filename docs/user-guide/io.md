@@ -440,6 +440,26 @@ as `RepetitionTime`, `DelayAfterTrigger`, or `VolumeTiming`. When possible,
 `RepetitionTime` is inferred directly from the `time` coordinate so the sidecar stays
 consistent with the data being saved.
 
+If `data_array.attrs["affines"]` contains named physical-to-reference affines, you can
+choose which ones are written into the NIfTI header:
+
+```python
+import confusius as cf
+
+cf.save_nifti(
+    data_array,
+    "output.nii.gz",
+    qform="physical_to_scanner",
+    sform="physical_to_template",
+)
+```
+
+When `qform` and/or `sform` are omitted, [`save_nifti`][confusius.io.save_nifti]
+falls back to `"physical_to_qform"` and `"physical_to_sform"` if those keys exist in
+`attrs["affines"]`. Any affine actually written into the NIfTI `qform` or `sform`
+header is omitted from the `ConfUSIusAffines` JSON sidecar field so it is not stored
+twice.
+
 ## Format Conversion Reference
 
 Quick reference for converting between formats:

@@ -9,11 +9,12 @@ import xarray as xr
 
 from confusius.registration._utils import (
     dataarray_to_sitk_image,
+    replace_affines_attr,
     set_sitk_thread_count,
 )
 from confusius.registration.affines import (
-    _affine_to_sitk_linear_transform,
-    _sitk_linear_transform_to_affine,
+    affine_to_sitk_linear_transform,
+    sitk_linear_transform_to_affine,
 )
 
 if TYPE_CHECKING:
@@ -454,8 +455,9 @@ def register_volume(
     -------
     registered : xarray.DataArray
         When `resample=True`, the moving volume resampled onto the fixed grid with
-        coordinates matching `fixed`. When `resample=False`, the original moving
-        volume with a `registration` attribute added to its metadata.
+        coordinates matching `fixed` and physical-space affines inherited from `fixed`.
+        When `resample=False`, the original moving volume with its original coordinates
+        and attributes.
     transform : (N+1, N+1) numpy.ndarray or xarray.DataArray or None
         Estimated registration transform. For linear transforms (`"translation"`,
         `"rigid"`, `"affine"`), returns a homogeneous affine matrix of shape `(N+1,
@@ -630,7 +632,7 @@ def register_volume(
             sitk_centering_transform = sitk_centering_transform
 
     if initial_transform is not None:
-        pre_tx = _affine_to_sitk_linear_transform(initial_transform)
+        pre_tx = affine_to_sitk_linear_transform(initial_transform)
 
         sitk_initial_transform: sitk.Transform = sitk.CompositeTransform(ndim)
         sitk_initial_transform.AddTransform(pre_tx)
@@ -662,8 +664,9 @@ def register_volume(
         interp = (
             sitk.sitkLinear if resample_interpolation == "linear" else sitk.sitkBSpline
         )
-        # .T restores numpy axis order, inverse of the .T used to build the SITK image.
         with set_sitk_thread_count(sitk_threads):
+            # .T restores numpy axis order, inverse of the .T used to build the SITK
+            # image.
             registered_arr = sitk.GetArrayFromImage(
                 sitk.Resample(
                     moving_sitk,
@@ -685,17 +688,16 @@ def register_volume(
         dims=reference.dims,
         attrs=moving.attrs.copy(),
     )
-    result.attrs["registration"] = "volume"
+    if resample:
+        replace_affines_attr(result, fixed)
 
     if transform_type == "bspline":
-        from confusius.registration.bspline import _sitk_bspline_to_dataarray
+        from confusius.registration.bspline import sitk_bspline_to_dataarray
 
-        optimized_transform: npt.NDArray[np.floating] | xr.DataArray = (
-            _sitk_bspline_to_dataarray(
-                sitk_optimized_transform, pre_affine=initial_transform
-            )
+        optimized_transform = sitk_bspline_to_dataarray(
+            sitk_optimized_transform, pre_affine=initial_transform
         )
     else:
-        optimized_transform = _sitk_linear_transform_to_affine(sitk_optimized_transform)
+        optimized_transform = sitk_linear_transform_to_affine(sitk_optimized_transform)
 
     return result, optimized_transform

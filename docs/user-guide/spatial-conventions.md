@@ -9,8 +9,8 @@ ConfUSIus works with three kinds of coordinate systems:
 - the **voxel space**, linked to the underlying array storage and indexed by integer
   voxel coordinates,
 - the **physical space** embedded in every DataArray's coordinates,
-- and any number of **world spaces** (atlas, scanner, etc.) linked to the physical space
-  through affine transforms stored in `attrs["affines"]`.
+- and any number of **reference spaces** (atlas, scanner, etc.) linked to the physical
+  space through affine transforms stored in `attrs["affines"]`.
 
 Understanding these three spaces and the axis-ordering convention used throughout
 ConfUSIus makes it much easier to reason about I/O, registration, and downstream
@@ -74,7 +74,8 @@ This ordering is motivated by several considerations.
   `(z, y, x) = (elevation, axial/depth, lateral)` maps to
   `(antero-posterior, superior-inferior, left-right)`, sharing the first two axes with
   [BrainGlobe](https://brainglobe.info) atlases (e.g. Allen CCFv3). The physical →
-  world affine captures any remaining orientation difference (e.g. a lateral mirror).
+  reference affine captures any remaining orientation difference (e.g. a lateral
+  mirror).
 - **Visualization:** Most visualization tools (e.g. napari) expect the last two axes to
   be the display axes of a 2D image. `data.sel(time=t, z=z)` yields a `(y, x)` array
   that plots correctly without transposing.
@@ -146,19 +147,18 @@ da_slice = da_down.isel(z=0)
 # since the coordinate has been collapsed to a scalar.
 ```
 
-### World Spaces
+### Reference Spaces
 
-World spaces are external coordinate systems defined by other tools or standards—for
-example, an atlas space (Allen CCFv3), a scanner space, or a user-defined stereotactic
-space.
-
-ConfUSIus stores affine transformations between the DataArray's physical space and
-any world space in `da.attrs["affines"]`, a dictionary keyed by affine name. Each
-value is a `(4, 4)` homogeneous matrix in `(z, y, x)` convention that maps a
-physical-space point to the corresponding world-space point:
+ConfUSIus stores affine transformations between the DataArray's physical space and any
+other reference physical space in `da.attrs["affines"]`, a dictionary keyed by affine
+name. These target spaces can be external coordinate systems defined by other tools or
+standards, for example an atlas space (Allen CCFv3), a scanner space, or a user-defined
+stereotactic space. Each value is a `(4, 4)` homogeneous matrix in `(z, y, x)`
+convention that maps a physical-space point to the corresponding point in the reference
+space:
 
 ```python
-A @ [pz, py, px, 1] = [wz, wy, wx, 1]
+A @ [pz, py, px, 1] = [rz, ry, rx, 1]
 ```
 
 where `(pz, py, px)` are the physical coordinates stored in `da.coords`.
@@ -166,37 +166,43 @@ where `(pz, py, px)` are the physical coordinates stored in `da.coords`.
 Several loaders populate `da.attrs["affines"]` automatically:
 
 - **NIfTI**: NIfTI files store `qform` and `sform` affines in their header that map
-  voxel indices to world coordinates. [`load_nifti`][confusius.io.load_nifti] reads the
-  relevant affine(s), converts them from voxel → world to physical → world form, and
-  stores them under the keys `"physical_to_sform"` and/or `"physical_to_qform"`
-  depending on which codes are valid in the header.
+  voxel indices to reference coordinates. [`load_nifti`][confusius.io.load_nifti] reads
+  the relevant affine(s), converts them from voxel → reference to physical → reference
+  form, and stores them under the keys `"physical_to_sform"` and/or
+  `"physical_to_qform"` depending on which codes are valid in the header. When saving
+  back to NIfTI, [`save_nifti`][confusius.io.save_nifti] can write any named affine in
+  `attrs["affines"]` to the header via its `qform=` and `sform=` arguments, with
+  `"physical_to_qform"` and `"physical_to_sform"` used as convenience fallbacks.
 - **Iconeus SCAN**: [`load_scan`][confusius.io.load_scan] stores a
   `"physical_to_lab"` affine mapping ConfUSIus physical coordinates `(z, y, x)` to the
   Iconeus lab coordinate system. For multi-pose acquisitions (`3Dscan`, `4Dscan`),
   one affine per pose is stored, with shape `(npose, 4, 4)`.
 
-After registration to an atlas, you would typically store the result yourself:
+Registration transforms are handled separately from `attrs["affines"]`.
+[`register_volume`][confusius.registration.register_volume] returns the estimated
+transform explicitly; for linear registration it follows the SimpleITK pull convention
+and maps fixed physical coordinates to moving physical coordinates. That pull transform
+is useful for resampling, but it is not stored automatically in `attrs["affines"]`.
 
-```python
-_, affine_to_atlas = cf.registration.register_volume(moving, atlas)
+When registration is run with `resample=True`, the returned DataArray already lives on
+the fixed/reference grid. In that case ConfUSIus copies `fixed.attrs["affines"]` onto
+the result, so any named physical-space relationships already attached to the
+fixed/reference DataArray are preserved automatically.
 
-da.attrs["affines"]["physical_to_atlas"] = affine_to_atlas
-```
-
-!!! question "Why physical → world, not voxel → world?"
-    The standard NIfTI affine maps **voxel indices → world coordinates**. ConfUSIus
-    uses a **physical → world** affine instead, for one practical reason: it is
+!!! question "Why physical → reference, not voxel → reference?"
+    The standard NIfTI affine maps **voxel indices → reference coordinates**. ConfUSIus
+    uses a **physical → reference** affine instead, for one practical reason: it is
     **invariant to slicing and downsampling**.
 
-    A voxel → world affine encodes the origin as the world position of voxel `(0,0,0)`
-    specifically. The moment you crop or subsample the DataArray—even a simple
-    `.isel(y=slice(10, 50))`—voxel `(0,0,0)` is no longer in the array, and the
-    affine silently points to the wrong location.
+    A voxel → reference affine encodes the origin as the reference position of voxel
+    `(0,0,0)` specifically. The moment you crop or subsample the DataArray—even a simple
+    `.isel(y=slice(10, 50))`—voxel `(0,0,0)` is no longer in the array, and the affine
+    silently points to the wrong location.
 
-    A physical → world affine operates on the coordinate values already stored in
+    A physical → reference affine operates on the coordinate values already stored in
     `da.coords`. Those values travel with the data through any Xarray operation that
     preserves coordinates, so the affine remains valid without any adjustment.
 
-    [`save_nifti`][confusius.io.save_nifti] reconstructs the full voxel → world NIfTI
-    affine internally by combining the physical → world orientation matrix with the
-    dimension coordinate origin and spacing.
+    [`save_nifti`][confusius.io.save_nifti] reconstructs the full voxel → reference
+    NIfTI affine internally by combining the physical → reference orientation matrix
+    with the dimension coordinate origin and spacing.

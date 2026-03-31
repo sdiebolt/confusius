@@ -71,11 +71,11 @@ class TestRegisterVolumewise:
         assert abs(motion_df.loc[motion_df.index[1], "trans_x"]) < shift_x + 1
         assert abs(motion_df.loc[motion_df.index[1], "trans_y"]) < shift_y + 1
 
-    def test_output_has_registration_attributes(self, sample_2d_dataarray):
-        """Output has registration metadata attributes."""
+    def test_output_has_motion_metadata_attributes(self, sample_2d_dataarray):
+        """Output has motion metadata attributes."""
         result = register_volumewise(sample_2d_dataarray, reference_time=2, n_jobs=1)
 
-        assert result.attrs["registration"] == "volumewise"
+        assert "registration" not in result.attrs
         assert result.attrs["reference_time"] == 2
         assert "motion_params" in result.attrs
 

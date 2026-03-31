@@ -7,7 +7,11 @@ import numpy as np
 import numpy.typing as npt
 import xarray as xr
 
-from confusius.registration._utils import dataarray_to_sitk_image, set_sitk_thread_count
+from confusius.registration._utils import (
+    dataarray_to_sitk_image,
+    replace_affines_attr,
+    set_sitk_thread_count,
+)
 from confusius.registration.bspline import _dataarray_to_sitk_bspline
 
 
@@ -68,8 +72,9 @@ def resample_volume(
     Returns
     -------
     xarray.DataArray
-        Resampled volume on the specified grid with `moving`'s attributes. If the
-        input had a time dimension, the output will also have a time dimension.
+        Resampled volume on the specified grid with `moving`'s attributes. If the input
+        had a time dimension, the output will also have a time dimension. This low-level
+        function does not infer world-space affines for the output grid.
 
     Raises
     ------
@@ -153,7 +158,6 @@ def resample_volume(
         dims=dims,
         attrs=moving.attrs.copy(),
     )
-    result.attrs["registration"] = "volume"
     return result
 
 
@@ -198,8 +202,9 @@ def resample_like(
     -------
     xarray.DataArray
         Resampled volume on the grid of `reference`, with `reference`'s coordinates and
-        dimensions and `moving`'s attributes. If `moving` had a time dimension, the
-        output will also have a time dimension.
+        dimensions, `moving`'s non-spatial attributes, and physical-space affines
+        inherited from `reference`. If `moving` had a time dimension, the output will
+        also have a time dimension.
 
     Raises
     ------
@@ -240,4 +245,5 @@ def resample_like(
     result = result.assign_coords(
         {d: reference.coords[d] for d in dims if d in reference.coords}
     )
+    replace_affines_attr(result, reference)
     return result

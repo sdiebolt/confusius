@@ -1,6 +1,7 @@
 """Internal utilities shared by registration modules."""
 
 import os
+from copy import deepcopy
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Generator
 
@@ -9,6 +10,29 @@ import xarray as xr
 
 if TYPE_CHECKING:
     import SimpleITK as sitk
+
+
+def replace_affines_attr(result: xr.DataArray, reference: xr.DataArray) -> None:
+    """Replace `result.attrs["affines"]` with affines from a reference array.
+
+    Parameters
+    ----------
+    result : xarray.DataArray
+        DataArray whose affine metadata should be updated in place.
+    reference : xarray.DataArray
+        DataArray providing the physical-to-reference affines for the output grid.
+
+    Notes
+    -----
+    If `reference` does not define `attrs["affines"]`, any existing affines on
+    `result` are removed. This is appropriate for resampled outputs, whose affine
+    metadata should match the grid they now live on rather than the source grid they
+    were sampled from.
+    """
+    if "affines" in reference.attrs:
+        result.attrs["affines"] = deepcopy(reference.attrs["affines"])
+    else:
+        result.attrs.pop("affines", None)
 
 
 @contextmanager
