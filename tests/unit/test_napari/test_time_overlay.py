@@ -9,6 +9,7 @@ import numpy as np
 import pytest
 
 from confusius._napari._time_overlay import _TimeOverlay
+from confusius.plotting import plot_napari
 
 
 @pytest.fixture
@@ -49,3 +50,48 @@ class TestTimeOverlay:
         assert overlay._time_idx is not None
         assert overlay._units == "ms"
         assert "ms" in viewer.text_overlay.text
+
+    def test_updates_text_when_time_step_changes(
+        self, sample_4d_volume, make_napari_viewer
+    ) -> None:
+        """Changing the time slider updates the overlay text."""
+        viewer = make_napari_viewer()
+        _, _ = plot_napari(
+            sample_4d_volume,
+            viewer=viewer,
+            show_colorbar=False,
+            show_scale_bar=False,
+        )
+        overlay = _TimeOverlay(viewer)
+
+        overlay.check()
+        assert overlay._time_idx is not None
+
+        viewer.dims.set_current_step(overlay._time_idx, 3)
+
+        expected = f"{float(viewer.dims.point[overlay._time_idx]):.2f} s"
+        assert viewer.text_overlay.text == expected
+        assert viewer.text_overlay.visible
+
+    def test_deactivates_when_time_layer_is_removed(
+        self, sample_4d_volume, make_napari_viewer
+    ) -> None:
+        """Removing the only time-aware layer hides and clears the overlay."""
+        viewer = make_napari_viewer()
+        _, layer = plot_napari(
+            sample_4d_volume,
+            viewer=viewer,
+            show_colorbar=False,
+            show_scale_bar=False,
+        )
+        overlay = _TimeOverlay(viewer)
+
+        overlay.check()
+        assert overlay._active
+
+        viewer.layers.remove(layer)
+
+        assert not overlay._active
+        assert overlay._time_idx is None
+        assert not viewer.text_overlay.visible
+        assert viewer.text_overlay.text == ""
