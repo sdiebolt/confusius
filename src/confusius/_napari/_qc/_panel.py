@@ -326,7 +326,7 @@ class QCPanel(QWidget):
                 return layer
         return None
 
-    def _on_time_step_changed(self, event) -> None:
+    def _on_time_step_changed(self) -> None:
         """Forward the current napari time step to the time cursor."""
         if self._qc_plots is None:
             return
