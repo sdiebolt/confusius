@@ -13,12 +13,12 @@ class _TimeOverlay:
     coordinates and multi-recording setups (different time origins) are handled
     correctly.  The reference layer is resolved as follows:
 
-    * Starts as ``None``; on activation the first layer whose ``axis_labels``
-      contain ``"time"`` is used.
-    * When the user selects exactly one layer that has a ``"time"`` axis, that
+    * Starts as `None`; on activation the first layer whose `axis_labels`
+      contain `"time"` is used.
+    * When the user selects exactly one layer that has a `"time"` axis, that
       layer becomes the new reference.  Selecting zero or multiple time-aware
       layers leaves the reference unchanged.
-    * If the reference layer is removed, the reference resets to ``None`` and a
+    * If the reference layer is removed, the reference resets to `None` and a
       new one is picked on the next activation cycle.
 
     Parameters
@@ -44,10 +44,10 @@ class _TimeOverlay:
     # -- helpers ----------------------------------------------------------
 
     def _find_time_dim_index(self) -> int | None:
-        """Return the viewer axis index for "time", or ``None`` if absent.
+        """Return the viewer axis index for "time", or `None` if absent.
 
-        napari does not propagate ``axis_labels`` from layers to
-        ``viewer.dims``, so we inspect each layer's labels directly and
+        napari does not propagate `axis_labels` from layers to
+        `viewer.dims`, so we inspect each layer's labels directly and
         map the layer-local index to the viewer axis (layers are
         right-aligned in the viewer dims).
         """
@@ -71,7 +71,7 @@ class _TimeOverlay:
         """Read the actual time coordinate from the reference layer.
 
         Maps the viewer's world coordinate to the layer's data index via
-        ``world_to_data`` so that layers with different time origins or
+        `world_to_data` so that layers with different time origins or
         scales are resolved correctly.  The data index is then used to
         look up the true xarray coordinate, avoiding napari's linear
         scale/translate approximation for non-uniform spacing.
@@ -133,12 +133,11 @@ class _TimeOverlay:
             self._ref_layer = None
         self.check()
 
-    def _on_selection_changed(self, event=None) -> None:
+    def _on_selection_changed(self) -> None:
         """Update the reference layer from the current selection.
 
-        If exactly one selected layer has a ``"time"`` axis it becomes the
-        new reference.  Zero or multiple time-aware selections leave the
-        reference unchanged.
+        If exactly one selected layer has a `"time"` axis it becomes the new reference.
+        Zero or multiple time-aware selections leave the reference unchanged.
         """
         selected_with_time = [
             layer
@@ -150,7 +149,7 @@ class _TimeOverlay:
             self._units = self._read_time_units()
             self.update()
 
-    def check(self, event=None) -> None:
+    def check(self) -> None:
         """Activate or deactivate the overlay based on current dims."""
         time_idx = self._find_time_dim_index()
         is_sliced = time_idx is not None and time_idx not in self._viewer.dims.displayed
@@ -162,14 +161,14 @@ class _TimeOverlay:
         elif self._active:
             self._deactivate()
 
-    def update(self, event=None) -> None:
+    def update(self) -> None:
         """Set the overlay text to the current time value."""
         if not self._active or self._time_idx is None:
             return
         time_val = self._read_time_value()
         if time_val is None:
-            # Fall back to napari's linear approximation when no xarray
-            # metadata is available.
+            # Fall back to napari's linear approximation when no xarray metadata is
+            # available.
             time_val = float(self._viewer.dims.point[self._time_idx])
         self._viewer.text_overlay.text = (
             f"{time_val:.2f} {self._units if self._units else ''}"

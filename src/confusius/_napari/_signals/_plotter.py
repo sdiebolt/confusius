@@ -333,7 +333,7 @@ class SignalPlotter(QWidget):
     def _world_to_xaxis(self, world_value: float) -> float | str:
         """Convert a world coordinate to the x-axis value used for plotting.
 
-        Uses the current layer's ``world_to_data`` transform to map the
+        Uses the current layer's `world_to_data` transform to map the
         world coordinate to a data index, then looks up the actual xarray
         coordinate value.  This keeps the cursor in sync with the time
         overlay for non-uniform spacing and multi-recording setups.
@@ -357,7 +357,7 @@ class SignalPlotter(QWidget):
 
         Builds a full world-space point from the current viewer position,
         overrides the x-axis component with *world_value*, and transforms
-        through the current layer's ``world_to_data``.
+        through the current layer's `world_to_data`.
         """
         layer = self._current_layer
         world_point = np.array(self._viewer.dims.point)

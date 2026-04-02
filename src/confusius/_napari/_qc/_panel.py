@@ -279,12 +279,12 @@ class QCPanel(QWidget):
     def _time_val_from_layer(self, layer: napari.layers.Layer) -> float | None:
         """Return the current time value for *layer* based on the viewer position.
 
-        Uses the layer's ``world_to_data`` transform to map the viewer's
+        Uses the layer's `world_to_data` transform to map the viewer's
         world coordinate to the correct data index, then looks up the
         xarray coordinate.  This handles multi-recording setups (different
         time origins) and non-uniform time spacing correctly.
 
-        Returns ``None`` when the time dimension cannot be resolved.
+        Returns `None` when the time dimension cannot be resolved.
         """
         import numpy as np
 
@@ -307,9 +307,9 @@ class QCPanel(QWidget):
         return None
 
     def _selected_time_layer(self) -> napari.layers.Layer | None:
-        """Return the single selected layer with a time axis, or ``None``.
+        """Return the single selected layer with a time axis, or `None`.
 
-        Mirrors the reference-layer logic in ``_TimeOverlay`` so that the
+        Mirrors the reference-layer logic in `_TimeOverlay` so that the
         QC cursor stays in sync with the time overlay.  When zero or more
         than one time-aware layers are selected, falls back to the first
         time-aware layer in the viewer.
