@@ -3,13 +3,23 @@
 from __future__ import annotations
 
 import napari
+import numpy as np
 
 
 class _TimeOverlay:
     """Manage the viewer text overlay that displays the current time coordinate.
 
-    Caches the time axis index and units on activation so that per-step updates
-    are cheap.
+    The overlay reads the time value from a *reference layer* so that non-uniform
+    coordinates and multi-recording setups (different time origins) are handled
+    correctly.  The reference layer is resolved as follows:
+
+    * Starts as ``None``; on activation the first layer whose ``axis_labels``
+      contain ``"time"`` is used.
+    * When the user selects exactly one layer that has a ``"time"`` axis, that
+      layer becomes the new reference.  Selecting zero or multiple time-aware
+      layers leaves the reference unchanged.
+    * If the reference layer is removed, the reference resets to ``None`` and a
+      new one is picked on the next activation cycle.
 
     Parameters
     ----------
@@ -22,12 +32,14 @@ class _TimeOverlay:
         self._active: bool = False
         self._time_idx: int | None = None
         self._units: str | None = None
+        self._ref_layer: napari.layers.Layer | None = None
 
         viewer.layers.events.inserted.connect(self.check)
-        viewer.layers.events.removed.connect(self.check)
+        viewer.layers.events.removed.connect(self._on_layer_removed)
         viewer.dims.events.current_step.connect(self.update)
         viewer.dims.events.ndisplay.connect(self.check)
         viewer.dims.events.axis_labels.connect(self.check)
+        viewer.layers.selection.events.changed.connect(self._on_selection_changed)
 
     # -- helpers ----------------------------------------------------------
 
@@ -48,25 +60,40 @@ class _TimeOverlay:
         return None
 
     def _read_time_units(self) -> str | None:
-        """Read time units from the first layer carrying xarray metadata."""
-        for layer in self._viewer.layers:
-            da = layer.metadata.get("xarray")
+        """Read time units from the reference layer's xarray metadata."""
+        if self._ref_layer is not None:
+            da = self._ref_layer.metadata.get("xarray")
             if da is not None and "time" in da.coords:
                 return da.coords["time"].attrs.get("units", "s")
         return None
 
-    def _read_time_value(self, step: int) -> float | None:
-        """Read the actual time coordinate value for a given step index.
+    def _read_time_value(self) -> float | None:
+        """Read the actual time coordinate from the reference layer.
 
-        Uses xarray metadata so non-uniform coordinates are resolved correctly
-        instead of relying on napari's linear scale/translate approximation.
+        Maps the viewer's world coordinate to the layer's data index via
+        ``world_to_data`` so that layers with different time origins or
+        scales are resolved correctly.  The data index is then used to
+        look up the true xarray coordinate, avoiding napari's linear
+        scale/translate approximation for non-uniform spacing.
         """
-        for layer in self._viewer.layers:
-            da = layer.metadata.get("xarray")
-            if da is not None and "time" in da.coords:
-                coords = da.coords["time"].values
-                if 0 <= step < len(coords):
-                    return float(coords[step])
+        if self._ref_layer is None:
+            return None
+        da = self._ref_layer.metadata.get("xarray")
+        if da is None or "time" not in da.coords:
+            return None
+
+        # Map the viewer world coordinate to this layer's data space.
+        world_point = np.array(self._viewer.dims.point)
+        offset = self._viewer.dims.ndim - self._ref_layer.ndim
+        layer_world_point = world_point[offset:]
+        data_point = self._ref_layer.world_to_data(layer_world_point)
+
+        time_local_idx = list(da.dims).index("time")
+        step = int(np.round(data_point[time_local_idx]))
+
+        coords = da.coords["time"].values
+        if 0 <= step < len(coords):
+            return float(coords[step])
         return None
 
     # -- lifecycle --------------------------------------------------------
@@ -74,6 +101,14 @@ class _TimeOverlay:
     def _activate(self) -> None:
         """Cache time axis index, units, and configure overlay appearance."""
         self._time_idx = self._find_time_dim_index()
+
+        # Pick a default reference layer when none is set.
+        if self._ref_layer is None:
+            for layer in self._viewer.layers:
+                if "time" in layer.axis_labels:
+                    self._ref_layer = layer
+                    break
+
         self._units = self._read_time_units()
 
         overlay = self._viewer.text_overlay
@@ -92,6 +127,29 @@ class _TimeOverlay:
 
     # -- public event handlers --------------------------------------------
 
+    def _on_layer_removed(self, event=None) -> None:
+        """Reset reference layer if it was removed, then re-check."""
+        if event is not None and event.value is self._ref_layer:
+            self._ref_layer = None
+        self.check()
+
+    def _on_selection_changed(self, event=None) -> None:
+        """Update the reference layer from the current selection.
+
+        If exactly one selected layer has a ``"time"`` axis it becomes the
+        new reference.  Zero or multiple time-aware selections leave the
+        reference unchanged.
+        """
+        selected_with_time = [
+            layer
+            for layer in self._viewer.layers.selection
+            if "time" in layer.axis_labels
+        ]
+        if len(selected_with_time) == 1:
+            self._ref_layer = selected_with_time[0]
+            self._units = self._read_time_units()
+            self.update()
+
     def check(self, event=None) -> None:
         """Activate or deactivate the overlay based on current dims."""
         time_idx = self._find_time_dim_index()
@@ -108,8 +166,7 @@ class _TimeOverlay:
         """Set the overlay text to the current time value."""
         if not self._active or self._time_idx is None:
             return
-        step = int(self._viewer.dims.current_step[self._time_idx])
-        time_val = self._read_time_value(step)
+        time_val = self._read_time_value()
         if time_val is None:
             # Fall back to napari's linear approximation when no xarray
             # metadata is available.
