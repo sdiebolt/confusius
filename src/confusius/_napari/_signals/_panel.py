@@ -55,6 +55,7 @@ class SignalPanel(QWidget):
 
         # Source group.
         source_group = QGroupBox("Source")
+        self._source_group = source_group
         source_layout = QVBoxLayout(source_group)
         source_layout.setSpacing(4)
 
@@ -129,6 +130,7 @@ class SignalPanel(QWidget):
 
         # Axis parameters group.
         axis_group = QGroupBox("Axis Parameters")
+        self._axis_group = axis_group
         axis_layout = QVBoxLayout(axis_group)
         axis_layout.setSpacing(4)
 
@@ -190,6 +192,7 @@ class SignalPanel(QWidget):
 
         # Display options.
         display_group = QGroupBox("Display Options")
+        self._display_group = display_group
         display_layout = QVBoxLayout(display_group)
         display_layout.setSpacing(4)
 

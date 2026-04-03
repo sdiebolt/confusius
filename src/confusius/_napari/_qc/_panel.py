@@ -96,12 +96,19 @@ class QCPanel(QWidget):
         layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        layout.addWidget(QLabel("Layer"))
+        layer_group = QGroupBox("Layer")
+        self._layer_group = layer_group
+        layer_layout = QVBoxLayout(layer_group)
+        layer_layout.setSpacing(4)
+
+        layer_layout.addWidget(QLabel("Layer"))
         self._layer_combo = QComboBox()
-        layout.addWidget(self._layer_combo)
+        layer_layout.addWidget(self._layer_combo)
+        layout.addWidget(layer_group)
 
         # --- Temporal metrics (bottom dock) ---------------------------
         ts_group = QGroupBox("Temporal metrics")
+        self._temporal_group = ts_group
         ts_layout = QVBoxLayout(ts_group)
         ts_layout.setSpacing(4)
         self._dvars_check = QCheckBox("DVARS")
@@ -114,6 +121,7 @@ class QCPanel(QWidget):
 
         # --- Spatial map metrics (new viewer layers) ---------------------
         maps_group = QGroupBox("Spatial metrics")
+        self._spatial_group = maps_group
         maps_layout = QVBoxLayout(maps_group)
         maps_layout.setSpacing(4)
         self._tsnr_check = QCheckBox("tSNR")

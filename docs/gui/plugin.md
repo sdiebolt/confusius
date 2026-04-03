@@ -5,7 +5,8 @@ icon: lucide/app-window
 # Using the Plugin
 
 The ConfUSIus sidebar contains three collapsible panels. Each panel operates
-independently and can be expanded or collapsed by clicking its header.
+independently and can be expanded or collapsed by clicking its header. For an in-app
+introduction, click **Take a Tour** in the sidebar header.
 
 ## Data I/O Panel
 
