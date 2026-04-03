@@ -6,7 +6,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QEasingCurve, QPropertyAnimation, QRectF, QSize, Qt, QTimer
+from qtpy.QtCore import QRectF, QSize, Qt, QTimer
 from qtpy.QtGui import QFont, QImage, QPainter, QPixmap
 from qtpy.QtSvg import QSvgRenderer as _QSvgRenderer
 from qtpy.QtWidgets import (
@@ -188,6 +188,20 @@ QProgressBar::chunk {{
 
 /* ---- Status labels ---- */
 QLabel#status_err {{ color: {status_err}; font-size: 11px; }}
+
+/* ---- Tour button ---- */
+QPushButton#tour_btn {{
+    background: transparent;
+    color: {accent};
+    border: 1px solid {accent};
+    border-radius: 4px;
+    font-size: 11px;
+    padding: 3px 8px;
+}}
+QPushButton#tour_btn:hover {{
+    background: {accent};
+    color: {accent_fg};
+}}
 """
 
 
@@ -275,6 +289,16 @@ class ConfUSIusWidget(QWidget):
             btn.setIcon(make_lucide_icon(icon_name, accent))
 
     # ------------------------------------------------------------------
+    # Guided tour
+    # ------------------------------------------------------------------
+
+    def _start_tour(self) -> None:
+        from confusius._napari._tour import build_default_tour
+
+        tour = build_default_tour(self, is_dark=self._is_dark())
+        tour.start()
+
+    # ------------------------------------------------------------------
     # UI construction
     # ------------------------------------------------------------------
 
@@ -310,13 +334,23 @@ class ConfUSIusWidget(QWidget):
         layout.setContentsMargins(16, 16, 16, 14)
         layout.setSpacing(2)
 
+        tour_btn = QPushButton("Take a Tour")
+        tour_btn.setObjectName("tour_btn")
+        tour_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        tour_btn.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        tour_btn.setFixedHeight(24)
+        tour_btn.clicked.connect(self._start_tour)
+        tour_btn.adjustSize()
+
         logo_widget = self._load_logo()
+        logo_row = QHBoxLayout()
+        logo_row.setContentsMargins(0, 0, 0, 6)
+        logo_row.setSpacing(8)
         if logo_widget is not None:
-            logo_row = QHBoxLayout()
-            logo_row.setContentsMargins(0, 0, 0, 6)
             logo_row.addWidget(logo_widget)
-            logo_row.addStretch()
-            layout.addLayout(logo_row)
+        logo_row.addStretch()
+        logo_row.addWidget(tour_btn, alignment=Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(logo_row)
 
         title = QLabel("ConfUSIus")
         title.setObjectName("confusius_title")
@@ -367,25 +401,13 @@ class ConfUSIusWidget(QWidget):
         return label
 
     def _make_accordion(self) -> QWidget:
-        """Build a stacked accordion where the open section fills all space.
-
-        The active section's content widget is visible (stretch=1) while all others are
-        hidden. Because Qt excludes hidden widgets from layout calculations, the single
-        visible content area expands to fill the full height between all the section
-        headers.
-
-        Opening and closing sections is animated via `QPropertyAnimation` on
-        `maximumHeight`: the expanding panel slides in from 0 to unconstrained height;
-        the collapsing panel slides out before being hidden.
-        """
+        """Build a stacked accordion where the open section fills all space."""
         from confusius._napari._data._load_panel import DataPanel
         from confusius._napari._data._save_panel import SavePanel
         from confusius._napari._qc._panel import QCPanel
         from confusius._napari._signals._panel import SignalPanel
 
         container = QWidget()
-        # Keep animation objects alive for their duration.
-        container._anims: list[QPropertyAnimation] = []
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -436,73 +458,23 @@ class ConfUSIusWidget(QWidget):
         # buttons stack at the top of the accordion area.
         layout.addStretch(1)
 
-        _DURATION = 200  # ms
-
-        def _drop_anim(a: QPropertyAnimation) -> None:
-            try:
-                container._anims.remove(a)
-            except ValueError:
-                pass
-
         def _activate_panel(panel_index: int) -> None:
             # Clicking the already-open panel collapses it (all closed).
             already_open = panels[panel_index].isVisible()
             target = -1 if already_open else panel_index  # -1 means all collapsed
-
-            # Available height shared between panels during animation.
-            available_h = max(container.height() - sum(b.height() for b in btns), 50)
 
             for j, (b, p) in enumerate(zip(btns, panels)):
                 active = j == target
                 b.blockSignals(True)
                 b.setChecked(active)
                 b.blockSignals(False)
-
-                if active and not p.isVisible():
-                    # Expand: 0 → available_h
-                    p.setMaximumHeight(0)
-                    p.show()
-                    a = QPropertyAnimation(p, b"maximumHeight")
-                    a.setDuration(_DURATION)
-                    a.setStartValue(0)
-                    a.setEndValue(available_h)
-                    a.setEasingCurve(QEasingCurve.Type.InOutCubic)
-
-                    def _on_expand_done(
-                        panel: QWidget = p, anim: QPropertyAnimation = a
-                    ) -> None:
-                        panel.setMaximumHeight(16777215)
-                        _drop_anim(anim)
-
-                    a.finished.connect(_on_expand_done)
-                    container._anims.append(a)
-                    a.start()
-
-                elif not active and p.isVisible():
-                    # Collapse: current height → 0; when done, if all panels are hidden
-                    # constrain the container to button heights so Qt stops distributing
-                    # extra space between the buttons.
-                    a = QPropertyAnimation(p, b"maximumHeight")
-                    a.setDuration(_DURATION)
-                    a.setStartValue(p.height())
-                    a.setEndValue(0)
-                    a.setEasingCurve(QEasingCurve.Type.InOutCubic)
-
-                    def _on_collapse_done(
-                        panel: QWidget = p, anim: QPropertyAnimation = a
-                    ) -> None:
-                        panel.hide()
-                        panel.setMaximumHeight(16777215)
-                        _drop_anim(anim)
-
-                    a.finished.connect(_on_collapse_done)
-                    container._anims.append(a)
-                    a.start()
+                p.setVisible(active)
 
         for i, btn in enumerate(btns):
             btn.clicked.connect(lambda _checked, i=i: _activate_panel(i))
 
-        # Store for icon re-tinting on theme change.
+        # Store for icon re-tinting on theme change and tour access.
         self._accordion_btns = list(zip(btns, [e[1] for e in tab_entries]))
+        self._accordion_panels = dict(zip([e[0] for e in tab_entries], panels))
 
         return container
