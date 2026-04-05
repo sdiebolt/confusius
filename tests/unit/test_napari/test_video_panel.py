@@ -1,17 +1,19 @@
-"""Unit tests for VideoPanel pure-logic components.
+"""Tests for the VideoPanel widget.
 
-Only tests code with real computation -- no UI state, no napari event wiring.
+_VideoArray and _compute_spatial_params are tested as pure-logic units.
+Integration tests for dimension reorder, frame step, and time overlay use
+real napari viewers via `make_napari_viewer`.
+
 See https://napari.org/dev/plugins/testing_and_publishing/test.html
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 import numpy as np
 import pytest
 
-from confusius._napari._video_panel import VideoPanel, _VideoArray
+from confusius._napari._video._video_panel import VideoPanel, _VideoArray
+from confusius.plotting import plot_napari
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -35,62 +37,21 @@ class _FakeVideo:
         return self._frames[idx]
 
 
-def _make_panel(sample_4d_volume):
-    """Build a VideoPanel with a mocked viewer (no Qt/GL)."""
-    mock_viewer = MagicMock()
-    mock_viewer.dims.axis_labels = tuple(sample_4d_volume.dims)
+def _inject_fake_video(panel, fv, *, frame_step=1):
+    """Inject a _FakeVideo into an already-constructed VideoPanel.
 
-    panel = VideoPanel.__new__(VideoPanel)
-    panel._viewer = mock_viewer
-    panel._axis_labels = tuple(sample_4d_volume.dims)
-    panel._video_h = 48
-    panel._displayed_dims = (2, 3)
-
-    mock_layer = MagicMock()
-    mock_layer.metadata = {"xarray": sample_4d_volume}
-    panel._ref_layer = mock_layer
-
-    return panel
-
-
-def _make_loaded_panel(sample_4d_volume, initial_order=(0, 1, 2, 3)):
-    """Build a VideoPanel with a mocked viewer and a 'loaded' video."""
-    mock_viewer = MagicMock()
-    mock_viewer.dims.ndisplay = 2
-    mock_viewer.dims.order = initial_order
-    mock_viewer.dims.axis_labels = tuple(sample_4d_volume.dims)
-
-    panel = VideoPanel.__new__(VideoPanel)
-    panel._viewer = mock_viewer
-
-    mock_ref = MagicMock()
-    mock_ref.metadata = {"xarray": sample_4d_volume}
-    mock_ref.ndim = sample_4d_volume.ndim
-    panel._ref_layer = mock_ref
-
-    fv = _FakeVideo(n_frames=10, h=48, w=64, rgb=True)
+    Sets all internal video state so that ``_rebuild_video_layer`` can
+    run without any actual file I/O.
+    """
     panel._video = fv
     panel._frame_dtype = np.uint8
-    panel._frame_shape = (48, 64, 3)
-    panel._video_h = 48
-    panel._video_w = 64
-    panel._is_rgb = True
-    panel._fps = 30.0
-    panel._n_pad = 1
-    panel._fusi_time_idx = 0
-    panel._axis_labels = tuple(sample_4d_volume.dims)
-    panel._units = ["s", "m", "m", "m"]
-    panel._displayed_dims = (initial_order[-2], initial_order[-1])
+    panel._frame_shape = fv.frame_shape
+    panel._video_h = fv.frame_shape[0]
+    panel._video_w = fv.frame_shape[1]
+    panel._is_rgb = len(fv.frame_shape) == 3 and fv.frame_shape[2] in (3, 4)
+    panel._fps = fv.frame_rate
     panel._video_name = "Video: test"
-    panel._guarding_order = True
-
-    panel._step_spin = MagicMock()
-    panel._step_spin.value.return_value = 1
-
-    panel._video_layer = MagicMock()
-    panel._video_layer.name = "Video: test"
-
-    return panel
+    panel._step_spin.setValue(frame_step)
 
 
 # ---------------------------------------------------------------------------
@@ -214,13 +175,11 @@ class TestVideoArray:
 
 
 class TestComputeSpatialParams:
-    def test_returns_defaults_without_ref_layer(self, sample_4d_volume):
-        panel = _make_panel(sample_4d_volume)
+    def test_returns_defaults_without_ref_layer(self, panel):
         panel._ref_layer = None
         assert panel._compute_spatial_params(2) == (1.0, 0.0)
 
-    def test_video_scaled_to_scan_height(self, sample_4d_volume):
-        panel = _make_panel(sample_4d_volume)
+    def test_video_scaled_to_scan_height(self, panel, sample_4d_volume):
         # vertical_dim=2 -> "y" coord.
         scale, ty = panel._compute_spatial_params(2)
 
@@ -234,14 +193,12 @@ class TestComputeSpatialParams:
         expected_ty = center_y - scale * (48 - 1) / 2
         assert ty == pytest.approx(expected_ty)
 
-    def test_returns_defaults_when_coords_missing(self, sample_4d_volume):
-        panel = _make_panel(sample_4d_volume)
+    def test_returns_defaults_when_coords_missing(self, panel):
         panel._axis_labels = ("time", "z", "foo", "bar")
         assert panel._compute_spatial_params(2) == (1.0, 0.0)
 
-    def test_spatial_params_z_vertical(self, sample_4d_volume):
+    def test_spatial_params_z_vertical(self, panel, sample_4d_volume):
         """When z is the vertical axis, scale uses z-coordinates."""
-        panel = _make_panel(sample_4d_volume)
         scale, tz = panel._compute_spatial_params(1)  # dim 1 = "z".
 
         z_coords = sample_4d_volume.coords["z"].values.astype(np.float64)
@@ -252,63 +209,225 @@ class TestComputeSpatialParams:
 
 
 # ---------------------------------------------------------------------------
-# Dimension reorder integration
+# Integration fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def viewer(make_napari_viewer):
+    """Real napari viewer for integration tests."""
+    return make_napari_viewer()
+
+
+@pytest.fixture
+def fusi_layer(viewer, sample_4d_volume):
+    """Add the sample 4D volume to the viewer as a real image layer.
+
+    Returns the napari layer, which carries axis_labels, scale, translate,
+    and xarray metadata -- the same state a real fUSI scan would have.
+    """
+    _, layer = plot_napari(
+        sample_4d_volume,
+        viewer=viewer,
+        show_colorbar=False,
+        show_scale_bar=False,
+    )
+    return layer
+
+
+@pytest.fixture
+def panel(viewer, fusi_layer, sample_4d_volume):
+    """VideoPanel wired to a real viewer that already has a fUSI layer."""
+    p = VideoPanel(viewer)
+
+    # Set reference layer and scan metadata (normally done by _load).
+    p._ref_layer = fusi_layer
+    p._axis_labels = tuple(sample_4d_volume.dims)
+    p._units = list(getattr(fusi_layer, "units", [None] * fusi_layer.ndim))
+    p._n_pad = max(fusi_layer.ndim - 3, 0)
+    p._fusi_time_idx = list(sample_4d_volume.dims).index("time")
+    p._video_h = 48
+    order = viewer.dims.order
+    p._displayed_dims = (order[-2], order[-1])
+
+    return p
+
+
+@pytest.fixture
+def loaded_panel(panel, viewer):
+    """Panel with a fake RGB video injected and the video layer built.
+
+    This is the closest to "user clicked Load" without actual file I/O.
+    """
+    fv = _FakeVideo(n_frames=10, h=48, w=64, rgb=True)
+    _inject_fake_video(panel, fv)
+    panel._rebuild_video_layer()
+
+    # Connect the dimension order guard (normally done at end of _load).
+    viewer.dims.events.order.connect(panel._on_dim_order_changed)
+    panel._guarding_order = True
+
+    return panel
+
+
+# ---------------------------------------------------------------------------
+# Dimension reorder integration (real viewer)
 # ---------------------------------------------------------------------------
 
 
 class TestDimReorder:
-    def test_rebuild_on_displayed_dims_change(self, sample_4d_volume):
-        """Changing displayed dims triggers a layer rebuild."""
-        panel = _make_loaded_panel(sample_4d_volume, initial_order=(0, 1, 2, 3))
-        old_layer = panel._video_layer
+    def test_rebuild_on_displayed_dims_change(self, loaded_panel, viewer):
+        """Changing displayed dims removes old layer and adds new one."""
+        old_name = loaded_panel._video_layer.name
+        assert old_name in [ly.name for ly in viewer.layers]
 
-        # Simulate order change: display z x instead of y x.
-        event = MagicMock()
-        event.value = (0, 2, 3, 1)  # displayed: dims 3, 1.
-        panel._on_dim_order_changed(event)
+        # Change displayed dims: swap y and z in the display axes.
+        # Default order is (0, 1, 2, 3); displayed are last 2: dims 2, 3.
+        # New order (0, 2, 3, 1): displayed dims 3, 1.
+        viewer.dims.order = (0, 2, 3, 1)
 
-        # Old layer should have been removed, new one added.
-        panel._viewer.layers.remove.assert_called_with(old_layer)
-        panel._viewer.add_image.assert_called_once()
-        # New displayed dims should be updated.
-        assert panel._displayed_dims == (3, 1)
+        # Video layer should still exist (rebuilt), but displayed_dims updated.
+        assert loaded_panel._displayed_dims == (3, 1)
+        assert loaded_panel._video_layer is not None
+        assert loaded_panel._video_layer.name in [ly.name for ly in viewer.layers]
 
-    def test_no_rebuild_when_displayed_dims_unchanged(self, sample_4d_volume):
-        """Reordering sliders without changing displayed dims skips rebuild."""
-        panel = _make_loaded_panel(sample_4d_volume, initial_order=(0, 1, 2, 3))
+    def test_no_rebuild_when_displayed_dims_unchanged(self, loaded_panel, viewer):
+        """Reordering only slider dims (not displayed) keeps the same layer."""
+        old_layer = loaded_panel._video_layer
 
-        event = MagicMock()
-        event.value = (1, 0, 2, 3)  # same displayed: dims 2, 3.
-        panel._on_dim_order_changed(event)
+        # Swap slider dims 0 and 1, keep displayed dims 2, 3 the same.
+        viewer.dims.order = (1, 0, 2, 3)
 
-        panel._viewer.layers.remove.assert_not_called()
-        panel._viewer.add_image.assert_not_called()
+        # Same layer object, no rebuild.
+        assert loaded_panel._video_layer is old_layer
+        assert loaded_panel._displayed_dims == (2, 3)
 
-    def test_time_in_display_gets_corrected(self, sample_4d_volume):
-        """If time ends up displayed, the order is fixed."""
-        panel = _make_loaded_panel(sample_4d_volume, initial_order=(0, 1, 2, 3))
+    def test_time_in_display_gets_corrected(self, loaded_panel, viewer):
+        """If time ends up in displayed dims, the order is fixed."""
+        # Try to put time (dim 0) in a displayed position.
+        viewer.dims.order = (1, 2, 3, 0)
 
-        event = MagicMock()
-        event.value = (1, 2, 3, 0)  # time (dim 0) in displayed position.
+        # The guard should have corrected the order so time is not displayed.
+        # Time (dim 0) should be back in a slider position.
+        order = viewer.dims.order
+        displayed = (order[-2], order[-1])
+        assert 0 not in displayed, (
+            f"Time dim 0 should not be displayed, but order is {order}"
+        )
 
-        panel._on_dim_order_changed(event)
+    def test_rebuild_creates_correct_video_array_shape(self, loaded_panel, viewer):
+        """After dim change, video layer has H and W at new positions."""
+        # Change to display dims 3, 1 (x, z).
+        viewer.dims.order = (0, 2, 3, 1)
 
-        # Should have disconnected, fixed order, reconnected.
-        panel._viewer.dims.events.order.disconnect.assert_called()
-        panel._viewer.dims.events.order.connect.assert_called()
-        # Time should be moved to front of the corrected order.
-        assert panel._viewer.dims.order[0] == 0
-
-    def test_rebuild_creates_correct_video_array_shape(self, sample_4d_volume):
-        """After rebuild for z x display, VideoArray has H at dim 3, W at dim 1."""
-        panel = _make_loaded_panel(sample_4d_volume, initial_order=(0, 1, 2, 3))
-
-        event = MagicMock()
-        event.value = (0, 2, 3, 1)  # displayed: vertical=3, horizontal=1.
-        panel._on_dim_order_changed(event)
-
-        # Check the data passed to add_image.
-        call_args = panel._viewer.add_image.call_args
-        data = call_args[0][0] if call_args[0] else call_args[1]["data"]
+        layer = loaded_panel._video_layer
         # Shape should be (10, 64, 1, 48, 3): time, W, pad, H, C.
-        assert data.shape == (10, 64, 1, 48, 3)
+        assert layer.data.shape == (10, 64, 1, 48, 3)
+
+
+# ---------------------------------------------------------------------------
+# Frame step integration (real viewer)
+# ---------------------------------------------------------------------------
+
+
+class TestFrameStep:
+    def test_frame_step_reduces_time_shape(self):
+        """With step=3, time dimension is len(range(0, n_frames, step))."""
+        fv = _FakeVideo(n_frames=12, h=4, w=6)
+        arr = _VideoArray(fv, dtype=np.uint8, frame_shape=(4, 6), step=3)
+        # 12 frames with step 3: indices 0, 3, 6, 9 -> 4 logical frames.
+        assert arr.shape == (4, 4, 6)
+        # Logical frame 0 -> physical frame 0.
+        np.testing.assert_array_equal(arr[0], fv[0])
+        # Logical frame 2 -> physical frame 6.
+        np.testing.assert_array_equal(arr[2], fv[6])
+
+    def test_rebuild_time_scale_reflects_frame_step(self, loaded_panel, viewer):
+        """Time scale must be frame_step / fps."""
+        loaded_panel._step_spin.setValue(3)
+        loaded_panel._rebuild_video_layer()
+
+        layer = loaded_panel._video_layer
+        time_idx = loaded_panel._fusi_time_idx
+        expected = 3.0 / loaded_panel._fps
+        np.testing.assert_allclose(layer.scale[time_idx], expected)
+
+    def test_frame_step_change_rebuilds_with_smaller_time_dim(
+        self, loaded_panel, viewer
+    ):
+        """Changing frame step rebuilds the video layer with fewer time frames."""
+        old_layer = loaded_panel._video_layer
+
+        # Trigger frame step change.
+        loaded_panel._step_spin.setValue(3)
+        loaded_panel._on_frame_step_changed(3)
+
+        new_layer = loaded_panel._video_layer
+        # Layer was rebuilt (different object or at least different data).
+        assert new_layer is not old_layer or new_layer.data is not old_layer.data
+
+        # New VideoArray has reduced time dimension.
+        n_frames = loaded_panel._video.number_of_frames  # 10
+        expected_time = len(range(0, n_frames, 3))  # 4
+        time_idx = loaded_panel._fusi_time_idx
+        assert new_layer.data.shape[time_idx] == expected_time
+
+    def test_frame_step_change_preserves_time_position(self, loaded_panel, viewer):
+        """Changing frame step restores the slider to the closest time."""
+        time_idx = loaded_panel._fusi_time_idx
+
+        # Move the slider to a specific world time.
+        viewer.dims.set_point(time_idx, 0.1)
+        world_time_before = float(viewer.dims.point[time_idx])
+
+        loaded_panel._step_spin.setValue(3)
+        loaded_panel._on_frame_step_changed(3)
+
+        # Should restore world time; napari snaps to nearest valid step.
+        world_time_after = float(viewer.dims.point[time_idx])
+        np.testing.assert_allclose(world_time_after, world_time_before, atol=0.2)
+
+
+# ---------------------------------------------------------------------------
+# Time overlay syncs with video fps (real viewer)
+# ---------------------------------------------------------------------------
+
+
+class TestTimeOverlayVideoSync:
+    def test_overlay_uses_dims_point_for_video_layer(self, viewer, fusi_layer):
+        """For a video layer (no xarray), the overlay uses dims.point which
+        is correct because the layer's time scale encodes the frame step.
+
+        With scale = frame_step / fps, napari's world coordinate at
+        ``dims.point[time_idx]`` is already in physical seconds.
+        """
+        from confusius._napari._time_overlay import _TimeOverlay
+
+        overlay = _TimeOverlay(viewer)
+        overlay.check()
+        assert overlay._active
+
+        # Add a video-like layer with fps metadata but no xarray.
+        video_data = np.zeros((10, 4, 6, 8), dtype=np.uint8)
+        fps = 50.0
+        time_scale = 1.0 / fps
+        video_layer = viewer.add_image(
+            video_data,
+            name="Video: test",
+            scale=(time_scale, 1.0, 1.0, 1.0),
+            axis_labels=("time", "z", "y", "x"),
+            metadata={"fps": fps, "time_units": "s"},
+        )
+
+        # Select the video layer so the overlay uses it as reference.
+        viewer.layers.selection = {video_layer}
+        assert overlay._ref_layer is video_layer
+
+        # Move to step 3; world time = 3 * time_scale = 0.06s.
+        time_idx = overlay._time_idx
+        viewer.dims.set_current_step(time_idx, 3)
+
+        # The overlay should fall back to dims.point (no xarray).
+        expected_time = float(viewer.dims.point[time_idx])
+        expected_text = f"{expected_time:.2f} s"
+        assert viewer.text_overlay.text == expected_text

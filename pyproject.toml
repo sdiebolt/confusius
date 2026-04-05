@@ -121,4 +121,7 @@ filterwarnings = [
     # Zarr format 3 consolidated metadata is not yet in the spec but is the
     # correct format to use; suppress the informational warning.
     "ignore:Consolidated metadata is currently not part:zarr.errors.ZarrUserWarning",
+    # napari uses deprecated pydantic json_encoders internally; suppress
+    # until napari migrates to the new serialization API.
+    "ignore:`json_encoders` is deprecated:pydantic.warnings.PydanticDeprecatedSince20",
 ]
