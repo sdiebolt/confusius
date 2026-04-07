@@ -247,6 +247,9 @@ class VideoPanel(QWidget):
         ref_layout.setSpacing(4)
         self._ref_combo = QComboBox()
         self._ref_combo.setPlaceholderText("No layers loaded")
+        self._ref_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         self._ref_combo.currentIndexChanged.connect(self._on_ref_changed)
         ref_layout.addWidget(self._ref_combo)
         layout.addWidget(ref_group)
