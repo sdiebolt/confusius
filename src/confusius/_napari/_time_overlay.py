@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import napari
 import napari.layers
 import numpy as np
+
+if TYPE_CHECKING:
+    from napari.layers import Layer
 
 
 class _TimeOverlay:
@@ -33,7 +38,7 @@ class _TimeOverlay:
         self._active: bool = False
         self._time_idx: int | None = None
         self._units: str | None = None
-        self._ref_layer: napari.layers.Layer | None = None
+        self._ref_layer: Layer | None = None
 
         viewer.layers.events.inserted.connect(self.check)
         viewer.layers.events.removed.connect(self._on_layer_removed)

@@ -22,7 +22,13 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup headless display
+      - name: Setup headless display (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: pyvista/setup-headless-display-action@v4
+        with:
+          qt: true
+
+      - name: Setup headless display (Windows)
         if: matrix.os == 'windows-latest'
         uses: pyvista/setup-headless-display-action@v4
         with:
