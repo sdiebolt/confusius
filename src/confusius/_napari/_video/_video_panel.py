@@ -23,6 +23,7 @@ from qtpy.QtWidgets import (
 
 if TYPE_CHECKING:
     import napari
+    import napari.layers
 
 
 class _VideoArray:
@@ -203,7 +204,7 @@ class VideoPanel(QWidget):
 
         # Video state.
         self._ref_layer = None
-        self._video_layer = None
+        self._video_layer: napari.layers.Image | None = None
         self._video: VideoReaderNP | None = None
         self._frame_dtype: np.dtype | None = None
         self._frame_shape: tuple[int, ...] = ()
@@ -476,11 +477,16 @@ class VideoPanel(QWidget):
         """
         displayed_v, displayed_h = self._displayed_dims
 
+        video = self._video
+        frame_dtype = self._frame_dtype
+        assert video is not None
+        assert frame_dtype is not None
+
         # Build the array wrapper with explicit dim positions.
         frame_step = self._step_spin.value()
         data = _VideoArray(
-            self._video,
-            dtype=self._frame_dtype,
+            video,
+            dtype=frame_dtype,
             frame_shape=self._frame_shape,
             n_pad=self._n_pad,
             step=frame_step,
@@ -515,7 +521,7 @@ class VideoPanel(QWidget):
         self._viewer.layers.events.inserted.disconnect(self._refresh_layer_combo)
         self._viewer.layers.events.removed.disconnect(self._on_layer_removed)
 
-        self._video_layer = self._viewer.add_image(
+        layer = self._viewer.add_image(
             data,
             name=self._video_name,
             rgb=self._is_rgb,
@@ -526,6 +532,8 @@ class VideoPanel(QWidget):
             units=self._units,
             visible=False,
         )
+        assert not isinstance(layer, list)
+        self._video_layer = layer
 
         self._viewer.layers.events.inserted.connect(self._refresh_layer_combo)
         self._viewer.layers.events.removed.connect(self._on_layer_removed)
