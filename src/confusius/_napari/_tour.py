@@ -469,6 +469,7 @@ def build_default_tour(
     from confusius._napari._data._save_panel import SavePanel
     from confusius._napari._qc._panel import QCPanel
     from confusius._napari._signals._panel import SignalPanel
+    from confusius._napari._video._video_panel import VideoPanel
 
     window = plugin_widget.window() or plugin_widget
 
@@ -642,6 +643,63 @@ def build_default_tour(
             pre_action=_expand_section("Data I/O"),
         ),
         TourStep(
+            target=_accordion_panel("Video"),
+            title="Video",
+            body=(
+                "This section lets you load a behavioral video alongside your fUSI "
+                "recording. The video is displayed side by side with the reference "
+                "scan and synchronized frame by frame, so you can see what the "
+                "animal was doing at each acquisition time point."
+            ),
+            anchor="left",
+            spotlight_rect=_accordion_tab_rect("Video"),
+            tooltip_target=_dock_widget,
+            pre_action=_expand_section("Video"),
+        ),
+        TourStep(
+            target=_panel_attr("Video", VideoPanel, "_ref_group"),
+            title="Reference Layer",
+            body=(
+                "Pick the fUSI image layer that the video will synchronize to. "
+                "When you scrub through the image frames, the video follows along "
+                "automatically."
+            ),
+            anchor="left",
+            tooltip_target=_dock_widget,
+            pre_action=_expand_section("Video"),
+        ),
+        TourStep(
+            target=_panel_attr("Video", VideoPanel, "_file_group"),
+            title="Load a Video",
+            body=(
+                "Enter or browse for a video file (.mp4, .mov, .avi), then click "
+                "<b>Load video</b> to import it. The video will appear as a new "
+                "layer synchronized to the reference layer."
+            ),
+            anchor="left",
+            spotlight_rect=_panel_attr_rect(
+                "Video",
+                VideoPanel,
+                "_file_group",
+                "_load_btn",
+            ),
+            tooltip_target=_dock_widget,
+            pre_action=_expand_section("Video"),
+        ),
+        TourStep(
+            target=_panel_attr("Video", VideoPanel, "_playback_group"),
+            title="Playback Settings",
+            body=(
+                "Adjust the <b>Frame step</b> to skip frames for lighter playback "
+                "when the video is long or heavy. The frame rate shown below is "
+                "computed from the original frame rate of the video and the frame "
+                "step."
+            ),
+            anchor="left",
+            tooltip_target=_dock_widget,
+            pre_action=_expand_section("Video"),
+        ),
+        TourStep(
             target=_accordion_panel("Signals"),
             title="Signals",
             body=(
@@ -757,8 +815,8 @@ def build_default_tour(
             title="You're Ready to Explore!",
             body=(
                 "You're all set to start exploring. Load a dataset in Data I/O, "
-                "explore signals, run a few QC checks, and have fun digging into some "
-                "fUSI data!"
+                "overlay a behavioral video, explore signals, run a few QC checks, "
+                "and have fun digging into some fUSI data!"
             ),
             anchor="left",
             spotlight_rect=lambda: _widget_rect(plugin_widget),

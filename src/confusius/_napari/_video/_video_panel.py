@@ -243,7 +243,7 @@ class VideoPanel(QWidget):
         layout.setSpacing(8)
 
         # Reference layer selector.
-        ref_group = QGroupBox("Reference layer")
+        self._ref_group = ref_group = QGroupBox("Reference layer")
         ref_layout = QVBoxLayout(ref_group)
         ref_layout.setSpacing(4)
         self._ref_combo = QComboBox()
@@ -256,7 +256,7 @@ class VideoPanel(QWidget):
         layout.addWidget(ref_group)
 
         # Video file selector.
-        file_group = QGroupBox("Video file")
+        self._file_group = file_group = QGroupBox("Video file")
         file_layout = QVBoxLayout(file_group)
         file_layout.setSpacing(6)
 
@@ -281,7 +281,7 @@ class VideoPanel(QWidget):
         layout.addWidget(self._load_btn)
 
         # Playback controls (enabled after loading).
-        playback_group = QGroupBox("Playback")
+        self._playback_group = playback_group = QGroupBox("Playback")
         playback_layout = QVBoxLayout(playback_group)
         playback_layout.setSpacing(4)
 
