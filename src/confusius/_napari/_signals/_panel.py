@@ -74,6 +74,9 @@ class SignalPanel(QWidget):
         self._source_btn_group.addButton(self._radio_points, 1)
         points_row.addWidget(self._radio_points)
         self._points_combo = QComboBox()
+        self._points_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         self._points_combo.setEnabled(False)
         points_row.addWidget(self._points_combo, stretch=1)
         self._new_points_btn = QPushButton("+")
@@ -92,6 +95,9 @@ class SignalPanel(QWidget):
         self._source_btn_group.addButton(self._radio_labels, 2)
         labels_row.addWidget(self._radio_labels)
         self._labels_combo = QComboBox()
+        self._labels_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         self._labels_combo.setEnabled(False)
         labels_row.addWidget(self._labels_combo, stretch=1)
         self._new_labels_btn = QPushButton("+")
@@ -110,6 +116,9 @@ class SignalPanel(QWidget):
         self._ref_label.setEnabled(False)
         ref_row.addWidget(self._ref_label)
         self._ref_combo = QComboBox()
+        self._ref_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         self._ref_combo.setEnabled(False)
         ref_row.addWidget(self._ref_combo, stretch=1)
         source_layout.addLayout(ref_row)
@@ -140,6 +149,9 @@ class SignalPanel(QWidget):
         xaxis_label.setTextFormat(Qt.TextFormat.RichText)
         xaxis_row.addWidget(xaxis_label)
         self._xaxis_combo = QComboBox()
+        self._xaxis_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         self._xaxis_combo.setToolTip(
             "Select which dimension to use for the plot's x-axis. "
             "Defaults to 'time' when available, otherwise the first axis."

@@ -104,6 +104,9 @@ class QCPanel(QWidget):
 
         layer_layout.addWidget(QLabel("Layer"))
         self._layer_combo = QComboBox()
+        self._layer_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         layer_layout.addWidget(self._layer_combo)
         layout.addWidget(layer_group)
 

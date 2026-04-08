@@ -94,9 +94,15 @@ class SavePanel(QWidget):
 
         self._layer_combo = QComboBox()
         self._layer_combo.setToolTip("Layer to save.")
+        self._layer_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
 
         self._template_combo = QComboBox()
         self._template_combo.setPlaceholderText("None")
+        self._template_combo.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
         self._template_combo.setToolTip(
             "Optional: borrow coordinates and metadata from this layer.\n"
             "Useful when saving labels drawn on top of a ConfUSIus image layer\n"
