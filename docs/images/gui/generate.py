@@ -1,15 +1,14 @@
 """Generate documentation images for the GUI guide.
 
+Data is fetched automatically from the Nunez-Elizalde et al. (2022) fUSI-BIDS
+dataset on OSF (https://osf.io/43skw/) via `confusius.datasets`.  The first run
+downloads ~30 MB; subsequent runs use the local cache.
+
 Usage
 -----
-1. Fill in the constant below with the path to an example dataset on your machine:
+Run from the project root::
 
-    - `ZARR_PATH`: 4D fUSI recording in Zarr format (or any format supported by
-      `confusius.load`). Used to populate the viewer before taking screenshots.
-
-2. Run from the project root::
-
-       uv run docs/images/gui/generate.py
+    uv run docs/images/gui/generate.py
 
 All images are saved to docs/images/gui/.
 
@@ -29,27 +28,30 @@ from napari.qt import get_qapp
 from qtpy.QtCore import QEventLoop, Qt, QTimer
 
 import confusius as cf  # noqa: F401  # Register xarray accessors.
+from confusius.datasets import fetch_nunez_elizalde_2022
 
 HERE = Path(__file__).parent
 
-# == Fill in before running ===================================================
+# ---------------------------------------------------------------------------
+# Fetch dataset and load data
+# ---------------------------------------------------------------------------
 
-ZARR_PATH = "../../../data/sub-ALD030_ses-ChATChR2FibreMidThalamus_task-awake_acq-motor2dot2_proc-staticsvd50_pwd.zarr/"
+print("Fetching Nunez-Elizalde 2022 dataset …")
+bids_root = fetch_nunez_elizalde_2022(
+    subjects=["CR020"],
+    sessions=["20191121"],
+    tasks=["spontaneous"],
+)
 
-# Path to a hand-drawn labels layer (NIfTI or Zarr) for the signal labels
-# screenshot. Set to None to fall back to the auto-generated rectangular ROIs.
-LABELS_PATH = "../../../data/sub-ALD030_ses-ChATChR2FibreMidThalamus_task-awake_acq-motor2dot2_proc-staticsvd50_labels.zarr/"
+_FUSI_PATH = (
+    bids_root
+    / "sub-CR020/ses-20191121/fusi"
+    / "sub-CR020_ses-20191121_task-spontaneous_acq-slice01_pwd.nii.gz"
+)
 
-# =============================================================================
-
-
-def _resolve(path: str) -> str:
-    """Resolve a path relative to this script's directory if not absolute."""
-    p = Path(path)
-    return str((HERE / p).resolve() if not p.is_absolute() else p)
-
-
-ZARR_PATH = _resolve(ZARR_PATH)
+print("Loading data …")
+da = cf.load(_FUSI_PATH)
+print(f"  {da.dims}, shape {dict(da.sizes)}")
 
 
 def _napari_screenshot(viewer: napari.Viewer, path: str) -> None:
@@ -108,14 +110,6 @@ def _open_accordion(widget, idx: int) -> None:
 
     get_qapp().processEvents()
 
-
-# ---------------------------------------------------------------------------
-# Load data
-# ---------------------------------------------------------------------------
-
-print("Loading data …")
-da = cf.load(ZARR_PATH)
-print(f"  {da.dims}, shape {dict(da.sizes)}")
 
 # ---------------------------------------------------------------------------
 # 1. Data I/O panel — file loaded, save section visible
@@ -308,7 +302,7 @@ except Exception as exc:
     print(f"  plugin-signals-points.png failed: {exc}")
 
 # ---------------------------------------------------------------------------
-# 5. Signals panel — labels mode, 3 labelled regions
+# 5. Signals panel — labels mode, 3 labelled regions (auto-generated)
 # ---------------------------------------------------------------------------
 
 print("Generating plugin-signals-labels.png …")
@@ -333,25 +327,20 @@ try:
     scale_3d5 = layer5.scale[1:]
     translate_3d5 = layer5.translate[1:]
 
-    if LABELS_PATH is not None:
-        # Load the hand-drawn labels file provided by the user.
-        labels_da = cf.load(_resolve(LABELS_PATH))
-        labels_data = labels_da.values.astype(np.int32)
-    else:
-        # Fallback: three small, localised ROI blobs at different positions.
-        labels_data = np.zeros(shape5, dtype=np.int32)
-        r = max(2, min(shape5) // 8)  # Half-width of each cubic ROI (mm-agnostic).
-        centers = [
-            (shape5[0] // 4, shape5[1] // 3, shape5[2] // 2),
-            (shape5[0] // 2, shape5[1] // 2, shape5[2] // 3),
-            (shape5[0] * 3 // 4, shape5[1] * 2 // 3, shape5[2] * 2 // 3),
-        ]
-        for label_id, (zc, yc, xc) in enumerate(centers, start=1):
-            labels_data[
-                max(0, zc - r) : min(shape5[0], zc + r),
-                max(0, yc - r) : min(shape5[1], yc + r),
-                max(0, xc - r) : min(shape5[2], xc + r),
-            ] = label_id
+    # Three small, localised ROI blobs at different positions.
+    labels_data = np.zeros(shape5, dtype=np.int32)
+    r = max(2, min(shape5) // 8)  # Half-width of each cubic ROI (mm-agnostic).
+    centers = [
+        (shape5[0] // 4, shape5[1] // 3, shape5[2] // 2),
+        (shape5[0] // 2, shape5[1] // 2, shape5[2] // 3),
+        (shape5[0] * 3 // 4, shape5[1] * 2 // 3, shape5[2] * 2 // 3),
+    ]
+    for label_id, (zc, yc, xc) in enumerate(centers, start=1):
+        labels_data[
+            max(0, zc - r) : min(shape5[0], zc + r),
+            max(0, yc - r) : min(shape5[1], yc + r),
+            max(0, xc - r) : min(shape5[2], xc + r),
+        ] = label_id
 
     labels_layer5 = viewer5.add_labels(
         labels_data,
