@@ -118,6 +118,7 @@ def _filter_files(
     subjects: list[str] | None,
     sessions: list[str] | None,
     tasks: list[str] | None,
+    acqs: list[str] | None,
 ) -> dict[str, str]:
     """Filter the index to files matching the requested subjects/sessions/tasks.
 
@@ -137,6 +138,9 @@ def _filter_files(
     tasks : list[str] or None
         Task names to include, e.g. `["kalatsky", "spontaneous"]`. If `None`, all tasks
         are included. Only applies to `fusi/` files; `angio/` files are always included.
+    acqs : list[str] or None
+        Acquisition labels to include (without `acq-`), e.g. `["slice03"]`. If `None`,
+        all acquisitions are included. Only applies to `fusi/` files.
 
     Returns
     -------
@@ -197,6 +201,12 @@ def _filter_files(
             if match is None or match.group(1) not in tasks:
                 continue
 
+        # Acquisition filter (only applies to fusi/ files).
+        if acqs is not None and len(parts) >= 3 and parts[2] == "fusi":
+            match = re.search(r"acq-([^_]+)", parts[-1])
+            if match is None or match.group(1) not in acqs:
+                continue
+
         filtered[path] = osf_id
 
     return filtered
@@ -207,6 +217,7 @@ def fetch_nunez_elizalde_2022(
     subjects: list[str] | None = None,
     sessions: list[str] | None = None,
     tasks: list[str] | None = None,
+    acqs: list[str] | None = None,
     refresh: bool = False,
 ) -> Path:
     """Fetch the Nunez-Elizalde 2022 fUSI-BIDS dataset.
@@ -236,6 +247,10 @@ def fetch_nunez_elizalde_2022(
         Task names to download, e.g. `["kalatsky", "spontaneous"]`. If not provided, all
         tasks are downloaded. Angiography files are always included regardless of this
         filter.
+    acqs : list[str], optional
+        Acquisition labels to download (without `acq-`), e.g. `["slice03"]`. If not
+        provided, all acquisitions are downloaded. Only applies to `fusi/` files;
+        angiography files are always included.
     refresh : bool, default: False
         Whether to re-fetch the dataset index from OSF and download any files that are
         missing locally. If `False` and all requested files are already cached, the
@@ -260,7 +275,7 @@ def fetch_nunez_elizalde_2022(
     bids_dir.mkdir(parents=True, exist_ok=True)
 
     index = _get_index(bids_dir, refresh=refresh)
-    files = _filter_files(index, subjects, sessions, tasks)
+    files = _filter_files(index, subjects, sessions, tasks, acqs)
 
     missing = {p: i for p, i in files.items() if not (bids_dir / p).exists()}
     if not missing:

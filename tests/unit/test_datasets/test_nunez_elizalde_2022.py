@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -24,6 +23,7 @@ _FAKE_INDEX = {
     # fUSI — task-filtered.
     "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-kalatsky_acq-slice01_pwd.nii.gz": "/file005",
     "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-spontaneous_acq-slice01_pwd.nii.gz": "/file006",
+    "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-spontaneous_acq-slice03_pwd.nii.gz": "/file009",
     # Second session — session-filtered.
     "sub-CR020/ses-20191121/angio/sub-CR020_ses-20191121_pwd.nii.gz": "/file007",
     "sub-CR020/ses-20191121/fusi/sub-CR020_ses-20191121_task-kalatsky_acq-slice01_pwd.nii.gz": "/file008",
@@ -158,6 +158,26 @@ def test_fetch_session_filter(tmp_path, mock_get_index, mock_retrieve):
     assert "sub-CR020_ses-20191121_pwd.nii.gz" not in downloaded
 
 
+def test_fetch_acq_filter_excludes_non_matching_fusi_includes_angio(
+    tmp_path, mock_get_index, mock_retrieve
+):
+    fetch_nunez_elizalde_2022(data_dir=tmp_path, acqs=["slice03"])
+
+    downloaded = {c.kwargs["fname"] for c in mock_retrieve.call_args_list}
+    assert (
+        "sub-CR020_ses-20191122_task-spontaneous_acq-slice03_pwd.nii.gz" in downloaded
+    )
+    assert (
+        "sub-CR020_ses-20191122_task-spontaneous_acq-slice01_pwd.nii.gz"
+        not in downloaded
+    )
+    assert (
+        "sub-CR020_ses-20191122_task-kalatsky_acq-slice01_pwd.nii.gz" not in downloaded
+    )
+    # Angio is always included regardless of acquisition filter.
+    assert "sub-CR020_ses-20191122_pwd.nii.gz" in downloaded
+
+
 def test_fetch_subject_filter(tmp_path, mock_retrieve):
     index_with_two_subjects = {
         **_FAKE_INDEX,
@@ -180,7 +200,9 @@ def test_fetch_subject_filter(tmp_path, mock_retrieve):
 # ---------------------------------------------------------------------------
 
 
-def test_fetch_refresh_passes_flag_to_get_index(tmp_path, mock_get_index, mock_retrieve):
+def test_fetch_refresh_passes_flag_to_get_index(
+    tmp_path, mock_get_index, mock_retrieve
+):
     fetch_nunez_elizalde_2022(data_dir=tmp_path, refresh=True)
     mock_get_index.assert_called_once_with(tmp_path / _BIDS_ROOT, refresh=True)
 
@@ -267,9 +289,7 @@ def test_fetch_uses_cached_index_without_network(tmp_path, mock_retrieve):
     bids_dir.mkdir(parents=True)
     (bids_dir / _INDEX_FILENAME).write_text(json.dumps(_FAKE_INDEX))
 
-    with patch(
-        "confusius.datasets._nunez_elizalde_2022.requests.get"
-    ) as mock_requests:
+    with patch("confusius.datasets._nunez_elizalde_2022.requests.get") as mock_requests:
         fetch_nunez_elizalde_2022(data_dir=tmp_path)
 
     mock_requests.assert_not_called()
