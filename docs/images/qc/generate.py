@@ -64,6 +64,7 @@ bids_root = fetch_nunez_elizalde_2022(
     subjects=[_SUBJECT],
     sessions=[_SESSION],
     tasks=[_TASK],
+    acqs=[_ACQ_SLICE],
 )
 
 _FUSI_PATH = (

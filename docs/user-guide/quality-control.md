@@ -29,6 +29,7 @@ ConfUSIus provides three QC metrics, divided into two categories:
         subjects=["CR022"],
         sessions=["20201011"],
         tasks=["spontaneous"],
+        acqs=["slice03"],
     )
 
     pwd = cf.load(

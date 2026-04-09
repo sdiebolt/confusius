@@ -66,6 +66,7 @@ concise syntax; both call the same underlying functions.
         subjects=["CR022"],
         sessions=["20201011"],
         tasks=["spontaneous"],
+        acqs=["slice03"],
     )
 
     pwd = cf.load(
