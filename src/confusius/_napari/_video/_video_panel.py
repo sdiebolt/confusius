@@ -102,7 +102,6 @@ class _VideoArray:
         self.shape = tuple(core_shape) + (frame_shape[2:3] if is_rgb else ())
         self.dtype = dtype
         self.ndim = len(self.shape)
-
         # Precompute the padded frame shape used by _fetch.
         # After optional transpose, the frame is (H', W' [,C]) where H'/W'
         # may be swapped.  We reshape it into the non-time core dims.
@@ -152,6 +151,25 @@ class _VideoArray:
         # --- multiple frames (slice time index) ---
         if isinstance(time_idx, slice):
             n_time = self.shape[self._time_dim]
+
+            # Guard: an unbounded slice on the time axis (slice(None)) means
+            # napari placed time among the displayed dims.  The dim-order
+            # guard will fix this momentarily, but _update_layers already
+            # fired and issued this slice *before* our handler ran (core
+            # callbacks always execute before plugin callbacks).  Decoding
+            # every frame would freeze the UI, so we return a single frame
+            # in the expected (1, ...) shape instead.
+            #
+            # Legitimate multi-frame requests (thick slicing / projections)
+            # always arrive as bounded slice(low, high) from the margin
+            # calculation, never as slice(None).
+            if (
+                time_idx.start is None
+                and time_idx.stop is None
+                and time_idx.step is None
+            ):
+                return _fetch(0)[np.newaxis]
+
             start, stop, step = time_idx.indices(n_time)
             frames = [_fetch(t) for t in range(start, stop, step or 1)]
             if not frames:
@@ -468,12 +486,16 @@ class VideoPanel(QWidget):
     # ------------------------------------------------------------------
 
     def _rebuild_video_layer(self) -> None:
-        """Remove old video layer and add a new one for current displayed dims.
+        """Update the video layer for the current displayed dims.
 
         Creates a `_VideoArray` whose H and W are placed at the currently
         displayed vertical and horizontal dim positions.  Scale and
         translate are computed per-dim so the video aligns with the fUSI
         scan.
+
+        When a layer already exists, updates data, scale and translate
+        in-place to avoid the expensive remove/add cycle (vispy node
+        destruction, contrast-limit recomputation, event storms).
         """
         displayed_v, displayed_h = self._displayed_dims
 
@@ -510,14 +532,17 @@ class VideoPanel(QWidget):
         scale[displayed_h] = spatial_scale
         translate[displayed_v] = ty
 
-        # Remove old layer before adding new one.
         if self._video_layer is not None:
-            try:
-                self._viewer.layers.remove(self._video_layer)
-            except ValueError:
-                pass
+            # In-place update: reuse the existing vispy node and skip
+            # contrast-limit recomputation / layer-list event storms.
+            clims = self._video_layer.contrast_limits
+            self._video_layer.data = data
+            self._video_layer.contrast_limits = clims
+            self._video_layer.scale = tuple(scale)
+            self._video_layer.translate = tuple(translate)
+            return
 
-        # Add hidden so the initial refresh doesn't run before dims settle.
+        # First creation — full add_image path.
         self._viewer.layers.events.inserted.disconnect(self._refresh_layer_combo)
         self._viewer.layers.events.removed.disconnect(self._on_layer_removed)
 

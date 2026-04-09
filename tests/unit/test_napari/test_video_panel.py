@@ -168,6 +168,28 @@ class TestVideoArray:
         assert result.shape == (6, 4, 3)
         np.testing.assert_array_equal(result, np.swapaxes(fv[0], 0, 1))
 
+    def test_unbounded_time_slice_returns_single_frame(self):
+        """slice(None) on the time axis returns only frame 0.
+
+        This guards against napari decoding all frames when the user
+        drags time into a displayed dimension (the dim-order guard
+        fixes it, but _update_layers fires first with slice(None)).
+        """
+        fv = _FakeVideo(n_frames=1000, h=4, w=6)
+        arr = _VideoArray(fv, dtype=np.uint8, frame_shape=(4, 6))
+        result = arr[slice(None), :, :]
+        assert result.shape == (1, 4, 6)
+        np.testing.assert_array_equal(result[0], fv[0])
+
+    def test_bounded_time_slice_still_works(self):
+        """Bounded slices (thick slicing / projections) decode normally."""
+        fv = _FakeVideo(n_frames=20, h=4, w=6)
+        arr = _VideoArray(fv, dtype=np.uint8, frame_shape=(4, 6))
+        result = arr[5:10]
+        assert result.shape == (5, 4, 6)
+        np.testing.assert_array_equal(result[0], fv[5])
+        np.testing.assert_array_equal(result[4], fv[9])
+
 
 # ---------------------------------------------------------------------------
 # _compute_spatial_params
@@ -356,21 +378,21 @@ class TestFrameStep:
         self, loaded_panel, viewer
     ):
         """Changing frame step rebuilds the video layer with fewer time frames."""
-        old_layer = loaded_panel._video_layer
+        old_data = loaded_panel._video_layer.data
 
         # Trigger frame step change.
         loaded_panel._step_spin.setValue(3)
         loaded_panel._on_frame_step_changed(3)
 
-        new_layer = loaded_panel._video_layer
-        # Layer was rebuilt (different object or at least different data).
-        assert new_layer is not old_layer or new_layer.data is not old_layer.data
+        layer = loaded_panel._video_layer
+        # Data was replaced (in-place update reuses the layer object).
+        assert layer.data is not old_data
 
         # New VideoArray has reduced time dimension.
         n_frames = loaded_panel._video.number_of_frames  # 10
         expected_time = len(range(0, n_frames, 3))  # 4
         time_idx = loaded_panel._fusi_time_idx
-        assert new_layer.data.shape[time_idx] == expected_time
+        assert layer.data.shape[time_idx] == expected_time
 
     def test_frame_step_change_preserves_time_position(self, loaded_panel, viewer):
         """Changing frame step restores the slider to the closest time."""
