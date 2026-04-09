@@ -23,7 +23,24 @@ jobs:
       - name: Install system dependencies for napari screenshots
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb libgl1 libegl1 libxkbcommon-x11-0 libxcb-cursor0
+          sudo apt-get install -y \
+            xvfb \
+            libegl1 \
+            libgl1 \
+            libglu1-mesa \
+            libx11-xcb1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-shm0 \
+            libxcb-sync1 \
+            libxcb-xfixes0 \
+            libxcb-xinerama0
       - name: Cache Nunez-Elizalde dataset
         uses: actions/cache@v4
         with:
