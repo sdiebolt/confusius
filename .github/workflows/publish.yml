@@ -20,6 +20,43 @@ jobs:
         with:
           python-version: "3.13"
       - run: uv sync
+      - name: Install system dependencies for napari screenshots
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xvfb \
+            libegl1 \
+            libgl1 \
+            libglu1-mesa \
+            libx11-xcb1 \
+            libxkbcommon-x11-0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-shape0 \
+            libxcb-shm0 \
+            libxcb-sync1 \
+            libxcb-xfixes0 \
+            libxcb-xinerama0
+      - name: Cache Nunez-Elizalde dataset
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/confusius/nunez-elizalde-2022-bids
+          key: ${{ runner.os }}-nunez-elizalde-bids-${{ hashFiles('docs/images/gui/generate.py', 'docs/images/qc/generate.py', 'docs/images/visualization/generate.py') }}
+          restore-keys: |
+            ${{ runner.os }}-nunez-elizalde-bids-
+      - name: Generate documentation images
+        env:
+          QT_QPA_PLATFORM: "xcb"
+          PYOPENGL_PLATFORM: "glx"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          xvfb-run -a uv run docs/images/gui/generate.py
+          xvfb-run -a uv run docs/images/qc/generate.py
+          xvfb-run -a uv run docs/images/visualization/generate.py
       - name: Build documentation
         run: uv run zensical build --clean
 
