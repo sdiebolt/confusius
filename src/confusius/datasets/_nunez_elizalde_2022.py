@@ -26,6 +26,7 @@ _OSF_PROJECT_ID = "43skw"
 _BIDS_ROOT = "nunez-elizalde-2022-bids"
 _INDEX_FILENAME = "dataset_index.json"
 _OSF_DOWNLOAD_BASE = "https://osf.io/download/{}/"
+_TOTAL_SIZE_BYTES = 6_982_575_320
 
 
 def _resolve_index_url() -> str:
