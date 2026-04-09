@@ -35,7 +35,8 @@ class TestPlotVolume:
         """plot_volume converts complex-valued data to magnitude before plotting."""
         complex_data = sample_3d_volume * (1 + 1j)
         z_coord = complex_data.coords["z"].values[0]
-        plotter = plot_volume(complex_data, slice_mode="z", slice_coords=[z_coord])
+        with pytest.warns(UserWarning, match="Complex-valued data"):
+            plotter = plot_volume(complex_data, slice_mode="z", slice_coords=[z_coord])
 
         plotted_values = plotter.axes[0, 0].collections[0].get_array().data
         assert np.all(plotted_values >= 0)
@@ -579,6 +580,25 @@ class TestPlotNapari:
         )
 
         assert layer.metadata["xarray"] is labels
+        viewer.close()
+
+    def test_complex_data_warns_and_plots_magnitude(
+        self, sample_4d_volume_complex, make_napari_viewer
+    ) -> None:
+        """Complex-valued image data is converted to magnitude with a warning."""
+        viewer = make_napari_viewer()
+        with pytest.warns(UserWarning, match="Complex-valued data"):
+            _, layer = plot_napari(
+                sample_4d_volume_complex,
+                viewer=viewer,
+                show_colorbar=False,
+                show_scale_bar=False,
+            )
+
+        assert np.issubdtype(np.asarray(layer.data).dtype, np.floating)
+        npt.assert_allclose(
+            np.asarray(layer.data), np.abs(sample_4d_volume_complex.data)
+        )
         viewer.close()
 
 

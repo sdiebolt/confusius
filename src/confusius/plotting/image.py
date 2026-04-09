@@ -202,6 +202,38 @@ def _build_axis_label(da: xr.DataArray, dim: str) -> str:
     return label
 
 
+def _coerce_complex_to_magnitude(data: xr.DataArray, caller: str) -> xr.DataArray:
+    """Convert complex-valued arrays to magnitude for plotting.
+
+    Parameters
+    ----------
+    data : xarray.DataArray
+        Input data to display.
+    caller : str
+        Name of the plotting entry point used in the warning message.
+
+    Returns
+    -------
+    xarray.DataArray
+        `data` unchanged for non-complex inputs, otherwise `abs(data)`.
+
+    Warns
+    -----
+    UserWarning
+        Raised when `data` is complex-valued to make the implicit magnitude
+        conversion explicit to users.
+    """
+    if np.iscomplexobj(data):
+        warnings.warn(
+            f"Complex-valued data passed to {caller}; plotting magnitude "
+            "(`abs(data)`).",
+            UserWarning,
+            stacklevel=find_stack_level(),
+        )
+        return xr.ufuncs.abs(data)
+    return data
+
+
 def _get_distinct_colors(n_colors: int) -> list[tuple[float, float, float]]:
     """Generate `n_colors` visually distinct colors."""
     import matplotlib
@@ -457,7 +489,8 @@ class VolumePlotter:
         ----------
         data : xarray.DataArray
             3D volume data. Unitary dimensions (except `slice_mode`) are squeezed
-            before processing.
+            before processing. Complex-valued inputs are converted to magnitude
+            (`abs(data)`) with a warning.
         slice_coords : list[float], optional
             Specific coordinates to plot. If None, uses all coordinates from data.
         match_coordinates : bool, default: True
@@ -519,8 +552,7 @@ class VolumePlotter:
         """
         import matplotlib.pyplot as plt
 
-        if np.iscomplexobj(data):
-            data = xr.ufuncs.abs(data)
+        data = _coerce_complex_to_magnitude(data, caller="VolumePlotter.add_volume")
 
         squeeze_dims = [
             d for d in data.dims if d != self.slice_mode and data.sizes[d] == 1
@@ -1383,6 +1415,8 @@ def plot_napari(
 
     Notes
     -----
+    Complex-valued data is converted to magnitude (`abs(data)`) before display.
+
     If all spatial dimensions have coordinates, their spacing is used as the scale
     parameter for napari to ensure correct physical scaling. If any spatial dimension is
     missing coordinates, no scaling is applied. The spacing is computed as the median
@@ -1466,6 +1500,8 @@ def plot_napari(
         layer_kwargs.setdefault("units", all_units)
 
     if layer_type == "image":
+        plot_data = _coerce_complex_to_magnitude(data, caller="plot_napari")
+
         # The last 2 (2D) or 3 (3D) dimensions are the displayed spatial axes.
         if dim_order is not None:
             order = []
@@ -1490,7 +1526,7 @@ def plot_napari(
         # making time scrubbing noticeably slow for lazy (Dask-backed) data.
         layer_kwargs.setdefault("metadata", {})["xarray"] = data
         viewer, layer = napari.imshow(
-            data.data,
+            plot_data.data,
             scale=scale,
             viewer=viewer,
             **layer_kwargs,

@@ -104,4 +104,11 @@ guide](../user-guide/index.md) for more detailed explanations and usage examples
 
     Xarray integration providing DataArray accessors for fUSI data.
 
+- **[:lucide-database: Datasets](datasets.md)**
+
+    ---
+
+    Fetchers for publicly available fUSI datasets with automatic caching and
+    offline support.
+
 </div>

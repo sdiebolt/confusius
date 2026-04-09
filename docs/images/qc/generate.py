@@ -1,18 +1,14 @@
 """Generate documentation images for the Quality Control user guide.
 
+Data is fetched automatically from the Nunez-Elizalde et al. (2022) fUSI-BIDS
+dataset on OSF (https://osf.io/43skw/) via `confusius.datasets`.  The first run
+downloads ~30 MB; subsequent runs use the local cache.
+
 Usage
 -----
-1. Fill in the constant variables below with paths to example datasets on your machine:
+Run from the project root::
 
-    - ``ZARR_PATH``: 4D fUSI recording in Zarr format.
-      Used for the DVARS line plot and the carpet plot.
-    - ``MASK_ZARR_PATH``: binary brain mask Zarr store.
-    - ``SCAN_PATH``: 2Dscan SCAN file.
-      Used for the CV and tSNR spatial maps and the mean power Doppler reference image.
-
-2. Run from the project root::
-
-       uv run docs/images/qc/generate.py
+    uv run docs/images/qc/generate.py
 
 All images are saved to docs/images/qc/.
 """
@@ -20,67 +16,100 @@ All images are saved to docs/images/qc/.
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
+from rich.console import Console
 
 import confusius as cf
+from confusius.datasets import fetch_nunez_elizalde_2022
 from confusius.plotting import plot_carpet
 from confusius.qc import compute_cv, compute_dvars, compute_tsnr
 
 HERE = Path(__file__).parent
 
-# == Fill in before running ===================================================
+_SUBJECT = "CR022"
+_SESSION = "20201011"
+_TASK = "spontaneous"
+_ACQ_SLICE = "slice03"
 
-ZARR_PATH = "../../../data/sub-ALD030_ses-ChATChR2FibreMidThalamus_task-awake_acq-motor2dot2_proc-staticsvd50_pwd.zarr/"
+_DERIVATIVE_ATLAS_REL_PATH = (
+    Path("derivatives")
+    / "allenccf_align"
+    / f"sub-{_SUBJECT}"
+    / f"ses-{_SESSION}"
+    / "fusi"
+    / f"sub-{_SUBJECT}_ses-{_SESSION}_space-fusi_desc-allenccf_dseg.nii.gz"
+)
 
-MASK_ZARR_PATH = "../../../data/brain_mask.zarr/"
+_MEAN_DB_LIMITS = (-20.0, 0.0)
+_CV_LIMITS = (0.0, 1.0)
 
-SCAN_PATH = "../../../data/sub-tatooine_ses-20221205_task-anesthetized_pd2dt.scan"
-
-# =============================================================================
-
-
-def _resolve(path: str) -> str:
-    p = Path(path)
-    return str((HERE / p).resolve() if not p.is_absolute() else p)
+console = Console()
 
 
-ZARR_PATH = _resolve(ZARR_PATH)
-MASK_ZARR_PATH = _resolve(MASK_ZARR_PATH)
-SCAN_PATH = _resolve(SCAN_PATH)
+def _section(title: str) -> None:
+    console.rule(f"[bold]{title}[/bold]")
+
+
+def _ok(message: str) -> None:
+    console.print(f"[green]✓[/green] {message}")
+
+
+# ---------------------------------------------------------------------------
+# Fetch dataset and load data
+# ---------------------------------------------------------------------------
+
+_section("Load Data")
+console.print("Fetching Nunez-Elizalde 2022 dataset")
+bids_root = fetch_nunez_elizalde_2022(
+    subjects=[_SUBJECT],
+    sessions=[_SESSION],
+    tasks=[_TASK],
+    acqs=[_ACQ_SLICE],
+)
+
+_FUSI_PATH = (
+    bids_root
+    / f"sub-{_SUBJECT}/ses-{_SESSION}/fusi"
+    / f"sub-{_SUBJECT}_ses-{_SESSION}_task-{_TASK}_acq-{_ACQ_SLICE}_pwd.nii.gz"
+)
+
+console.print("Loading fUSI data")
+pwd = cf.load(_FUSI_PATH)
+console.print(f"  {pwd.dims}, shape {dict(pwd.sizes)}")
+
+console.print("Loading Allen dseg mask")
+atlas_path = bids_root / _DERIVATIVE_ATLAS_REL_PATH
+if not atlas_path.exists():
+    raise RuntimeError(
+        "Missing required derivative atlas file: "
+        f"{_DERIVATIVE_ATLAS_REL_PATH}. "
+        "Recreate and publish dataset_index.json with this file included."
+    )
+atlas_labels = cf.load(atlas_path).round().astype(np.int32)
+if (
+    "z" in atlas_labels.dims
+    and "z" in pwd.dims
+    and atlas_labels.sizes["z"] != pwd.sizes["z"]
+):
+    atlas_labels = atlas_labels.sel(z=pwd["z"], method="nearest")
+    atlas_labels = atlas_labels.assign_coords(z=pwd["z"])
+
+brain_mask = atlas_labels > 0
+console.print(f"  Brain mask voxels: {int(brain_mask.sum())}")
+
+console.print("Extracting brain signals")
+signals = pwd.fusi.extract.with_mask(brain_mask).compute()
 
 _SAVEFIG_KWARGS = {"dpi": 150, "bbox_inches": "tight", "transparent": True}
 
-# --------------------------------------------------------------------------- #
-# Load data                                                                     #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# 1. DVARS line plot
+# ---------------------------------------------------------------------------
 
-print("Loading Zarr power Doppler data (for DVARS and carpet plot) …")
-pwd_zarr = cf.load(ZARR_PATH)
-print(f"  {pwd_zarr.dims}, shape {dict(pwd_zarr.sizes)}")
-
-print("Loading brain mask …")
-brain_mask = cf.load(MASK_ZARR_PATH).compute() > 0
-
-print("Extracting brain signals …")
-signals = pwd_zarr.fusi.extract.with_mask(brain_mask).compute()
-
-print("Loading SCAN power Doppler data (for CV and tSNR) …")
-pwd_scan = cf.load(SCAN_PATH).compute()
-pwd_scan.attrs.update(
-    {
-        "long_name": "Power Doppler intensity",
-        "units": "a.u.",
-    }
-)
-print(f"  {pwd_scan.dims}, shape {dict(pwd_scan.sizes)}")
-
-# --------------------------------------------------------------------------- #
-# 1. DVARS line plot                                                            #
-# --------------------------------------------------------------------------- #
-
-print("\n── DVARS ─────────────────────────────────────────────────────────────")
-print("Computing DVARS …")
+_section("DVARS")
+console.print("Computing DVARS")
 dvars = compute_dvars(signals)
-threshold = 3
+threshold = 2.5
 
 for black_bg, suffix in [(False, "light"), (True, "dark")]:
     bg_color = "#1a1a1a" if black_bg else "white"
@@ -92,16 +121,19 @@ for black_bg, suffix in [(False, "light"), (True, "dark")]:
     ax.set_facecolor(bg_color)
 
     flagged = dvars > threshold
+    flagged_dvars = dvars.where(flagged, drop=True)
     dvars.plot(ax=ax, color=line_color, linewidth=0.8, label=dvars.attrs["long_name"])
-    dvars[flagged].plot(
-        ax=ax,
-        marker="o",
-        linestyle="",
-        color=threshold_color,
-        ms=3,
-        zorder=3,
-        label="Flagged frames",
-    )
+    if flagged_dvars.size > 0:
+        ax.plot(
+            np.asarray(flagged_dvars["time"].values, dtype=float),
+            np.asarray(flagged_dvars.values, dtype=float),
+            marker="o",
+            linestyle="",
+            color=threshold_color,
+            ms=3,
+            zorder=3,
+            label="Flagged frames",
+        )
     ax.axhline(
         threshold,
         color=threshold_color,
@@ -121,66 +153,76 @@ for black_bg, suffix in [(False, "light"), (True, "dark")]:
     fig.savefig(str(HERE / f"qc-dvars-{suffix}.png"), **_SAVEFIG_KWARGS)
     plt.close(fig)
 
-print("  Saved qc-dvars-light.png and qc-dvars-dark.png")
+_ok("Saved qc-dvars-light.png and qc-dvars-dark.png")
 
-# --------------------------------------------------------------------------- #
-# 2. Carpet plot                                                                #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# 2. Carpet plot
+# ---------------------------------------------------------------------------
 
-print("\n── Carpet plot ───────────────────────────────────────────────────────")
+_section("Carpet Plot")
 
 for black_bg, suffix in [(False, "light"), (True, "dark")]:
-    fig, ax = plot_carpet(pwd_zarr, mask=brain_mask, black_bg=black_bg)
+    fig, ax = plot_carpet(pwd, mask=brain_mask, black_bg=black_bg)
     fig.savefig(str(HERE / f"qc-carpet-{suffix}.png"), **_SAVEFIG_KWARGS)
     plt.close(fig)
 
-print("  Saved qc-carpet-light.png and qc-carpet-dark.png")
+_ok("Saved qc-carpet-light.png and qc-carpet-dark.png")
 
-# --------------------------------------------------------------------------- #
-# 3. Mean power Doppler (reference for CV and tSNR sections)                   #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# 3. Mean power Doppler (reference for CV and tSNR sections)
+# ---------------------------------------------------------------------------
 
-print("\n── Mean power Doppler ────────────────────────────────────────────────")
-print("Computing mean (dB scale) …")
-mean_pwd = pwd_scan.mean("time").fusi.scale.db()
+_section("Mean Power Doppler")
+console.print("Computing mean (dB scale)")
+mean_pwd = pwd.mean("time").fusi.scale.db()
 
 for black_bg, suffix in [(False, "light"), (True, "dark")]:
-    plotter = mean_pwd.fusi.plot.volume(slice_mode="z", black_bg=black_bg)
+    plotter = mean_pwd.fusi.plot.volume(
+        slice_mode="z",
+        vmin=_MEAN_DB_LIMITS[0],
+        vmax=_MEAN_DB_LIMITS[1],
+        black_bg=black_bg,
+    )
     plotter.savefig(str(HERE / f"qc-mean-pwd-{suffix}.png"), **_SAVEFIG_KWARGS)
     plotter.close()
 
-print("  Saved qc-mean-pwd-light.png and qc-mean-pwd-dark.png")
+_ok("Saved qc-mean-pwd-light.png and qc-mean-pwd-dark.png")
 
-# --------------------------------------------------------------------------- #
-# 4. CV spatial map                                                             #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# 4. CV spatial map
+# ---------------------------------------------------------------------------
 
-print("\n── CV map ────────────────────────────────────────────────────────────")
-print("Computing CV …")
-cv = compute_cv(pwd_scan)
+_section("CV Map")
+console.print("Computing CV")
+cv = compute_cv(pwd)
 
 for black_bg, suffix in [(False, "light"), (True, "dark")]:
-    plotter = cv.fusi.plot.volume(slice_mode="z", black_bg=black_bg)
+    plotter = cv.fusi.plot.volume(
+        slice_mode="z",
+        vmin=_CV_LIMITS[0],
+        vmax=_CV_LIMITS[1],
+        black_bg=black_bg,
+    )
     plotter.savefig(str(HERE / f"qc-cv-{suffix}.png"), **_SAVEFIG_KWARGS)
     plotter.close()
 
-print("  Saved qc-cv-light.png and qc-cv-dark.png")
+_ok("Saved qc-cv-light.png and qc-cv-dark.png")
 
-# --------------------------------------------------------------------------- #
-# 5. tSNR spatial map                                                           #
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
+# 5. tSNR spatial map
+# ---------------------------------------------------------------------------
 
-print("\n── tSNR map ──────────────────────────────────────────────────────────")
-print("Computing tSNR …")
-tsnr = compute_tsnr(pwd_scan)
+_section("tSNR Map")
+console.print("Computing tSNR")
+tsnr = compute_tsnr(pwd)
 
 for black_bg, suffix in [(False, "light"), (True, "dark")]:
     plotter = tsnr.fusi.plot.volume(slice_mode="z", black_bg=black_bg)
     plotter.savefig(str(HERE / f"qc-tsnr-{suffix}.png"), **_SAVEFIG_KWARGS)
     plotter.close()
 
-print("  Saved qc-tsnr-light.png and qc-tsnr-dark.png")
+_ok("Saved qc-tsnr-light.png and qc-tsnr-dark.png")
 
-# --------------------------------------------------------------------------- #
+# ---------------------------------------------------------------------------
 
-print("\nDone! Rebuild the docs with `just docs` to see the images in place.")
+_ok("Done! Rebuild docs with `just docs` to preview changes")
