@@ -41,8 +41,8 @@ class TourStep:
     body : str
         Longer explanatory text.
     anchor : str
-        Preferred tooltip placement relative to the target: ``"right"``,
-        ``"left"``, ``"above"``, or ``"below"``.
+        Preferred tooltip placement relative to the target: `"right"`,
+        `"left"`, `"above"`, or `"below"`.
     spotlight_rect : Callable[[], QRect | None] | None
         Optional callable returning a custom spotlight rectangle in window
         coordinates. Use this when a step should highlight multiple related
@@ -351,6 +351,8 @@ class GuidedTour(QObject):
 
     def start(self) -> None:
         """Show the overlay and display the first step."""
+        if self._active:
+            return
         self._overlay.setGeometry(self._window.rect())
         self._overlay.show()
         self._overlay.raise_()
@@ -360,8 +362,9 @@ class GuidedTour(QObject):
         # Watch the top-level window for resize events so the scrim, spotlight,
         # and tooltip stay aligned when the napari window or its docks change
         # size while the tour is active.
-        self._window.installEventFilter(self)
-        self._event_filter_installed = True
+        if not self._event_filter_installed:
+            self._window.installEventFilter(self)
+            self._event_filter_installed = True
         # Defer one event-loop iteration so the tooltip completes its initial
         # layout pass before set_content calls adjustSize().
         QTimer.singleShot(0, lambda: self._show_step(0))
