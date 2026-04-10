@@ -390,7 +390,7 @@ class GuidedTour(QObject):
         Parameters
         ----------
         watched : qtpy.QtCore.QObject or None
-            The object the event was sent to; only ``self._window`` is acted
+            The object the event was sent to; only `self._window` is acted
             on.
         event : qtpy.QtCore.QEvent or None
             The intercepted event. Only `QEvent.Type.Resize` triggers a
