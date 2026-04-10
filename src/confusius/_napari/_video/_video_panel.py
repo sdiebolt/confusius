@@ -2,20 +2,25 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
 from napari.utils.notifications import show_error, show_info
 from napari_video.napari_video import VideoReaderNP
+from qtpy.QtCore import Qt
 from qtpy.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QFileDialog,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
     QPushButton,
+    QSizePolicy,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -180,32 +185,60 @@ class _VideoArray:
 
 
 # ---------------------------------------------------------------------------
+# Per-video state
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class _VideoEntry:
+    """Per-video state held by `VideoPanel` for each loaded video.
+
+    Groups the reader, decoded frame metadata, and the napari layer so
+    the panel can manage multiple videos as independent entries.
+    """
+
+    path: Path
+    video: VideoReaderNP
+    frame_dtype: np.dtype
+    frame_shape: tuple[int, ...]
+    video_h: int
+    video_w: int
+    is_rgb: bool
+    fps: float
+    name: str
+    layer: napari.layers.Image | None = None
+
+
+# ---------------------------------------------------------------------------
 # Panel widget
 # ---------------------------------------------------------------------------
 
 
 class VideoPanel(QWidget):
-    """Panel for loading a video as an image layer in the napari viewer.
+    """Panel for loading videos as image layers in the napari viewer.
 
-    The video is passed directly to napari as a lazy, array-like object
-    backed by ``VideoReaderNP`` (OpenCV frame-on-demand decoding).  A thin
-    wrapper (`_VideoArray`) handles singleton dimension padding and
-    dimension reordering.
+    Multiple videos can be added; each becomes its own napari Image
+    layer and its own grid cell.  All videos share a single reference
+    fUSI scan (selected at first load) so they align on the same time
+    and spatial axes.  Videos are passed to napari as lazy, array-like
+    objects backed by ``VideoReaderNP`` (OpenCV frame-on-demand
+    decoding).  A thin wrapper (`_VideoArray`) handles singleton
+    dimension padding and dimension reordering.
 
-    When the viewer's displayed dimensions change, the video layer is
-    removed and re-added with a new `_VideoArray` whose shape places H
-    and W at the currently displayed dim positions.
+    When the viewer's displayed dimensions change, every video layer
+    is rebuilt with a new `_VideoArray` whose shape places H and W at
+    the currently displayed dim positions.
 
-    The video layer receives the same ``axis_labels`` as the fUSI scan so
-    that napari handles dimension reordering identically for both layers.
-    The time scale is ``frame_step / fps``, and the time dimension size
-    is reduced by the frame step, so napari auto-computes the correct
-    world-coordinate range without any ``set_range`` call.
+    The video layers receive the same ``axis_labels`` as the fUSI scan
+    so that napari handles dimension reordering identically for both.
+    The time scale is ``frame_step / fps``, shared across all videos.
+    Spatial dimensions use a per-video isotropic scale matching the
+    fUSI scan height.
 
-    The spatial dimensions use a single isotropic scale matching the fUSI
-    scan height.  The viewer's grid mode is enabled so the video and fUSI
-    scan are displayed side-by-side in separate viewports; grid mode is
-    restored to its previous state when the video is unloaded.
+    Grid mode is enabled with a single-row shape when the first video
+    loads, so reference scan, labels, and each video appear side-by-
+    side.  The viewer's previous grid state is restored when the last
+    video is removed.
 
     A dimension-order guard prevents the time axis from ever being
     displayed spatially.
@@ -220,27 +253,23 @@ class VideoPanel(QWidget):
         super().__init__()
         self._viewer = viewer
 
-        # Video state.
-        self._ref_layer = None
-        self._video_layer: napari.layers.Image | None = None
-        self._video: VideoReaderNP | None = None
-        self._frame_dtype: np.dtype | None = None
-        self._frame_shape: tuple[int, ...] = ()
-        self._video_h: int = 0
-        self._video_w: int = 0
-        self._n_pad: int = 0
-        self._is_rgb: bool = False
-        self._fusi_time_idx: int = 0
-        self._fps: float = 0.0
+        # Loaded video entries.  All entries share the same reference
+        # layer, axis labels, and time index (established at first load).
+        self._videos: list[_VideoEntry] = []
+
+        # Shared reference-layer state (from the first video's ref).
+        self._ref_layer: napari.layers.Layer | None = None
         self._axis_labels: tuple[str, ...] = ()
         self._units: list[str | None] = []
+        self._n_pad: int = 0
+        self._fusi_time_idx: int = 0
+
         # Dim indices of the currently displayed vertical and horizontal axes.
         self._displayed_dims: tuple[int, int] = (0, 0)
-        # Name of the video layer (for identification during rebuild).
-        self._video_name: str = ""
 
-        # Grid mode state (saved before enabling, restored on unload).
+        # Grid-mode state saved before enabling, restored on last unload.
         self._grid_was_enabled: bool = False
+        self._grid_shape_was: tuple[int, int] = (-1, -1)
 
         # Dimension guard.
         self._guarding_order: bool = False
@@ -270,6 +299,11 @@ class VideoPanel(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self._ref_combo.currentIndexChanged.connect(self._on_ref_changed)
+        # `activated` only fires for user interaction, not programmatic
+        # setCurrentIndex calls from `_refresh_layer_combo` -- so
+        # switching the reference triggers a rebuild only on real user
+        # input, never as a side-effect of layer inserts or removals.
+        self._ref_combo.activated.connect(self._on_user_ref_changed)
         ref_layout.addWidget(self._ref_combo)
         layout.addWidget(ref_group)
 
@@ -292,11 +326,39 @@ class VideoPanel(QWidget):
         file_layout.addLayout(path_row)
         layout.addWidget(file_group)
 
-        self._load_btn = QPushButton("Load video")
+        self._load_btn = QPushButton("Add video")
         self._load_btn.setObjectName("primary_btn")
         self._load_btn.setEnabled(False)
         self._load_btn.clicked.connect(self._load_from_path)
         layout.addWidget(self._load_btn)
+
+        # Loaded videos list.
+        self._videos_group = videos_group = QGroupBox("Loaded videos")
+        videos_layout = QVBoxLayout(videos_group)
+        videos_layout.setSpacing(4)
+        self._videos_list = QListWidget()
+        self._videos_list.setSelectionMode(
+            QAbstractItemView.SelectionMode.SingleSelection
+        )
+        self._videos_list.setFixedHeight(80)
+        # Long video names must not force the panel wider than its dock.
+        # Ignored horizontal policy makes the widget accept whatever width
+        # the layout gives it, and ElideRight adds an ellipsis to long items.
+        self._videos_list.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed
+        )
+        self._videos_list.setTextElideMode(Qt.TextElideMode.ElideRight)
+        self._videos_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        self._videos_list.itemSelectionChanged.connect(self._on_video_selection_changed)
+        videos_layout.addWidget(self._videos_list)
+
+        self._remove_btn = QPushButton("Remove selected")
+        self._remove_btn.setEnabled(False)
+        self._remove_btn.clicked.connect(self._on_remove_clicked)
+        videos_layout.addWidget(self._remove_btn)
+        layout.addWidget(videos_group)
 
         # Playback controls (enabled after loading).
         self._playback_group = playback_group = QGroupBox("Playback")
@@ -317,9 +379,6 @@ class VideoPanel(QWidget):
         step_row.addWidget(self._step_spin)
         playback_layout.addLayout(step_row)
 
-        self._fps_label = QLabel("")
-        playback_layout.addWidget(self._fps_label)
-
         layout.addWidget(playback_group)
 
         layout.addStretch()
@@ -330,17 +389,37 @@ class VideoPanel(QWidget):
     # ------------------------------------------------------------------
 
     def _on_layer_removed(self, event=None) -> None:
-        """Handle layer removal: clear stale ref and refresh combo."""
+        """Handle external layer removal.
+
+        Drops any entries whose layer was removed outside the panel,
+        refreshes the combo, and restores grid state if the last video
+        was removed.
+        """
+        removed = [
+            e
+            for e in list(self._videos)
+            if e.layer is not None and e.layer not in self._viewer.layers
+        ]
+        for e in removed:
+            self._forget_entry(e)
+
         if self._ref_layer is not None and self._ref_layer not in self._viewer.layers:
             self._ref_layer = None
+
+        if removed:
+            self._refresh_videos_list()
+            if not self._videos:
+                self._on_last_video_removed()
+
         self._refresh_layer_combo()
 
     def _refresh_layer_combo(self, event=None) -> None:
         """Repopulate the reference layer combo from current viewer layers."""
         current = self._ref_combo.currentText()
         self._ref_combo.clear()
+        video_layers = {e.layer for e in self._videos if e.layer is not None}
         for layer in self._viewer.layers:
-            if layer is self._video_layer:
+            if layer in video_layers:
                 continue
             self._ref_combo.addItem(layer.name)
         idx = self._ref_combo.findText(current)
@@ -349,13 +428,55 @@ class VideoPanel(QWidget):
         self._on_ref_changed()
 
     def _on_ref_changed(self) -> None:
-        """Enable/disable load button based on reference selection."""
-        has_ref = self._ref_combo.currentIndex() >= 0
+        """Update the load button state from the current ref/path selection."""
         has_path = bool(self._path_edit.text().strip())
+        has_ref = self._ref_combo.currentIndex() >= 0
         self._load_btn.setEnabled(has_ref and has_path)
 
+    def _on_user_ref_changed(self, _idx: int | None = None) -> None:
+        """Handle user-initiated reference layer changes in the combo.
+
+        If videos are already loaded and the user picks a different
+        reference layer with valid xarray metadata, refresh the shared
+        state (axis labels, n_pad, time index, ...) and rebuild every
+        video layer so they align with the new reference.  If the new
+        layer has no coordinate metadata, warn and revert the combo.
+        """
+        if not self._videos:
+            return
+        new_ref = self._get_ref_layer()
+        if new_ref is None or new_ref is self._ref_layer:
+            return
+        if new_ref.metadata.get("xarray") is None:
+            show_error(
+                "Selected layer has no coordinate metadata. Keeping previous reference."
+            )
+            if self._ref_layer is not None:
+                idx = self._ref_combo.findText(self._ref_layer.name)
+                if idx >= 0:
+                    self._ref_combo.blockSignals(True)
+                    try:
+                        self._ref_combo.setCurrentIndex(idx)
+                    finally:
+                        self._ref_combo.blockSignals(False)
+            return
+
+        self._update_shared_ref_state(new_ref)
+        self._rebuild_all_entries()
+
+    def _update_shared_ref_state(self, ref_layer) -> None:
+        """Cache axis labels, padding, time index and units from *ref_layer*."""
+        self._ref_layer = ref_layer
+        ref_xr = ref_layer.metadata["xarray"]
+        self._n_pad = max(ref_layer.ndim - 3, 0)
+        self._fusi_time_idx = (
+            list(ref_xr.dims).index("time") if "time" in ref_xr.dims else 0
+        )
+        self._axis_labels = tuple(ref_xr.dims)
+        self._units = list(getattr(ref_layer, "units", [None] * ref_layer.ndim))
+
     def _get_ref_layer(self):
-        """Return the currently selected layer, or None."""
+        """Return the layer currently selected in the combo, or None."""
         name = self._ref_combo.currentText()
         if not name:
             return None
@@ -383,7 +504,7 @@ class VideoPanel(QWidget):
                 self._load_from_path()
 
     def _load_from_path(self) -> None:
-        """Validate inputs and call ``_load``."""
+        """Validate inputs and call ``_add_video``."""
         ref = self._get_ref_layer()
         if ref is None:
             show_error("Select a reference layer first.")
@@ -398,25 +519,10 @@ class VideoPanel(QWidget):
         if not path_str:
             show_error("Select a video file first.")
             return
-        self._load(Path(path_str), ref)
+        self._add_video(Path(path_str), ref)
 
-    def _unload(self) -> None:
-        """Remove the video layer and restore grid mode."""
-        self._disconnect()
-        if self._video_layer is not None:
-            try:
-                self._viewer.layers.remove(self._video_layer)
-            except ValueError:
-                pass
-            self._video_layer = None
-        # Restore grid mode to its previous state.
-        self._viewer.grid.enabled = self._grid_was_enabled
-        self._video = None
-        self._ref_layer = None
-        self._step_spin.setEnabled(False)
-        self._fps_label.setText("")
-
-    def _load(self, path: Path, ref_layer) -> None:
+    def _add_video(self, path: Path, ref_layer) -> None:
+        """Add a new video as its own layer in the viewer."""
         if not path.is_file():
             show_error(f"File not found: {path}")
             return
@@ -427,8 +533,6 @@ class VideoPanel(QWidget):
             show_error(f"Cannot open video: {exc}")
             return
 
-        self._unload()
-
         # Probe a single frame for shape / dtype / channel info.
         frame = np.ascontiguousarray(video[0])
         is_rgb = frame.ndim == 3 and frame.shape[2] in (3, 4)
@@ -436,80 +540,74 @@ class VideoPanel(QWidget):
         n_frames = video.number_of_frames
         fps = video.frame_rate
 
-        # Store state.
-        self._ref_layer = ref_layer
-        self._video = video
-        self._frame_dtype = frame.dtype
-        self._frame_shape = frame.shape
-        self._video_h = video_h
-        self._video_w = video_w
-        self._is_rgb = is_rgb
-        self._fps = fps
+        # First video establishes the shared reference-layer state and
+        # enables grid mode.
+        if not self._videos:
+            self._update_shared_ref_state(ref_layer)
+            order = self._viewer.dims.order
+            self._displayed_dims = (order[-2], order[-1])
 
-        ref_xr = ref_layer.metadata["xarray"]
-        self._n_pad = max(ref_layer.ndim - 3, 0)
-        self._fusi_time_idx = (
-            list(ref_xr.dims).index("time") if "time" in ref_xr.dims else 0
+            # Save and enable grid mode with a single-row layout.
+            self._grid_was_enabled = self._viewer.grid.enabled
+            self._grid_shape_was = tuple(self._viewer.grid.shape)
+            self._viewer.grid.enabled = True
+            self._viewer.grid.shape = (1, -1)
+
+            # Connect dim-order guard.
+            self._viewer.dims.events.order.connect(self._on_dim_order_changed)
+            self._guarding_order = True
+
+        entry = _VideoEntry(
+            path=path,
+            video=video,
+            frame_dtype=frame.dtype,
+            frame_shape=frame.shape,
+            video_h=video_h,
+            video_w=video_w,
+            is_rgb=is_rgb,
+            fps=fps,
+            name=f"Video: {path.stem}",
         )
-        self._axis_labels = tuple(ref_xr.dims)
-        self._units = list(getattr(ref_layer, "units", [None] * ref_layer.ndim))
-        self._video_name = f"Video: {path.stem}"
+        self._videos.append(entry)
 
-        # Read current displayed dims from the viewer.
-        order = self._viewer.dims.order
-        self._displayed_dims = (order[-2], order[-1])
+        # Build the layer for this entry.
+        self._rebuild_entry(entry)
 
-        # Build and add the video layer.
-        self._rebuild_video_layer()
-
-        # Enable grid mode for side-by-side display.
-        self._grid_was_enabled = self._viewer.grid.enabled
-        self._viewer.grid.enabled = True
-
-        # Connect dim-order guard.
-        self._viewer.dims.events.order.connect(self._on_dim_order_changed)
-        self._guarding_order = True
-
-        # Enable playback controls and show effective FPS.
-        frame_step = self._step_spin.value()
+        # Update UI.
+        self._refresh_videos_list()
         self._step_spin.setEnabled(True)
-        self._update_fps_label()
 
+        frame_step = self._step_spin.value()
         n_shown = len(range(0, n_frames, frame_step))
         show_info(
-            f"Video '{path.stem}' loaded ({n_frames} frames, {fps:.1f} fps, "
-            f"showing {n_shown} frames at step {frame_step})."
+            f"Video '{path.stem}' added ({n_frames} frames, {fps:.1f} fps, "
+            f"showing {n_shown} at step {frame_step})."
         )
 
     # ------------------------------------------------------------------
     # Layer rebuild
     # ------------------------------------------------------------------
 
-    def _rebuild_video_layer(self) -> None:
-        """Update the video layer for the current displayed dims.
+    def _rebuild_entry(self, entry: _VideoEntry) -> None:
+        """Create or update the image layer for a single video entry.
 
-        Creates a `_VideoArray` whose H and W are placed at the currently
+        Builds a `_VideoArray` whose H and W are placed at the currently
         displayed vertical and horizontal dim positions.  Scale and
-        translate are computed per-dim so the video aligns with the fUSI
-        scan.
+        translate are computed per-entry so the video aligns with the
+        fUSI scan.
 
-        When a layer already exists, updates data, scale and translate
-        in-place to avoid the expensive remove/add cycle (vispy node
-        destruction, contrast-limit recomputation, event storms).
+        When a layer already exists on the entry, updates data, scale
+        and translate in-place to avoid the expensive remove/add cycle
+        (vispy node destruction, contrast-limit recomputation, event
+        storms).
         """
         displayed_v, displayed_h = self._displayed_dims
-
-        video = self._video
-        frame_dtype = self._frame_dtype
-        assert video is not None
-        assert frame_dtype is not None
-
-        # Build the array wrapper with explicit dim positions.
         frame_step = self._step_spin.value()
+
         data = _VideoArray(
-            video,
-            dtype=frame_dtype,
-            frame_shape=self._frame_shape,
+            entry.video,
+            dtype=entry.frame_dtype,
+            frame_shape=entry.frame_shape,
             n_pad=self._n_pad,
             step=frame_step,
             time_dim=self._fusi_time_idx,
@@ -519,10 +617,16 @@ class VideoPanel(QWidget):
 
         # Time scale = frame_step / fps.  Each logical frame spans
         # ``frame_step`` physical frames, so consecutive data points are
-        # ``frame_step / fps`` seconds apart.  napari auto-computes the
-        # correct world-coordinate range from shape * scale.
-        time_scale = frame_step / self._fps if self._fps > 0 else 1.0
-        spatial_scale, ty = self._compute_spatial_params(displayed_v)
+        # ``frame_step / fps`` seconds apart.
+        time_scale = frame_step / entry.fps if entry.fps > 0 else 1.0
+        # Isotropic spatial scale (video pixels are square).
+        spatial_scale = self._compute_spatial_scale(displayed_v, entry.video_h)
+        translate_v = self._compute_axis_center_translate(
+            displayed_v, entry.video_h, spatial_scale
+        )
+        translate_h = self._compute_axis_center_translate(
+            displayed_h, entry.video_w, spatial_scale
+        )
 
         ndim = len(self._axis_labels)
         scale = [1.0] * ndim
@@ -530,146 +634,210 @@ class VideoPanel(QWidget):
         scale[self._fusi_time_idx] = time_scale
         scale[displayed_v] = spatial_scale
         scale[displayed_h] = spatial_scale
-        translate[displayed_v] = ty
+        translate[displayed_v] = translate_v
+        translate[displayed_h] = translate_h
 
-        if self._video_layer is not None:
-            # In-place update: reuse the existing vispy node and skip
-            # contrast-limit recomputation / layer-list event storms.
-            clims = self._video_layer.contrast_limits
-            self._video_layer.data = data  # type: ignore[invalid-assignment]
-            self._video_layer.contrast_limits = clims
-            self._video_layer.scale = tuple(scale)  # type: ignore[invalid-assignment]
-            self._video_layer.translate = tuple(translate)
+        if entry.layer is not None:
+            # In-place update: reuse the existing vispy node.
+            clims = entry.layer.contrast_limits
+            entry.layer.data = data  # type: ignore[invalid-assignment]
+            entry.layer.contrast_limits = clims
+            entry.layer.scale = tuple(scale)  # type: ignore[invalid-assignment]
+            entry.layer.translate = tuple(translate)
             return
 
-        # First creation — full add_image path.
+        # First creation -- full add_image path.
         self._viewer.layers.events.inserted.disconnect(self._refresh_layer_combo)
         self._viewer.layers.events.removed.disconnect(self._on_layer_removed)
 
         layer = self._viewer.add_image(
             data,
-            name=self._video_name,
-            rgb=self._is_rgb,
+            name=entry.name,
+            rgb=entry.is_rgb,
             scale=tuple(scale),
             translate=tuple(translate),
             axis_labels=self._axis_labels,
-            metadata={"fps": self._fps, "time_units": "s"},
+            metadata={"fps": entry.fps, "time_units": "s"},
             units=self._units,
             visible=False,
         )
         assert not isinstance(layer, list)
-        self._video_layer = layer
+        entry.layer = layer
 
         self._viewer.layers.events.inserted.connect(self._refresh_layer_combo)
         self._viewer.layers.events.removed.connect(self._on_layer_removed)
 
-        self._video_layer.visible = True
+        entry.layer.visible = True
+
+    def _rebuild_all_entries(self) -> None:
+        """Rebuild every loaded video's layer (for dim-order or frame-step changes)."""
+        for entry in self._videos:
+            self._rebuild_entry(entry)
+
+    # ------------------------------------------------------------------
+    # Remove / cleanup
+    # ------------------------------------------------------------------
+
+    def _on_video_selection_changed(self) -> None:
+        """Enable remove button based on selection."""
+        self._remove_btn.setEnabled(self._videos_list.currentRow() >= 0)
+
+    def _on_remove_clicked(self) -> None:
+        row = self._videos_list.currentRow()
+        if not (0 <= row < len(self._videos)):
+            return
+        self._remove_video(self._videos[row])
+
+    def _remove_video(self, entry: _VideoEntry) -> None:
+        """Remove a single video entry and its layer.
+
+        Actual entry cleanup happens in `_on_layer_removed` after napari
+        fires the layer-removed event, so external removals and panel
+        removals share the same path.
+        """
+        layer = entry.layer
+        if layer is not None and layer in self._viewer.layers:
+            self._viewer.layers.remove(layer)
+            return
+        # Layer already gone -- clean up entry state directly.
+        self._forget_entry(entry)
+        self._refresh_videos_list()
+        if not self._videos:
+            self._on_last_video_removed()
+
+    def _forget_entry(self, entry: _VideoEntry) -> None:
+        """Drop an entry from the list without touching the viewer."""
+        try:
+            self._videos.remove(entry)
+        except ValueError:
+            pass
+
+    def _on_last_video_removed(self) -> None:
+        """Restore viewer state after the last video is removed."""
+        self._disconnect()
+        self._viewer.grid.enabled = self._grid_was_enabled
+        self._viewer.grid.shape = self._grid_shape_was
+        self._ref_layer = None
+        self._axis_labels = ()
+        self._units = []
+        self._n_pad = 0
+        self._fusi_time_idx = 0
+        self._step_spin.setEnabled(False)
+
+    def _refresh_videos_list(self) -> None:
+        """Update the UI list of loaded videos."""
+        self._videos_list.clear()
+        for entry in self._videos:
+            self._videos_list.addItem(entry.name)
 
     # ------------------------------------------------------------------
     # Frame step
     # ------------------------------------------------------------------
 
-    def _update_fps_label(self) -> None:
-        """Update the effective-FPS label from current state."""
-        step = self._step_spin.value()
-        if self._fps > 0:
-            effective = self._fps / step
-            self._fps_label.setText(f"{effective:.1f} fps effective")
-        else:
-            self._fps_label.setText("")
-
     def _on_frame_step_changed(self, value: int) -> None:
-        """Rebuild the video layer with a new frame step.
+        """Rebuild all video layers with a new frame step.
 
-        The step is encoded in the `_VideoArray` shape (fewer logical
+        The step is encoded in each `_VideoArray` shape (fewer logical
         frames) and the layer's time scale (``value / fps``).  napari
-        auto-computes the correct slider range from shape and scale, so
-        no ``set_range`` call is needed.
+        auto-computes the correct slider range from shape and scale.
 
         The current world time is saved before the rebuild and restored
         afterward so the slider stays at the closest valid position.
         """
-        if self._video is None or self._video_layer is None:
+        if not self._videos:
             return
 
-        # Save current world time before rebuild.
         time_axis = self._fusi_time_idx
         current_time = float(self._viewer.dims.point[time_axis])
 
-        self._rebuild_video_layer()
+        self._rebuild_all_entries()
 
-        # Restore to nearest valid position at the same time.
         self._viewer.dims.set_point(time_axis, current_time)
-        self._update_fps_label()
 
-        n_frames = self._video.number_of_frames
+        first = self._videos[0]
+        n_frames = first.video.number_of_frames
         n_shown = len(range(0, n_frames, value))
         show_info(
             f"Frame step {value}: showing {n_shown} frames "
-            f"({self._fps / value:.1f} fps effective)."
+            f"({first.fps / value:.1f} fps effective)."
         )
 
     # ------------------------------------------------------------------
     # Spatial transform
     # ------------------------------------------------------------------
 
-    def _compute_spatial_params(self, vertical_dim: int) -> tuple[float, float]:
-        """Return ``(isotropic_scale, translate_y)``.
+    def _lookup_coord(self, dim_idx: int) -> np.ndarray | None:
+        """Return the reference xarray coordinate for *dim_idx*, or None.
 
-        Uses the axis label at *vertical_dim* to look up the corresponding
-        coordinate in the reference xarray.  The video is scaled
-        isotropically to match that extent and centred on the scan.
-
-        Parameters
-        ----------
-        vertical_dim : int
-            The viewer dim index whose coordinate extent the video height
-            should match.
-
-        Returns
-        -------
-        scale : float
-            Isotropic scale factor.
-        translate : float
-            Translation along the vertical axis to centre the video.
+        Returns ``None`` when there is no reference layer, no xarray
+        metadata, or the corresponding coordinate does not exist.
         """
         ref = self._ref_layer
         if ref is None:
-            return 1.0, 0.0
+            return None
 
         try:
             xr_da = ref.metadata.get("xarray")
         except RuntimeError:
             # Layer's C++ wrapper was deleted.
             self._ref_layer = None
-            return 1.0, 0.0
+            return None
         if xr_da is None:
-            return 1.0, 0.0
+            return None
 
-        # Look up the coordinate name from the axis label at vertical_dim.
-        y_dim = self._axis_labels[vertical_dim]
+        dim_name = self._axis_labels[dim_idx]
+        if dim_name not in xr_da.coords:
+            return None
 
-        if y_dim not in xr_da.coords:
-            return 1.0, 0.0
+        return np.asarray(xr_da.coords[dim_name], dtype=np.float64)
 
-        y_coords = np.asarray(xr_da.coords[y_dim], dtype=np.float64)
+    def _compute_spatial_scale(self, vertical_dim: int, video_h: int) -> float:
+        """Return the isotropic spatial scale for the video.
 
-        y_min, y_max = float(y_coords.min()), float(y_coords.max())
+        The scale maps the video's height to the fUSI scan's extent
+        along ``vertical_dim`` and is then applied identically to both
+        displayed spatial axes so that video pixels remain square --
+        webcam pixels are isotropic and must not be stretched.
 
-        y_step = (
-            float(np.median(np.diff(y_coords)))
-            if len(y_coords) > 1
-            else float(xr_da.coords[y_dim].attrs.get("voxdim", 1.0))
-        )
+        Parameters
+        ----------
+        vertical_dim : int
+            Viewer dim index whose coordinate extent the video height
+            should match.
+        video_h : int
+            Video height in pixels.
+        """
+        coords = self._lookup_coord(vertical_dim)
+        if coords is None or coords.size == 0:
+            return 1.0
 
-        video_h = self._video_h
-        fusi_extent_y = (y_max - y_min) + abs(y_step)
-        scale = fusi_extent_y / video_h
+        y_min, y_max = float(coords.min()), float(coords.max())
+        if coords.size > 1:
+            y_step = float(np.median(np.diff(coords)))
+        else:
+            dim_name = self._axis_labels[vertical_dim]
+            xr_da = self._ref_layer.metadata["xarray"]  # type: ignore[union-attr]
+            y_step = float(xr_da.coords[dim_name].attrs.get("voxdim", 1.0))
 
-        center_y = (y_min + y_max) / 2
-        translate_y = center_y - scale * (video_h - 1) / 2
+        fusi_extent = (y_max - y_min) + abs(y_step)
+        return fusi_extent / video_h
 
-        return scale, translate_y
+    def _compute_axis_center_translate(
+        self, dim_idx: int, video_n: int, scale: float
+    ) -> float:
+        """Return the translation that centers the video on the fUSI.
+
+        The video's centre pixel along ``dim_idx`` (at index
+        ``(video_n - 1) / 2``) is placed at the midpoint of the fUSI
+        coordinate range, so the video overlays the scan in both
+        spatial axes.
+        """
+        coords = self._lookup_coord(dim_idx)
+        if coords is None or coords.size == 0:
+            return 0.0
+
+        center = (float(coords.min()) + float(coords.max())) / 2
+        return center - scale * (video_n - 1) / 2
 
     # ------------------------------------------------------------------
     # Dimension order guard
@@ -681,7 +849,7 @@ class VideoPanel(QWidget):
         Three cases:
 
         1. Time is in the displayed dims -- fix the order (move time out).
-        2. Displayed dims changed -- rebuild the video layer.
+        2. Displayed dims changed -- rebuild every video layer.
         3. Displayed dims unchanged (only slider reorder) -- no-op.
         """
         order = tuple(event.value)
@@ -703,16 +871,16 @@ class VideoPanel(QWidget):
         if displayed == self._displayed_dims:
             return
 
-        # Case 2: displayed dims changed -- rebuild.
+        # Case 2: displayed dims changed -- rebuild every video.
         self._displayed_dims = displayed
-        self._rebuild_video_layer()
+        self._rebuild_all_entries()
 
     # ------------------------------------------------------------------
     # Cleanup
     # ------------------------------------------------------------------
 
     def _disconnect(self) -> None:
-        """Disconnect callbacks."""
+        """Disconnect the dim-order guard callback."""
         if self._guarding_order:
             try:
                 self._viewer.dims.events.order.disconnect(self._on_dim_order_changed)

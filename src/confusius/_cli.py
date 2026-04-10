@@ -53,7 +53,7 @@ def main() -> None:
 
         if args.video is not None:
             video_panel = widget._accordion_panels["Video"]
-            video_panel._load(args.video, layer)
+            video_panel._add_video(args.video, layer)
 
     elif args.video is not None:
         parser.error("--video requires a data file to be specified as well.")
