@@ -646,10 +646,11 @@ def build_default_tour(
             target=_accordion_panel("Video"),
             title="Video",
             body=(
-                "This section lets you load a behavioral video alongside your fUSI "
-                "recording. The video is displayed side by side with the reference "
-                "scan and synchronized frame by frame, so you can see what the "
-                "animal was doing at each acquisition time point."
+                "This section lets you load one or more behavioral videos alongside "
+                "your fUSI recording. Each video is overlaid on the reference scan "
+                "and placed in its own grid cell, synchronized frame by frame to the "
+                "acquisition, so you can see what the animal was doing at each time "
+                "point."
             ),
             anchor="left",
             spotlight_rect=_accordion_tab_rect("Video"),
@@ -660,9 +661,10 @@ def build_default_tour(
             target=_panel_attr("Video", VideoPanel, "_ref_group"),
             title="Reference Layer",
             body=(
-                "Pick the fUSI image layer that the video will synchronize to. "
-                "When you scrub through the image frames, the video follows along "
-                "automatically."
+                "Pick the fUSI image layer that the videos will synchronize to. "
+                "When you scrub through the image frames, every loaded video follows "
+                "along automatically. You can switch the reference at any time; all "
+                "loaded videos will re-align to the new scan."
             ),
             anchor="left",
             tooltip_target=_dock_widget,
@@ -670,11 +672,12 @@ def build_default_tour(
         ),
         TourStep(
             target=_panel_attr("Video", VideoPanel, "_file_group"),
-            title="Load a Video",
+            title="Add a Video",
             body=(
                 "Enter or browse for a video file (.mp4, .mov, .avi), then click "
-                "<b>Load video</b> to import it. The video will appear as a new "
-                "layer synchronized to the reference layer."
+                "<b>Add video</b> to import it. The video appears as a new layer in "
+                "its own grid cell, overlaid on the reference scan. Repeat to add "
+                "more videos side by side."
             ),
             anchor="left",
             spotlight_rect=_panel_attr_rect(
@@ -687,13 +690,24 @@ def build_default_tour(
             pre_action=_expand_section("Video"),
         ),
         TourStep(
+            target=_panel_attr("Video", VideoPanel, "_videos_group"),
+            title="Loaded Videos",
+            body=(
+                "All currently loaded videos appear here. Select one and click "
+                "<b>Remove selected</b> to unload it; grid mode is restored to its "
+                "previous state once the last video is removed."
+            ),
+            anchor="left",
+            tooltip_target=_dock_widget,
+            pre_action=_expand_section("Video"),
+        ),
+        TourStep(
             target=_panel_attr("Video", VideoPanel, "_playback_group"),
             title="Playback Settings",
             body=(
                 "Adjust the <b>Frame step</b> to skip frames for lighter playback "
-                "when the video is long or heavy. The frame rate shown below is "
-                "computed from the original frame rate of the video and the frame "
-                "step."
+                "when videos are long or heavy. A step of N shows every N-th frame "
+                "and applies to every loaded video."
             ),
             anchor="left",
             tooltip_target=_dock_widget,
