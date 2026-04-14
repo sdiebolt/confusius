@@ -131,12 +131,19 @@ fraction of this (see the examples below).
     Total size: **~13 GB**.
 
     Use [`fetch_cybis_pereira_2026`][confusius.datasets.fetch_cybis_pereira_2026] to
-    download the dataset. Two filters narrow the download:
+    download the dataset. Four filters narrow the download:
 
-    | Filter     | Accepts                                           |
-    |------------|---------------------------------------------------|
-    | `datasets` | `"rawdata"` and/or any derivative name (see below)|
-    | `subjects` | Subject IDs without the `sub-` prefix             |
+    | Filter     | BIDS entity / scope | Example                              |
+    |------------|---------------------|--------------------------------------|
+    | `datasets` | dataset name        | `"glm-speed"`, `["rawdata", "dlc-videos"]` |
+    | `subjects` | `sub-`              | `["rat83", "rat84"]`                 |
+    | `sessions` | `ses-`              | `["20220523"]`                       |
+    | `acqs`     | `acq-`              | `["slice32"]`                        |
+
+    Files that lack a session or acquisition entity (e.g. subject-level
+    statmaps in `glm-speed`, or `decode-speed` aggregates) are kept regardless
+    of the `sessions` / `acqs` filters, since they aggregate across those
+    entities.
 
     The `datasets` filter accepts:
 
@@ -158,8 +165,13 @@ fraction of this (see the examples below).
     # All subjects, GLM-speed derivative only.
     bids_root = fetch_cybis_pereira_2026(datasets="glm-speed")
 
-    # Or raw data for a single subject.
-    bids_root = fetch_cybis_pereira_2026(datasets="rawdata", subjects="rat83")
+    # Or raw data for a single subject, session, and acquisition slice.
+    bids_root = fetch_cybis_pereira_2026(
+        datasets="rawdata",
+        subjects="rat73",
+        sessions="20220523",
+        acqs="slice32",
+    )
     ```
 
 ## Refreshing the Dataset Index

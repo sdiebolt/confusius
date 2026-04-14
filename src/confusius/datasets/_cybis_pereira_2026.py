@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from typing import TypedDict
@@ -255,11 +256,17 @@ def _filter_files(
     index: dict[str, _FileInfo],
     datasets: list[str] | None,
     subjects: list[str] | None,
+    sessions: list[str] | None,
+    acqs: list[str] | None,
 ) -> dict[str, _FileInfo]:
     """Filter the index to files matching the requested datasets and subjects.
 
     Top-level BIDS metadata files (dataset_description.json, participants.*,
-    etc.) are always included.
+    etc.) are always included. The `sessions` and `acqs` filters only
+    exclude files that carry the corresponding BIDS entity; subject- or
+    dataset-level aggregate files (e.g. `sub-rat73_acq-slice32_statmap.nii`
+    in derivatives, or `decode-speed/sub-rat73/...`) are kept when they
+    match every entity they do declare.
 
     Parameters
     ----------
@@ -272,6 +279,15 @@ def _filter_files(
     subjects : list[str] or None
         Subject IDs to include (without "sub-" prefix), e.g. `["rat83"]`.
         If `None`, all subjects are included.
+    sessions : list[str] or None
+        Session IDs to include (without "ses-" prefix), e.g.
+        `["20220523"]`. If `None`, all sessions are included. Files with
+        no `ses-` entity are passed through (e.g. subject-level
+        derivatives that aggregate across sessions).
+    acqs : list[str] or None
+        Acquisition labels to include (without "acq-" prefix), e.g.
+        `["slice32"]`. If `None`, all acquisitions are included. Files
+        with no `acq-` entity are passed through.
 
     Returns
     -------
@@ -298,6 +314,9 @@ def _filter_files(
                 if subjects is not None and sub_id not in subjects:
                     continue
 
+            if not _matches_entities(parts, sessions, acqs):
+                continue
+
             filtered[path] = file_info
             continue
 
@@ -314,15 +333,48 @@ def _filter_files(
         if subjects is not None and sub_id not in subjects:
             continue
 
+        if not _matches_entities(parts, sessions, acqs):
+            continue
+
         filtered[path] = file_info
 
     return filtered
+
+
+def _matches_entities(
+    parts: tuple[str, ...],
+    sessions: list[str] | None,
+    acqs: list[str] | None,
+) -> bool:
+    """Return True when the path satisfies the session and acquisition filters.
+
+    A file matches when, for each of `sessions` and `acqs`, it either
+    omits the corresponding BIDS entity entirely or declares a value
+    that is in the requested list. The session is read from any
+    `ses-*` directory in `parts`; the acquisition is read from the
+    `acq-*` entity in the filename.
+    """
+    if sessions is not None:
+        ses_dir = next((p for p in parts if p.startswith("ses-")), None)
+        if ses_dir is not None:
+            ses_id = ses_dir.removeprefix("ses-")
+            if ses_id not in sessions:
+                return False
+
+    if acqs is not None and parts:
+        match = re.search(r"acq-([^_]+)", parts[-1])
+        if match is not None and match.group(1) not in acqs:
+            return False
+
+    return True
 
 
 def fetch_cybis_pereira_2026(
     data_dir: str | Path | None = None,
     datasets: str | list[str] | None = None,
     subjects: str | list[str] | None = None,
+    sessions: str | list[str] | None = None,
+    acqs: str | list[str] | None = None,
     refresh: bool = False,
 ) -> Path:
     """Fetch the Cybis Pereira 2026 fUSI-BIDS dataset.
@@ -351,6 +403,16 @@ def fetch_cybis_pereira_2026(
     subjects : str or list[str], optional
         Subject IDs to download (without "sub-" prefix), e.g. `"rat83"` or
         `["rat83", "rat84"]`. If not provided, all subjects are downloaded.
+    sessions : str or list[str], optional
+        Session IDs to download (without "ses-" prefix), e.g.
+        `"20220523"` or `["20220523", "20220524"]`. If not provided,
+        all sessions are downloaded. Files with no session entity
+        (e.g. subject-level derivatives) are always included.
+    acqs : str or list[str], optional
+        Acquisition labels to download (without "acq-" prefix), e.g.
+        `"slice32"` or `["slice32", "slice42"]`. If not provided, all
+        acquisitions are downloaded. Files with no acquisition entity
+        are always included.
     refresh : bool, default: False
         Whether to re-fetch the dataset index from OSF and download any files
         that are missing locally. If `False` and all requested files are
@@ -385,6 +447,10 @@ def fetch_cybis_pereira_2026(
         datasets = [datasets]
     if isinstance(subjects, str):
         subjects = [subjects]
+    if isinstance(sessions, str):
+        sessions = [sessions]
+    if isinstance(acqs, str):
+        acqs = [acqs]
 
     if datasets is not None:
         invalid = set(datasets) - _VALID_DATASETS
@@ -395,7 +461,7 @@ def fetch_cybis_pereira_2026(
             )
 
     index = _get_index(bids_dir, refresh=refresh)
-    files = _filter_files(index, datasets, subjects)
+    files = _filter_files(index, datasets, subjects, sessions, acqs)
 
     missing = {p: info for p, info in files.items() if not (bids_dir / p).exists()}
     if not missing:
