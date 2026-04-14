@@ -363,8 +363,9 @@ def fetch_cybis_pereira_2026(
     References
     ----------
     [^1]:
-        Cybis Pereira, F. et al. (2026). A Vascular Code for Speed in the
-        Spatial Navigation System.
+        Cybis Pereira, F. et al. (2026). A vascular code for speed in the spatial
+        navigation system. *Cell Reports*, 45(1).
+        [https://doi.org/10.1016/j.celrep.2025.116791](https://doi.org/10.1016/j.celrep.2025.116791)
 
     [^2]:
         fUSI-BIDS dataset on OSF: [https://osf.io/2v6f7/](https://osf.io/2v6f7/)
