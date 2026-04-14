@@ -25,7 +25,7 @@ def format_bytes(size_bytes: int) -> str:
     Returns
     -------
     str
-        Human-readable size string, e.g. ``"6.4 GB"``.
+        Human-readable size string, e.g. `"6.4 GB"`.
     """
     size = float(size_bytes)
     for unit in _SIZE_UNITS[:-1]:
