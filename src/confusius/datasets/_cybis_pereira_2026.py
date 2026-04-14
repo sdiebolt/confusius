@@ -6,6 +6,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from typing import TypedDict
 
 import pooch
 import requests
@@ -35,6 +36,14 @@ _MAX_DOWNLOAD_RETRIES = 3
 
 _RETRY_BACKOFF_BASE = 2.0
 """Base of the exponential backoff (seconds) between retry attempts."""
+
+
+class _FileInfo(TypedDict):
+    """Per-file entry in the dataset index."""
+
+    osf_path: str
+    size: int
+
 
 _VALID_DATASETS = frozenset(
     {
@@ -146,7 +155,7 @@ def _retrieve_with_retries(
                 known_hash=None,
                 fname=dest.name,
                 path=dest.parent,
-                progressbar=adapter,
+                progressbar=adapter,  # type: ignore[invalid-argument-type]
             )
             return
         except requests.exceptions.RequestException as exc:
@@ -207,9 +216,7 @@ def _resolve_index_url() -> str:
     )
 
 
-def _get_index(
-    data_dir: Path, refresh: bool = False
-) -> dict[str, dict[str, str | int]]:
+def _get_index(data_dir: Path, refresh: bool = False) -> dict[str, _FileInfo]:
     """Return the dataset index.
 
     Uses the locally cached index when available and `refresh` is False,
@@ -226,7 +233,7 @@ def _get_index(
 
     Returns
     -------
-    dict[str, dict[str, str | int]]
+    dict[str, _FileInfo]
         Mapping from BIDS-relative file paths to dicts containing
         `"osf_path"` (str) and `"size"` (int, bytes).
     """
@@ -245,10 +252,10 @@ def _get_index(
 
 
 def _filter_files(
-    index: dict[str, dict[str, str | int]],
+    index: dict[str, _FileInfo],
     datasets: list[str] | None,
     subjects: list[str] | None,
-) -> dict[str, dict[str, str | int]]:
+) -> dict[str, _FileInfo]:
     """Filter the index to files matching the requested datasets and subjects.
 
     Top-level BIDS metadata files (dataset_description.json, participants.*,
@@ -256,7 +263,7 @@ def _filter_files(
 
     Parameters
     ----------
-    index : dict[str, dict[str, str | int]]
+    index : dict[str, _FileInfo]
         Full dataset index as returned by `_get_index`.
     datasets : list[str] or None
         Datasets to include. Use `"rawdata"` for the raw subject data and
@@ -268,10 +275,10 @@ def _filter_files(
 
     Returns
     -------
-    dict[str, dict[str, str | int]]
+    dict[str, _FileInfo]
         Subset of the index matching the filters.
     """
-    filtered: dict[str, dict[str, str | int]] = {}
+    filtered: dict[str, _FileInfo] = {}
 
     for path, file_info in index.items():
         parts = Path(path).parts
