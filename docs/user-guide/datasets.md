@@ -4,15 +4,16 @@ icon: lucide/database
 
 # Datasets
 
-The [`confusius.datasets`][confusius.datasets] module provides fetchers for publicly available
-fUSI datasets, distributed in [fUSI-BIDS](https://bids.neuroimaging.io/) format. Each
-fetcher downloads the dataset on first call, caches it locally for offline re-use, and
-returns the path to the BIDS root directory—ready to be loaded with
-[`confusius.load`][confusius.load] or explored with your favorite BIDS-aware tool.
+The [`confusius.datasets`][confusius.datasets] module provides fetchers for publicly
+available atlases, templates, and fUSI datasets distributed in
+[fUSI-BIDS](https://bids.neuroimaging.io/) format. Each fetcher downloads the dataset
+on first call, caches it locally for offline re-use, and returns either the path to the
+root directory, or a more specific object (e.g., an [`Atlas`][confusius.atlas.Atlas]
+instance for atlases]).
 
 !!! tip "Try before you buy"
-    Each fetcher accepts filters (subjects, sessions, tasks, derivatives, …) so you can
-    download a small slice first and decide whether you want the full dataset later.
+    Fetchers accept filters (subjects, sessions, tasks, derivatives, etc. so you can
+    download a small subset first and decide whether you want the full dataset later.
     Cached files are never re-downloaded.
 
 ## Quick Start
@@ -24,7 +25,7 @@ The fastest way to get started is to fetch a single subject from the Nunez-Eliza
 import confusius as cf
 from confusius.datasets import fetch_nunez_elizalde_2022
 
-# Download one subject, one task (~30 MB).
+# Download data for one mouse, one task, one brain slice (~30 MB).
 root = fetch_nunez_elizalde_2022(
     subjects=["CR020"],
     sessions=["20191122"],
@@ -79,12 +80,12 @@ list_datasets()
 ```
 
 ```text
-           Available Datasets           
+           Available Datasets
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┓
-┃ Fetch function             ┃     Size ┃
+┃ Fetch function              ┃     Size ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━┩
-│ fetch_cybis_pereira_2026   │    12 GB │
-│ fetch_nunez_elizalde_2022  │ 6.503 GB │
+│ fetch_cybis_pereira_2026    │    12 GB │
+│ fetch_nunez_elizalde_2022   │ 6.503 GB │
 └────────────────────────────┴──────────┘
 ```
 
@@ -188,11 +189,11 @@ bids_root = fetch_nunez_elizalde_2022(subjects=["CR020"], refresh=True)
 Existing local files are never re-downloaded—`refresh=True` only adds what is
 missing.
 
-## Working with the Returned BIDS Root
+## Working with fUSI-BIDS Datasets
 
-Each fetcher returns a [`pathlib.Path`][pathlib.Path] to the dataset's BIDS root
-directory. You can walk it with any BIDS-aware tool, or simply use
-[`pathlib`][pathlib] globs for quick exploration:
+Datasets fetcher return a [`pathlib.Path`][pathlib.Path] to the dataset's root
+directory. You may want to use the [PyBIDS](https://bids-standard.github.io/pybids/)
+package for querying files, or simply use [`pathlib`][pathlib] for quick exploration:
 
 ```python
 # List every power Doppler NIfTI for one subject.
@@ -205,8 +206,8 @@ Xarray DataArrays.
 
 ## API Reference
 
-See the [`confusius.datasets` API reference][confusius.datasets] for the full list
-of parameters and return types.
+See the [`confusius.datasets` API reference][confusius.datasets] for the full list of
+parameters and return types.
 
 [^nunez2022]:
     Nunez-Elizalde, A.O. et al. (2022). Neural correlates of blood flow measured by
