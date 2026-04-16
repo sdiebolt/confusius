@@ -82,10 +82,10 @@ list_datasets()
 ```text
            Available Datasets
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┓
-┃ Fetch function              ┃     Size ┃
+┃ Fetch function             ┃     Size ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━┩
-│ fetch_cybis_pereira_2026    │    12 GB │
-│ fetch_nunez_elizalde_2022   │ 6.503 GB │
+│ fetch_cybis_pereira_2026   │    12 GB │
+│ fetch_nunez_elizalde_2022  │ 6.503 GB │
 └────────────────────────────┴──────────┘
 ```
 
