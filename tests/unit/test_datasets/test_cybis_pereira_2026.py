@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 import requests
 
 from confusius.datasets import fetch_cybis_pereira_2026
-from confusius.datasets._cybis_pereira_2026 import (
-    _BIDS_ROOT,
-    _INDEX_FILENAME,
-    _MAX_DOWNLOAD_RETRIES,
-)
+from confusius.datasets._cybis_pereira_2026 import _BIDS_ROOT, _OSF_PROJECT_ID
+from confusius.datasets._pooch import _MAX_DOWNLOAD_RETRIES
 
 # Minimal fake index representing the different file categories in the dataset.
 _FAKE_INDEX = {
@@ -88,9 +84,9 @@ def _make_retrieve(bids_dir: Path):
 
 @pytest.fixture
 def mock_get_index(tmp_path):
-    """Patch _get_index to return the fake index without network access."""
+    """Stub `get_index` so fetch tests don't hit the network."""
     with patch(
-        "confusius.datasets._cybis_pereira_2026._get_index",
+        "confusius.datasets._cybis_pereira_2026.get_index",
         return_value=_FAKE_INDEX,
     ) as mock:
         yield mock
@@ -101,7 +97,7 @@ def mock_retrieve(tmp_path):
     """Patch pooch.retrieve to create stub files instead of downloading."""
     bids_dir = tmp_path / _BIDS_ROOT
     with patch(
-        "confusius.datasets._cybis_pereira_2026.pooch.retrieve",
+        "confusius.datasets._pooch.pooch.retrieve",
         side_effect=_make_retrieve(bids_dir),
     ) as mock:
         yield mock
@@ -143,9 +139,7 @@ def test_fetch_returns_immediately_when_all_cached(tmp_path, mock_get_index):
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.touch()
 
-    with patch(
-        "confusius.datasets._cybis_pereira_2026.pooch.retrieve"
-    ) as mock_retrieve:
+    with patch("confusius.datasets._pooch.pooch.retrieve") as mock_retrieve:
         fetch_cybis_pereira_2026(data_dir=tmp_path)
         mock_retrieve.assert_not_called()
 
@@ -325,10 +319,10 @@ def test_fetch_retries_on_transient_failure(tmp_path, mock_get_index):
 
     with (
         patch(
-            "confusius.datasets._cybis_pereira_2026.pooch.retrieve",
+            "confusius.datasets._pooch.pooch.retrieve",
             side_effect=flaky_retrieve,
         ),
-        patch("confusius.datasets._cybis_pereira_2026.time.sleep"),
+        patch("confusius.datasets._pooch.time.sleep"),
     ):
         fetch_cybis_pereira_2026(data_dir=tmp_path)
 
@@ -355,10 +349,10 @@ def test_fetch_raises_after_max_retries(tmp_path, mock_get_index):
 
     with (
         patch(
-            "confusius.datasets._cybis_pereira_2026.pooch.retrieve",
+            "confusius.datasets._pooch.pooch.retrieve",
             side_effect=always_fails,
         ) as mock_retrieve,
-        patch("confusius.datasets._cybis_pereira_2026.time.sleep"),
+        patch("confusius.datasets._pooch.time.sleep"),
     ):
         with pytest.raises(requests.exceptions.ReadTimeout):
             fetch_cybis_pereira_2026(data_dir=tmp_path)
@@ -375,135 +369,9 @@ def test_fetch_refresh_passes_flag_to_get_index(
     tmp_path, mock_get_index, mock_retrieve
 ):
     fetch_cybis_pereira_2026(data_dir=tmp_path, refresh=True)
-    mock_get_index.assert_called_once_with(tmp_path / _BIDS_ROOT, refresh=True)
-
-
-# ---------------------------------------------------------------------------
-# _get_index and _resolve_index_url — network paths
-# ---------------------------------------------------------------------------
-
-
-def _make_osf_responses(index_data: dict) -> list[MagicMock]:
-    """Build mock requests.get responses for the full OSF resolution chain.
-
-    Three sequential calls are mocked:
-    1. OSF storage root listing (finds the BIDS folder)
-    2. BIDS folder listing (finds dataset_index.json)
-    3. dataset_index.json download
-    """
-    folder_href = "https://api.osf.io/v2/nodes/2v6f7/files/osfstorage/folder/"
-    index_download_url = "https://files.osf.io/v1/resources/2v6f7/index"
-
-    root_resp = MagicMock()
-    root_resp.raise_for_status.return_value = None
-    root_resp.json.return_value = {
-        "data": [
-            {
-                "attributes": {"name": "cybis-pereira-2026-bids"},
-                "relationships": {
-                    "files": {"links": {"related": {"href": folder_href}}}
-                },
-            }
-        ]
-    }
-
-    folder_resp = MagicMock()
-    folder_resp.raise_for_status.return_value = None
-    folder_resp.json.return_value = {
-        "data": [
-            {
-                "attributes": {"name": "dataset_index.json"},
-                "links": {"download": index_download_url},
-            }
-        ]
-    }
-
-    index_resp = MagicMock()
-    index_resp.raise_for_status.return_value = None
-    index_resp.json.return_value = index_data
-
-    return [root_resp, folder_resp, index_resp]
-
-
-def test_fetch_downloads_and_caches_index(tmp_path, mock_retrieve):
-    """When no cache exists, index is fetched from OSF and written to disk."""
-    responses = _make_osf_responses(_FAKE_INDEX)
-    with patch(
-        "confusius.datasets._cybis_pereira_2026.requests.get", side_effect=responses
-    ):
-        fetch_cybis_pereira_2026(data_dir=tmp_path)
-
-    index_path = tmp_path / _BIDS_ROOT / _INDEX_FILENAME
-    assert index_path.exists()
-    assert json.loads(index_path.read_text()) == _FAKE_INDEX
-
-
-def test_fetch_uses_cached_index_without_network(tmp_path, mock_retrieve):
-    """With a warm cache and refresh=False, no HTTP calls are made."""
-    bids_dir = tmp_path / _BIDS_ROOT
-    bids_dir.mkdir(parents=True)
-    (bids_dir / _INDEX_FILENAME).write_text(json.dumps(_FAKE_INDEX))
-
-    with patch("confusius.datasets._cybis_pereira_2026.requests.get") as mock_requests:
-        fetch_cybis_pereira_2026(data_dir=tmp_path)
-
-    mock_requests.assert_not_called()
-
-
-def test_fetch_refreshes_index_when_requested(tmp_path, mock_retrieve):
-    """refresh=True re-fetches the index even when a cached copy exists."""
-    bids_dir = tmp_path / _BIDS_ROOT
-    bids_dir.mkdir(parents=True)
-    (bids_dir / _INDEX_FILENAME).write_text(json.dumps({"stale": "data"}))
-
-    updated_index = {**_FAKE_INDEX}
-    responses = _make_osf_responses(updated_index)
-    with patch(
-        "confusius.datasets._cybis_pereira_2026.requests.get", side_effect=responses
-    ):
-        fetch_cybis_pereira_2026(data_dir=tmp_path, refresh=True)
-
-    cached = json.loads((bids_dir / _INDEX_FILENAME).read_text())
-    assert cached == updated_index
-
-
-def test_fetch_raises_if_bids_folder_not_on_osf(tmp_path):
-    """RuntimeError propagates when the BIDS root folder is missing on OSF."""
-    resp = MagicMock()
-    resp.raise_for_status.return_value = None
-    resp.json.return_value = {"data": [{"attributes": {"name": "other-folder"}}]}
-
-    with patch(
-        "confusius.datasets._cybis_pereira_2026.requests.get", return_value=resp
-    ):
-        with pytest.raises(RuntimeError, match="cybis-pereira-2026-bids"):
-            fetch_cybis_pereira_2026(data_dir=tmp_path)
-
-
-def test_fetch_raises_if_index_file_not_on_osf(tmp_path):
-    """RuntimeError propagates when dataset_index.json is absent from OSF."""
-    folder_href = "https://api.osf.io/v2/nodes/2v6f7/files/osfstorage/folder/"
-
-    root_resp = MagicMock()
-    root_resp.raise_for_status.return_value = None
-    root_resp.json.return_value = {
-        "data": [
-            {
-                "attributes": {"name": "cybis-pereira-2026-bids"},
-                "relationships": {
-                    "files": {"links": {"related": {"href": folder_href}}}
-                },
-            }
-        ]
-    }
-
-    folder_resp = MagicMock()
-    folder_resp.raise_for_status.return_value = None
-    folder_resp.json.return_value = {"data": []}
-
-    with patch(
-        "confusius.datasets._cybis_pereira_2026.requests.get",
-        side_effect=[root_resp, folder_resp],
-    ):
-        with pytest.raises(RuntimeError, match="dataset_index.json"):
-            fetch_cybis_pereira_2026(data_dir=tmp_path)
+    mock_get_index.assert_called_once_with(
+        tmp_path / _BIDS_ROOT,
+        _OSF_PROJECT_ID,
+        _BIDS_ROOT,
+        refresh=True,
+    )

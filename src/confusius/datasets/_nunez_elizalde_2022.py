@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-import json
-import logging
 import re
 from pathlib import Path
 
 import pooch
-import requests
-from rich.logging import RichHandler
 from rich.progress import (
     BarColumn,
     MofNCompleteColumn,
@@ -20,97 +16,18 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
+from ._osf import _OSF_DOWNLOAD_BASE, get_index
+from ._pooch import quiet_pooch_logger, retrieve_with_retries
 from ._utils import get_datasets_dir
 
 _OSF_PROJECT_ID = "43skw"
 _BIDS_ROOT = "nunez-elizalde-2022-bids"
-_INDEX_FILENAME = "dataset_index.json"
-_OSF_DOWNLOAD_BASE = "https://osf.io/download/{}/"
 _TOTAL_SIZE_BYTES = 6_982_575_320
 
-
-def _resolve_index_url() -> str:
-    """Find the dataset_index.json download URL via the OSF API.
-
-    Makes two API calls: one to get the BIDS root folder, one to find the
-    index file within it.
-
-    Returns
-    -------
-    str
-        Direct download URL for dataset_index.json.
-
-    Raises
-    ------
-    RuntimeError
-        If the index file is not found. This means nunez-upload --index-only
-        has not been run yet.
-    """
-    # Get root storage listing to find the BIDS root folder.
-    resp = requests.get(
-        f"https://api.osf.io/v2/nodes/{_OSF_PROJECT_ID}/files/osfstorage/"
-    )
-    resp.raise_for_status()
-
-    folder_url = None
-    for item in resp.json()["data"]:
-        if item["attributes"]["name"] == _BIDS_ROOT:
-            folder_url = item["relationships"]["files"]["links"]["related"]["href"]
-            break
-
-    if folder_url is None:
-        raise RuntimeError(
-            f"Could not find the {_BIDS_ROOT!r} folder on OSF "
-            f"(project {_OSF_PROJECT_ID})."
-        )
-
-    # Find dataset_index.json inside the BIDS root folder.
-    resp = requests.get(folder_url)
-    resp.raise_for_status()
-
-    for item in resp.json()["data"]:
-        if item["attributes"]["name"] == _INDEX_FILENAME:
-            return item["links"]["download"]
-
-    raise RuntimeError(
-        f"{_INDEX_FILENAME!r} was not found on OSF (project {_OSF_PROJECT_ID}). "
-        "Run 'nunez-upload --index-only' from the nunez-elizalde-2022-bids "
-        "repository to generate it."
-    )
-
-
-def _get_index(data_dir: Path, refresh: bool = False) -> dict[str, str]:
-    """Return the dataset index.
-
-    Uses the locally cached index when available and `refresh` is False,
-    enabling offline use. When `refresh` is True or no cached index exists,
-    fetches the latest version from OSF.
-
-    Parameters
-    ----------
-    data_dir : pathlib.Path
-        Local directory where the index is cached.
-    refresh : bool, default: False
-        If True, always fetch the latest index from OSF even if a local copy
-        exists.
-
-    Returns
-    -------
-    dict[str, str]
-        Mapping from BIDS-relative file paths to OSF file IDs.
-    """
-    index_path = data_dir / _INDEX_FILENAME
-    if not refresh and index_path.exists():
-        return json.loads(index_path.read_text(encoding="utf-8"))
-
-    url = _resolve_index_url()
-    response = requests.get(url)
-    response.raise_for_status()
-    index = response.json()
-    index_path.write_text(
-        json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    return index
+_MISSING_INDEX_HINT = (
+    "Run 'nunez-upload --index-only' from the nunez-elizalde-2022-bids "
+    "repository to generate it."
+)
 
 
 def _filter_files(
@@ -128,7 +45,7 @@ def _filter_files(
     Parameters
     ----------
     index : dict[str, str]
-        Full dataset index as returned by `_get_index`.
+        Full dataset index as returned by `get_index`.
     subjects : list[str] or None
         Subject IDs to include (without "sub-" prefix), e.g. `["CR020"]`. If `None`, all
         subjects are included.
@@ -274,29 +191,21 @@ def fetch_nunez_elizalde_2022(
     bids_dir = get_datasets_dir(data_dir) / _BIDS_ROOT
     bids_dir.mkdir(parents=True, exist_ok=True)
 
-    index = _get_index(bids_dir, refresh=refresh)
+    index = get_index(
+        bids_dir,
+        _OSF_PROJECT_ID,
+        _BIDS_ROOT,
+        refresh=refresh,
+        missing_index_hint=_MISSING_INDEX_HINT,
+    )
     files = _filter_files(index, subjects, sessions, tasks, acqs)
 
     missing = {p: i for p, i in files.items() if not (bids_dir / p).exists()}
     if not missing:
         return bids_dir
 
-    # Suppress pooch's INFO-level messages (SHA256 suggestions, download URLs) and route
-    # any warnings/errors through rich so they don't break the progress bar layout.
-    # Pooch uses logging.Logger("pooch") directly rather than
-    # logging.getLogger("pooch"), so we must go through pooch.get_logger().
-    pooch_logger = pooch.get_logger()
-    original_handlers = pooch_logger.handlers[:]
-    original_level = pooch_logger.level
-
-    for handler in original_handlers:
-        pooch_logger.removeHandler(handler)
-    pooch_logger.addHandler(
-        RichHandler(level=logging.WARNING, show_time=False, show_path=False)
-    )
-    pooch_logger.setLevel(logging.WARNING)
-
-    try:
+    with quiet_pooch_logger():
+        pooch_logger = pooch.get_logger()
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -314,21 +223,13 @@ def fetch_nunez_elizalde_2022(
                     task,
                     description=f"Downloading [bold]{Path(rel_path).name}[/bold]",
                 )
-                pooch.retrieve(
+                retrieve_with_retries(
                     url=_OSF_DOWNLOAD_BASE.format(osf_id.lstrip("/")),
-                    known_hash=None,
-                    fname=dest.name,
-                    path=dest.parent,
-                    progressbar=False,
+                    dest=dest,
+                    logger=pooch_logger,
                 )
                 progress.advance(task)
 
             progress.update(task, description="Download complete.")
-    finally:
-        for handler in pooch_logger.handlers[:]:
-            pooch_logger.removeHandler(handler)
-        for handler in original_handlers:
-            pooch_logger.addHandler(handler)
-        pooch_logger.setLevel(original_level)
 
     return bids_dir
