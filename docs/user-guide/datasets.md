@@ -80,13 +80,13 @@ list_datasets()
 ```
 
 ```text
-           Available Datasets
-┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┓
-┃ Fetch function             ┃     Size ┃
-┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━┩
-│ fetch_cybis_pereira_2026   │    12 GB │
-│ fetch_nunez_elizalde_2022  │ 6.503 GB │
-└────────────────────────────┴──────────┘
+                Available Datasets
+┏━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┓
+┃ Fetch function            ┃     Size ┃ On disk ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━┩
+│ fetch_cybis_pereira_2026  │    12 GB │    ✗    │
+│ fetch_nunez_elizalde_2022 │ 6.503 GB │    ✗    │
+└───────────────────────────┴──────────┴─────────┘
 ```
 
 The sizes shown are for the **full** dataset. Filtered fetches are typically a small
