@@ -116,7 +116,7 @@ def retrieve_with_retries(
             time.sleep(wait)
 
 
-class RichProgressAdapter:  # pragma: no cover
+class _RichProgressAdapter:  # pragma: no cover
     """Adapt a rich Progress task to the tqdm-like interface pooch expects.
 
     Pooch's `HTTPDownloader` calls `.update(chunk_size)` during streaming,

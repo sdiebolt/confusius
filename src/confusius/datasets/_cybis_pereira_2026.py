@@ -19,7 +19,7 @@ from rich.progress import (
 )
 
 from ._osf import _OSF_DOWNLOAD_BASE, get_index
-from ._pooch import RichProgressAdapter, quiet_pooch_logger, retrieve_with_retries
+from ._pooch import _RichProgressAdapter, quiet_pooch_logger, retrieve_with_retries
 from ._utils import get_datasets_dir
 
 _OSF_PROJECT_ID = "2v6f7"
@@ -287,7 +287,7 @@ def fetch_cybis_pereira_2026(
                     task,
                     description=(f"Downloading [bold]{Path(rel_path).name}[/bold]"),
                 )
-                adapter = RichProgressAdapter(progress, task)
+                adapter = _RichProgressAdapter(progress, task)
                 osf_path = file_info["osf_path"]
                 retrieve_with_retries(
                     url=_OSF_DOWNLOAD_BASE.format(osf_path.lstrip("/")),

@@ -49,9 +49,7 @@ def resolve_index_url(
     RuntimeError
         If the BIDS root folder or the index file is not found on OSF.
     """
-    resp = requests.get(
-        f"https://api.osf.io/v2/nodes/{project_id}/files/osfstorage/"
-    )
+    resp = requests.get(f"https://api.osf.io/v2/nodes/{project_id}/files/osfstorage/")
     resp.raise_for_status()
 
     folder_url = None
@@ -62,8 +60,7 @@ def resolve_index_url(
 
     if folder_url is None:
         raise RuntimeError(
-            f"Could not find the {bids_root!r} folder on OSF "
-            f"(project {project_id})."
+            f"Could not find the {bids_root!r} folder on OSF (project {project_id})."
         )
 
     resp = requests.get(folder_url)
