@@ -191,7 +191,7 @@ missing.
 
 ## Working with fUSI-BIDS Datasets
 
-Datasets fetcher return a [`pathlib.Path`][pathlib.Path] to the dataset's root
+Dataset fetchers return a [`pathlib.Path`][pathlib.Path] to the dataset's root
 directory. You may want to use the [PyBIDS](https://bids-standard.github.io/pybids/)
 package for querying files, or simply use [`pathlib`][pathlib] for quick exploration:
 
