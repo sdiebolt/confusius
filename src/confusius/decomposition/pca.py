@@ -15,7 +15,7 @@ from confusius.validation import validate_time_series
 class PCA(BaseEstimator, TransformerMixin):
     """Principal component analysis for fUSI `xarray.DataArray` inputs.
 
-    This estimator wraps [`sklearn.decomposition.PCA`][sklearn.decomposition.PCA]
+    This estimator wraps `sklearn.decomposition.PCA`
     but keeps xarray metadata through `transform` and `inverse_transform`:
 
     - Input data are expected as `(time, ...)` where `...` are spatial dimensions.
