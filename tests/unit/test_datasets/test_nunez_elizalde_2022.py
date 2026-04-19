@@ -6,6 +6,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+import requests
 
 from confusius.datasets import fetch_nunez_elizalde_2022, get_datasets_dir
 from confusius.datasets._nunez_elizalde_2022 import (
@@ -13,29 +14,63 @@ from confusius.datasets._nunez_elizalde_2022 import (
     _MISSING_INDEX_HINT,
     _OSF_PROJECT_ID,
 )
+from confusius.datasets._pooch import _MAX_DOWNLOAD_RETRIES
 
 # Minimal fake index representing the different file categories in the dataset.
 _FAKE_INDEX = {
     # Top-level BIDS metadata — always included.
-    "dataset_description.json": "/file001",
-    "participants.tsv": "/file002",
+    "dataset_description.json": {"osf_path": "/file001", "size": 100},
+    "participants.tsv": {"osf_path": "/file002", "size": 200},
     # Subject-level file — always included when subject passes the filter.
-    "sub-CR020/sub-CR020_sessions.tsv": "/file003",
+    "sub-CR020/sub-CR020_sessions.tsv": {"osf_path": "/file003", "size": 300},
     # Angio — always included regardless of task filter.
-    "sub-CR020/ses-20191122/angio/sub-CR020_ses-20191122_pwd.nii.gz": "/file004",
+    "sub-CR020/ses-20191122/angio/sub-CR020_ses-20191122_pwd.nii.gz": {
+        "osf_path": "/file004",
+        "size": 400,
+    },
     # fUSI — task-filtered.
-    "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-kalatsky_acq-slice01_pwd.nii.gz": "/file005",
-    "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-spontaneous_acq-slice01_pwd.nii.gz": "/file006",
-    "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-spontaneous_acq-slice03_pwd.nii.gz": "/file009",
+    "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-kalatsky_acq-slice01_pwd.nii.gz": {
+        "osf_path": "/file005",
+        "size": 500,
+    },
+    "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-spontaneous_acq-slice01_pwd.nii.gz": {
+        "osf_path": "/file006",
+        "size": 600,
+    },
+    "sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_task-spontaneous_acq-slice03_pwd.nii.gz": {
+        "osf_path": "/file009",
+        "size": 900,
+    },
     # Second session — session-filtered.
-    "sub-CR020/ses-20191121/angio/sub-CR020_ses-20191121_pwd.nii.gz": "/file007",
-    "sub-CR020/ses-20191121/fusi/sub-CR020_ses-20191121_task-kalatsky_acq-slice01_pwd.nii.gz": "/file008",
+    "sub-CR020/ses-20191121/angio/sub-CR020_ses-20191121_pwd.nii.gz": {
+        "osf_path": "/file007",
+        "size": 700,
+    },
+    "sub-CR020/ses-20191121/fusi/sub-CR020_ses-20191121_task-kalatsky_acq-slice01_pwd.nii.gz": {
+        "osf_path": "/file008",
+        "size": 800,
+    },
     # Derivatives — should also be subject/session-filtered.
-    "derivatives/allenccf_align/dataset_description.json": "/file010",
-    "derivatives/allenccf_align/structure_tree_safe_2017.csv": "/file011",
-    "derivatives/allenccf_align/sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_space-fusi_desc-allenccf_dseg.nii.gz": "/file012",
-    "derivatives/allenccf_align/sub-CR020/ses-20191121/fusi/sub-CR020_ses-20191121_space-fusi_desc-allenccf_dseg.nii.gz": "/file013",
-    "derivatives/allenccf_align/sub-OTHER/ses-20191122/fusi/sub-OTHER_ses-20191122_space-fusi_desc-allenccf_dseg.nii.gz": "/file014",
+    "derivatives/allenccf_align/dataset_description.json": {
+        "osf_path": "/file010",
+        "size": 1000,
+    },
+    "derivatives/allenccf_align/structure_tree_safe_2017.csv": {
+        "osf_path": "/file011",
+        "size": 1100,
+    },
+    "derivatives/allenccf_align/sub-CR020/ses-20191122/fusi/sub-CR020_ses-20191122_space-fusi_desc-allenccf_dseg.nii.gz": {
+        "osf_path": "/file012",
+        "size": 1200,
+    },
+    "derivatives/allenccf_align/sub-CR020/ses-20191121/fusi/sub-CR020_ses-20191121_space-fusi_desc-allenccf_dseg.nii.gz": {
+        "osf_path": "/file013",
+        "size": 1300,
+    },
+    "derivatives/allenccf_align/sub-OTHER/ses-20191122/fusi/sub-OTHER_ses-20191122_space-fusi_desc-allenccf_dseg.nii.gz": {
+        "osf_path": "/file014",
+        "size": 1400,
+    },
 }
 
 
@@ -223,8 +258,11 @@ def test_fetch_acq_filter_excludes_non_matching_fusi_includes_angio(
 def test_fetch_subject_filter(tmp_path, mock_retrieve):
     index_with_two_subjects = {
         **_FAKE_INDEX,
-        "sub-OTHER/sub-OTHER_sessions.tsv": "/file999",
-        "sub-OTHER/ses-20191122/angio/sub-OTHER_ses-20191122_pwd.nii.gz": "/file998",
+        "sub-OTHER/sub-OTHER_sessions.tsv": {"osf_path": "/file999", "size": 999},
+        "sub-OTHER/ses-20191122/angio/sub-OTHER_ses-20191122_pwd.nii.gz": {
+            "osf_path": "/file998",
+            "size": 998,
+        },
     }
     with patch(
         "confusius.datasets._nunez_elizalde_2022.get_index",
@@ -235,6 +273,97 @@ def test_fetch_subject_filter(tmp_path, mock_retrieve):
     downloaded = {c.kwargs["fname"] for c in mock_retrieve.call_args_list}
     assert "sub-OTHER_sessions.tsv" not in downloaded
     assert "sub-OTHER_ses-20191122_pwd.nii.gz" not in downloaded
+
+
+def test_fetch_accepts_string_filters(tmp_path, mock_get_index, mock_retrieve):
+    fetch_nunez_elizalde_2022(
+        data_dir=tmp_path,
+        subjects="CR020",
+        sessions="20191122",
+        tasks="kalatsky",
+        acqs="slice01",
+    )
+
+    downloaded = {c.kwargs["fname"] for c in mock_retrieve.call_args_list}
+    assert "sub-CR020_ses-20191122_task-kalatsky_acq-slice01_pwd.nii.gz" in downloaded
+    assert (
+        "sub-CR020_ses-20191122_task-spontaneous_acq-slice01_pwd.nii.gz"
+        not in downloaded
+    )
+
+
+# ---------------------------------------------------------------------------
+# fetch_nunez_elizalde_2022 — retry behaviour
+# ---------------------------------------------------------------------------
+
+
+def test_fetch_retries_on_transient_failure(tmp_path, mock_get_index):
+    """Transient network errors are retried and eventually succeed."""
+    bids_dir = tmp_path / _BIDS_ROOT
+
+    target_rel = (
+        "sub-CR020/ses-20191122/fusi/"
+        "sub-CR020_ses-20191122_task-kalatsky_acq-slice01_pwd.nii.gz"
+    )
+    for rel in _FAKE_INDEX:
+        if rel == target_rel:
+            continue
+        dest = bids_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.touch()
+
+    call_count = {"n": 0}
+
+    def flaky_retrieve(url, known_hash, fname, path, progressbar):
+        call_count["n"] += 1
+        if call_count["n"] < _MAX_DOWNLOAD_RETRIES:
+            raise requests.exceptions.ReadTimeout("simulated timeout")
+        dest = Path(path) / fname
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.touch()
+        return str(dest)
+
+    with (
+        patch(
+            "confusius.datasets._pooch.pooch.retrieve",
+            side_effect=flaky_retrieve,
+        ),
+        patch("confusius.datasets._pooch.time.sleep"),
+    ):
+        fetch_nunez_elizalde_2022(data_dir=tmp_path)
+
+    assert call_count["n"] == _MAX_DOWNLOAD_RETRIES
+
+
+def test_fetch_raises_after_max_retries(tmp_path, mock_get_index):
+    """Persistent network errors propagate after the retry budget is exhausted."""
+    bids_dir = tmp_path / _BIDS_ROOT
+
+    target_rel = (
+        "sub-CR020/ses-20191122/fusi/"
+        "sub-CR020_ses-20191122_task-kalatsky_acq-slice01_pwd.nii.gz"
+    )
+    for rel in _FAKE_INDEX:
+        if rel == target_rel:
+            continue
+        dest = bids_dir / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.touch()
+
+    def always_fails(url, known_hash, fname, path, progressbar):
+        raise requests.exceptions.ReadTimeout("persistent timeout")
+
+    with (
+        patch(
+            "confusius.datasets._pooch.pooch.retrieve",
+            side_effect=always_fails,
+        ) as mock_retrieve,
+        patch("confusius.datasets._pooch.time.sleep"),
+    ):
+        with pytest.raises(requests.exceptions.ReadTimeout):
+            fetch_nunez_elizalde_2022(data_dir=tmp_path)
+
+    assert mock_retrieve.call_count == _MAX_DOWNLOAD_RETRIES
 
 
 # ---------------------------------------------------------------------------

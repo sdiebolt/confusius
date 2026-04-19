@@ -7,14 +7,14 @@ icon: lucide/database
 The [`confusius.datasets`][confusius.datasets] module provides fetchers for publicly
 available atlases, templates, and fUSI datasets distributed in
 [fUSI-BIDS](https://bids.neuroimaging.io/) format. Each fetcher downloads the dataset
-on first call, caches it locally for offline re-use, and returns either the path to the
+on first call, caches it locally for offline reuse, and returns either the path to the
 root directory, or a more specific object (e.g., an [`Atlas`][confusius.atlas.Atlas]
 instance for atlases]).
 
 !!! tip "Try before you buy"
-    Fetchers accept filters (subjects, sessions, tasks, derivatives, etc. so you can
-    download a small subset first and decide whether you want the full dataset later.
-    Cached files are never re-downloaded.
+    Fetchers generally accept filters (subjects, sessions, tasks, derivatives, etc.) so
+    you can download a small subset first and decide later whether you want the full
+    dataset. Cached files are never re-downloaded.
 
 ## Quick Start
 
@@ -46,7 +46,7 @@ print(pwd.dims)
 ```
 
 
-## Where Data Is Cached
+## Datasets Storage
 
 ConfUSIus resolves the cache directory using the following priority chain:
 
@@ -68,7 +68,7 @@ print(get_datasets_dir())
 Each fetcher creates its own BIDS-root subdirectory under this path (e.g.
 `nunez-elizalde-2022-bids/`), so multiple datasets can coexist safely.
 
-## Discovering Available Datasets
+## Listing Available Datasets
 
 Use [`list_datasets`][confusius.datasets.list_datasets] to print a table of available
 fetchers and their full download sizes:
@@ -175,23 +175,9 @@ fraction of this (see the examples below).
     )
     ```
 
-## Refreshing the Dataset Index
-
-Each fetcher caches a `dataset_index.json` mapping BIDS-relative paths to OSF file
-IDs. Pass `refresh=True` to re-fetch this index from OSF and download any new files
-that appeared since the last call:
-
-```python
-# Pick up any files added to OSF since the last fetch.
-bids_root = fetch_nunez_elizalde_2022(subjects=["CR020"], refresh=True)
-```
-
-Existing local files are never re-downloaded—`refresh=True` only adds what is
-missing.
-
 ## Working with fUSI-BIDS Datasets
 
-Dataset fetchers return a [`pathlib.Path`][pathlib.Path] to the dataset's root
+fUSI-BIDS dataset fetchers return a [`pathlib.Path`][pathlib.Path] to the dataset's root
 directory. You may want to use the [PyBIDS](https://bids-standard.github.io/pybids/)
 package for querying files, or simply use [`pathlib`][pathlib] for quick exploration:
 
@@ -203,6 +189,19 @@ for nii in sorted((bids_root / "sub-CR020").rglob("*_pwd.nii.gz")):
 
 See the [I/O guide](io.md) for loading NIfTI, Zarr, and Iconeus SCAN files into
 Xarray DataArrays.
+
+### Refreshing the Dataset Index
+
+Each fUSI-BIDS dataset fetcher caches a `dataset_index.json` file mapping BIDS-relative
+paths to OSF file metadata (download path and size). Pass `refresh=True` to re-fetch
+this index from OSF and download any new files that appeared since the last call:
+
+```python
+# Pick up any files added to OSF since the last fetch.
+bids_root = fetch_nunez_elizalde_2022(subjects=["CR020"], refresh=True)
+```
+
+Existing local files are never re-downloaded—`refresh=True` only adds what is missing.
 
 ## API Reference
 

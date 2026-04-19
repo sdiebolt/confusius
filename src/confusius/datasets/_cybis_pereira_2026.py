@@ -4,34 +4,14 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import cast
 
-import pooch
-from rich.progress import (
-    BarColumn,
-    DownloadColumn,
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-    TransferSpeedColumn,
-)
-
-from ._osf import _OSF_DOWNLOAD_BASE, get_index
-from ._pooch import _RichProgressAdapter, quiet_pooch_logger, retrieve_with_retries
+from ._osf import OsfFileInfo, download_missing_osf_files, get_index
 from ._utils import get_datasets_dir
 
 _OSF_PROJECT_ID = "2v6f7"
 _BIDS_ROOT = "cybis-pereira-2026-bids"
 _TOTAL_SIZE_BYTES = 12_883_924_421
-
-
-class _FileInfo(TypedDict):
-    """Per-file entry in the dataset index."""
-
-    osf_path: str
-    size: int
 
 
 _VALID_DATASETS = frozenset(
@@ -48,12 +28,12 @@ _VALID_DATASETS = frozenset(
 
 
 def _filter_files(
-    index: dict[str, _FileInfo],
+    index: dict[str, OsfFileInfo],
     datasets: list[str] | None,
     subjects: list[str] | None,
     sessions: list[str] | None,
     acqs: list[str] | None,
-) -> dict[str, _FileInfo]:
+) -> dict[str, OsfFileInfo]:
     """Filter the index to files matching the requested datasets and subjects.
 
     Top-level BIDS metadata files (dataset_description.json, participants.*,
@@ -65,7 +45,7 @@ def _filter_files(
 
     Parameters
     ----------
-    index : dict[str, _FileInfo]
+    index : dict[str, OsfFileInfo]
         Full dataset index as returned by `get_index`.
     datasets : list[str] or None
         Datasets to include. Use `"rawdata"` for the raw subject data and
@@ -86,10 +66,10 @@ def _filter_files(
 
     Returns
     -------
-    dict[str, _FileInfo]
+    dict[str, OsfFileInfo]
         Subset of the index matching the filters.
     """
-    filtered: dict[str, _FileInfo] = {}
+    filtered: dict[str, OsfFileInfo] = {}
 
     for path, file_info in index.items():
         parts = Path(path).parts
@@ -256,47 +236,11 @@ def fetch_cybis_pereira_2026(
             )
 
     index = cast(
-        "dict[str, _FileInfo]",
+        "dict[str, OsfFileInfo]",
         get_index(bids_dir, _OSF_PROJECT_ID, _BIDS_ROOT, refresh=refresh),
     )
     files = _filter_files(index, datasets, subjects, sessions, acqs)
 
-    missing = {p: info for p, info in files.items() if not (bids_dir / p).exists()}
-    if not missing:
-        return bids_dir
-
-    total_bytes = sum(info["size"] for info in missing.values())
-
-    with quiet_pooch_logger():
-        pooch_logger = pooch.get_logger()
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            BarColumn(),
-            DownloadColumn(),
-            TransferSpeedColumn(),
-            TimeElapsedColumn(),
-            TimeRemainingColumn(),
-        ) as progress:
-            task = progress.add_task("Downloading dataset...", total=total_bytes)
-
-            for rel_path, file_info in missing.items():
-                dest = bids_dir / rel_path
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                progress.update(
-                    task,
-                    description=(f"Downloading [bold]{Path(rel_path).name}[/bold]"),
-                )
-                adapter = _RichProgressAdapter(progress, task)
-                osf_path = file_info["osf_path"]
-                retrieve_with_retries(
-                    url=_OSF_DOWNLOAD_BASE.format(osf_path.lstrip("/")),
-                    dest=dest,
-                    logger=pooch_logger,
-                    progressbar=adapter,
-                    on_retry=adapter.rewind,
-                )
-
-            progress.update(task, description="Download complete.")
+    download_missing_osf_files(bids_dir, files)
 
     return bids_dir

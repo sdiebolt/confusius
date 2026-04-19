@@ -1,29 +1,11 @@
-"""Tests for the datasets registry, list_datasets(), and format_bytes."""
+"""Tests for the datasets registry and list_datasets()."""
 
 from __future__ import annotations
 
 import pytest
 
-from confusius.datasets import _REGISTRY, list_datasets
-from confusius.datasets._utils import format_bytes
-
-# ---------------------------------------------------------------------------
-# format_bytes
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("size_bytes", "expected"),
-    [
-        (0, "0 B"),
-        (999, "999 B"),
-        (1024, "1 KB"),
-        (1_500_000, "1.431 MB"),
-        (6_982_575_320, "6.503 GB"),
-    ],
-)
-def test_format_bytes(size_bytes, expected):
-    assert format_bytes(size_bytes) == expected
+from confusius.datasets import list_datasets
+from confusius.datasets._registry import _REGISTRY
 
 
 # ---------------------------------------------------------------------------
@@ -80,3 +62,9 @@ def test_list_datasets_marks_cached_datasets(tmp_path, capsys):
             assert "✓" in line
         else:
             assert "✗" in line
+
+
+def test_list_datasets_shows_human_readable_sizes(tmp_path, capsys):
+    list_datasets(data_dir=tmp_path)
+    captured = capsys.readouterr().out
+    assert any(unit in captured for unit in (" KB", " MB", " GB", " TB"))

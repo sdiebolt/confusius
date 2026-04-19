@@ -3,18 +3,36 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any, TypedDict
 
+import pooch
 import requests
+from rich.progress import (
+    BarColumn,
+    DownloadColumn,
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+    TransferSpeedColumn,
+)
 
-if TYPE_CHECKING:
-    from pathlib import Path
+from ._pooch import _RichProgressAdapter, quiet_pooch_logger, retrieve_with_retries
 
 _OSF_DOWNLOAD_BASE = "https://osf.io/download/{}/"
 """URL template for direct downloads of an OSF file by id."""
 
 _INDEX_FILENAME = "dataset_index.json"
-"""Filename of the per-dataset index mapping BIDS-relative paths to OSF ids."""
+"""Filename of the per-dataset index mapping BIDS-relative paths to metadata."""
+
+
+class OsfFileInfo(TypedDict):
+    """Per-file metadata entry in an OSF-backed dataset index."""
+
+    osf_path: str
+    size: int
 
 
 def resolve_index_url(
@@ -127,3 +145,52 @@ def get_index(
         json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     return index
+
+
+def download_missing_osf_files(bids_dir: Path, files: dict[str, OsfFileInfo]) -> None:
+    """Download missing OSF files described by an index mapping.
+
+    Parameters
+    ----------
+    bids_dir : pathlib.Path
+        Local BIDS root directory where files are cached.
+    files : dict[str, OsfFileInfo]
+        Mapping from BIDS-relative paths to OSF download metadata.
+    """
+    missing = {p: info for p, info in files.items() if not (bids_dir / p).exists()}
+    if not missing:
+        return
+
+    total_bytes = sum(info["size"] for info in missing.values())
+
+    with quiet_pooch_logger():
+        pooch_logger = pooch.get_logger()
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
+            TimeElapsedColumn(),
+            TimeRemainingColumn(),
+        ) as progress:
+            task = progress.add_task("Downloading dataset...", total=total_bytes)
+
+            for rel_path, file_info in missing.items():
+                dest = bids_dir / rel_path
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                progress.update(
+                    task,
+                    description=f"Downloading [bold]{Path(rel_path).name}[/bold]",
+                )
+                adapter = _RichProgressAdapter(progress, task)
+                osf_path = file_info["osf_path"]
+                retrieve_with_retries(
+                    url=_OSF_DOWNLOAD_BASE.format(osf_path.lstrip("/")),
+                    dest=dest,
+                    logger=pooch_logger,
+                    progressbar=adapter,
+                    on_retry=adapter.rewind,
+                )
+
+            progress.update(task, description="Download complete.")
