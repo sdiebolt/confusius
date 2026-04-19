@@ -91,6 +91,14 @@ guide](../user-guide/index.md) for more detailed explanations and usage examples
 
     Xarray integration providing DataArray accessors for fUSI data.
 
+- **[:lucide-layers: Decomposition](decomposition.md)**
+
+    ---
+
+    Dimensionality reduction tools for fUSI time series, including xarray-aware
+    principal component analysis.
+
+
 - **[:lucide-brain-circuit: Functional Connectivity](connectivity.md)**
 
     ---
