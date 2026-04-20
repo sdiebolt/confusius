@@ -158,8 +158,17 @@ def test_fit_requires_spatial_dimension():
 
 def test_fit_rejects_unexpected_fit_params(sample_data):
     """fit raises when unexpected sklearn-style fit params are provided."""
-    with pytest.raises(TypeError, match="Unexpected fit parameters"):
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
         PCA().fit(sample_data, sample_weight=np.ones(sample_data.sizes["time"]))
+
+
+def test_fit_transform_rejects_unexpected_fit_params(sample_data):
+    """fit_transform raises when unexpected sklearn-style fit params are provided."""
+    with pytest.raises(TypeError, match="Unexpected fit parameters"):
+        PCA().fit_transform(
+            sample_data,
+            sample_weight=np.ones(sample_data.sizes["time"]),
+        )
 
 
 def test_transform_checks_spatial_layout(sample_data):

@@ -198,7 +198,7 @@ class PCA(BaseEstimator, TransformerMixin):
         self.power_iteration_normalizer = power_iteration_normalizer
         self.random_state = random_state
 
-    def fit(self, X: xr.DataArray, y: None = None, **fit_params: object) -> "PCA":
+    def fit(self, X: xr.DataArray, y: None = None) -> "PCA":
         """Fit PCA on `(time, ...)` fUSI data.
 
         Parameters
@@ -207,8 +207,6 @@ class PCA(BaseEstimator, TransformerMixin):
             Input fUSI data.
         y : None, optional
             Ignored. Present for scikit-learn API compatibility.
-        **fit_params : object
-            Additional fit parameters. Currently unsupported.
 
         Returns
         -------
@@ -224,9 +222,6 @@ class PCA(BaseEstimator, TransformerMixin):
             If additional fit parameters are provided.
         """
         del y
-        if fit_params:
-            keys = ", ".join(sorted(fit_params))
-            raise TypeError(f"Unexpected fit parameters for PCA.fit: {keys}.")
 
         X_proc, X_stacked, spatial_dims = self._prepare_data(
             X,
@@ -313,15 +308,25 @@ class PCA(BaseEstimator, TransformerMixin):
         y : None, optional
             Ignored. Present for scikit-learn API compatibility.
         **fit_params : object
-            Additional fit parameters forwarded to
-            [fit][confusius.decomposition.PCA.fit].
+            Additional fit parameters. Unsupported for this estimator.
 
         Returns
         -------
         (time, component) xarray.DataArray
             PCA signals in component space.
+
+        Raises
+        ------
+        TypeError
+            If additional fit parameters are provided.
         """
-        return self.fit(X, y=y, **fit_params).transform(X)
+        del y
+
+        if fit_params:
+            keys = ", ".join(sorted(fit_params))
+            raise TypeError(f"Unexpected fit parameters for PCA.fit_transform: {keys}.")
+
+        return self.fit(X).transform(X)
 
     def transform(self, X: xr.DataArray) -> xr.DataArray:
         """Project data into PCA component space.
