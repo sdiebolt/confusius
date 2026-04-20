@@ -251,9 +251,7 @@ class TestPlotVolume:
             (y_centers[0] - dy / 2, y_centers[-1] + dy / 2)
         )
 
-    def test_reversed_y_coord_flips_ylim(
-        self, sample_3d_volume, matplotlib_pyplot
-    ):
+    def test_reversed_y_coord_flips_ylim(self, sample_3d_volume, matplotlib_pyplot):
         """Reversing y coords via isel flips the y-axis orientation."""
         z_coord = sample_3d_volume.coords["z"].values[0]
 
@@ -265,7 +263,8 @@ class TestPlotVolume:
         )
         ylim_normal = plotter_normal.axes[0, 0].get_ylim()
 
-        reversed_volume = sample_3d_volume.isel(y=slice(None, None, -1))
+        reversed_volume = sample_3d_volume.copy()
+        reversed_volume.coords["y"] = reversed_volume.coords["y"][::-1]
         plotter_reversed = plot_volume(
             reversed_volume,
             slice_mode="z",
@@ -281,7 +280,8 @@ class TestPlotVolume:
     ):
         """Overlaying volumes keeps the direction of the most recently added volume."""
         z_coord = sample_3d_volume.coords["z"].values[0]
-        reversed_volume = sample_3d_volume.isel(y=slice(None, None, -1))
+        reversed_volume = sample_3d_volume.copy()
+        reversed_volume.coords["y"] = reversed_volume.coords["y"][::-1]
 
         plotter = plot_volume(
             sample_3d_volume,
