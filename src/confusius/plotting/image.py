@@ -709,10 +709,10 @@ class VolumePlotter:
 
             # Expand stored limits to encompass overlaid volumes with different extents.
             current_xlim = self._update_stored_lim(
-                self._axis_xlims, axis_idx, (float(x_vals.min()), float(x_vals.max()))
+                self._axis_xlims, axis_idx, (float(x_vals[0]), float(x_vals[-1]))
             )
             current_ylim = self._update_stored_lim(
-                self._axis_ylims, axis_idx, (float(y_vals.min()), float(y_vals.max()))
+                self._axis_ylims, axis_idx, (float(y_vals[0]), float(y_vals[-1]))
             )
             self._set_ax_lims(ax, current_xlim, current_ylim)
 
