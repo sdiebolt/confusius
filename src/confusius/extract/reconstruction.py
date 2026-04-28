@@ -28,9 +28,10 @@ def unmask(
           coordinates.
 
     mask : xarray.DataArray
-        Boolean mask used for the original extraction. Provides spatial dimensions
-        and coordinates for reconstruction. Must have the same spatial dimensions
-        and coordinates as the original data.
+        Mask used for the original extraction. Provides spatial dimensions and
+        coordinates for reconstruction. Must be either boolean dtype, or integer dtype
+        with exactly one non-zero value (0 = background, one region id = foreground).
+        Spatial dimensions and coordinates must match the original data.
     new_dims : list of str, optional
         Names for leading dimensions when `signals` is a Numpy array. Must match the
         number of leading dimensions `(ndim - 1)`. If not provided, uses `["dim_0",
@@ -95,6 +96,21 @@ def unmask(
     ("component", "pose", "z", "y", "x")
     """
     mask_values = mask.values
+    if np.issubdtype(mask_values.dtype, np.bool_):
+        pass
+    elif np.issubdtype(mask_values.dtype, np.integer):
+        non_zero = np.unique(mask_values[mask_values != 0])
+        if len(non_zero) > 1:
+            raise TypeError(
+                "mask has integer dtype with multiple distinct non-zero values. "
+                "A mask must be boolean or have exactly one non-zero label "
+                "(0 = background, one region id = foreground)."
+            )
+    else:
+        raise TypeError(
+            f"mask must be boolean dtype or a single-label integer dtype, got {mask_values.dtype}."
+        )
+
     n_voxels_mask = int(np.count_nonzero(mask_values))
 
     if isinstance(signals, np.ndarray):

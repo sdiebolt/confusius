@@ -174,7 +174,10 @@ class TestUnmask:
 
         bool_mask_data = np.zeros((3, 4, 5), dtype=bool)
         bool_mask_data.flat[[0, 3, 7, 10, 18, 29, 41]] = True
-        int_mask = xr.DataArray(bool_mask_data.astype(np.int32) * 385, dims=["z", "y", "x"])
+        int_mask = xr.DataArray(
+            bool_mask_data.astype(np.int32) * 385,
+            dims=["z", "y", "x"],
+        )
 
         signals = extract.extract_with_mask(data, int_mask)
         restored = extract.unmask(signals, int_mask)
@@ -186,10 +189,13 @@ class TestUnmask:
         np.testing.assert_array_equal(original_masked, restored_masked)
 
     def test_integer_mask_with_numpy_signals(self):
-        """Test unmasking Numpy signals with integer mask values."""
+        """Test unmasking NumPy signals with integer mask values."""
         bool_mask_data = np.zeros((2, 3, 4), dtype=bool)
         bool_mask_data.flat[[0, 2, 5, 7, 11]] = True
-        int_mask = xr.DataArray(bool_mask_data.astype(np.int32) * 9, dims=["z", "y", "x"])
+        int_mask = xr.DataArray(
+            bool_mask_data.astype(np.int32) * 9,
+            dims=["z", "y", "x"],
+        )
 
         signals = np.arange(15).reshape(3, 5)
         result = extract.unmask(signals, int_mask, new_dims=["component"])
@@ -224,6 +230,22 @@ class TestUnmask:
         )
 
         with pytest.raises(ValueError, match="Size of 'space' dimension"):
+            extract.unmask(signals, mask)
+
+    def test_float_mask_rejected(self):
+        """Test that float masks are rejected by unmask."""
+        mask = xr.DataArray(np.array([0.0, 1.0, 0.0]), dims=["space"])
+        signals = np.array([1.0])
+
+        with pytest.raises(TypeError, match="single-label integer dtype"):
+            extract.unmask(signals, mask)
+
+    def test_multi_label_integer_mask_rejected(self):
+        """Test that multi-label integer masks are rejected by unmask."""
+        mask = xr.DataArray(np.array([0, 1, 2], dtype=np.int32), dims=["space"])
+        signals = np.array([1.0, 2.0])
+
+        with pytest.raises(TypeError, match="multiple distinct non-zero values"):
             extract.unmask(signals, mask)
 
     def test_fill_value(self):
