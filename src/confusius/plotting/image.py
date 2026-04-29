@@ -269,11 +269,13 @@ def _sort_coords_for_plot(
     data: xr.DataArray,
     dims: Sequence[Hashable],
 ) -> xr.DataArray:
-    """Sort non-monotonic coordinate axes before plotting.
+    """Sort coordinate axes into increasing order before plotting.
 
-    Sorting avoids ambiguous geometry in plotting backends that assume ordered
-    coordinates (e.g. `pcolormesh` edge construction, contour interpolation, and napari
-    array indexing with scale/translate).
+    Any plotted coordinate axis that is not already monotonic increasing,
+    including monotonic-decreasing axes, is sorted to avoid ambiguous
+    geometry in plotting backends that assume ordered coordinates (e.g.
+    `pcolormesh` edge construction, contour interpolation, and napari array
+    indexing with scale/translate).
     """
     sorted_data = data
     for dim in dims:
