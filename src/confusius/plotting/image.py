@@ -342,7 +342,7 @@ class VolumePlotter:
     ):
         self.slice_mode = slice_mode
         if axes is not None and not isinstance(axes, np.ndarray):
-            axes = np.asarray([axes])
+            axes = np.asarray([[axes]])
         self.axes = axes
         self._user_provided_axes = axes is not None
         if figure is None and axes is not None:
@@ -969,6 +969,16 @@ class VolumePlotter:
                 x_range = float(np.max(x_vals_all) - np.min(x_vals_all))
                 y_range = float(np.max(y_vals_all) - np.min(y_vals_all))
             self._ensure_figure(n_slices, x_range=x_range, y_range=y_range)
+
+            if self._user_provided_axes:
+                assert self.axes is not None
+                if n_slices != self.axes.size:
+                    raise ValueError(
+                        f"Number of slices ({n_slices}) must match number of axes "
+                        f"({self.axes.size}). Got {n_slices} slice_coords but axes has "
+                        f"shape {self.axes.shape}."
+                    )
+
             plot_indices = self._init_sequential_layout(actual_coords)
 
         if self.axes is None:
@@ -1316,7 +1326,7 @@ def plot_volume(
     axes : numpy.ndarray or matplotlib.axes.Axes, optional
         Existing axes to draw into: either a single
         [`matplotlib.axes.Axes`][matplotlib.axes.Axes] or a 2D array of them. Must
-        contain at least as many elements as there are slices. A single `Axes` is
+        contain exactly as many elements as there are slices. A single `Axes` is
         wrapped automatically and limits the plot to one slice. If not provided, new
         axes are created inside `figure`.
     nrows : int, optional
