@@ -1,6 +1,5 @@
 """Extraction of signals using boolean masks."""
 
-import numpy as np
 import xarray as xr
 
 from confusius.validation import validate_mask
@@ -100,10 +99,7 @@ def extract_with_mask(data: xr.DataArray, mask: xr.DataArray) -> xr.DataArray:
     # performs exact label alignment instead of introducing NaNs.
     mask_aligned = mask.assign_coords(coord_updates).reindex_like(template)
 
-    if (
-        np.issubdtype(mask_aligned.dtype, np.floating)
-        and np.isnan(mask_aligned.values).any()
-    ):
+    if bool(mask_aligned.isnull().any()):
         raise ValueError(
             "mask could not be aligned to data coordinates. If coordinates are nearly "
             "equal, ensure they describe the same voxel grid before extraction."

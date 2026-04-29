@@ -151,6 +151,30 @@ class TestWithMask:
 
         assert signals.sizes["space"] == int(np.count_nonzero(mask.values))
 
+    def test_alignment_with_missing_values_raises(self, monkeypatch):
+        """Test extraction fails if aligned mask still contains missing values."""
+        data = xr.DataArray(
+            np.arange(6).reshape(2, 3),
+            dims=["time", "space"],
+            coords={"space": [0, 1, 2]},
+        )
+        mask = xr.DataArray([True, False, True], dims=["space"], coords={"space": [0, 1, 2]})
+
+        original_reindex_like = xr.DataArray.reindex_like
+
+        def broken_reindex_like(self, other):
+            aligned = original_reindex_like(self, other)
+            return xr.DataArray(
+                np.array([True, np.nan, False], dtype=object),
+                dims=aligned.dims,
+                coords=aligned.coords,
+            )
+
+        monkeypatch.setattr(xr.DataArray, "reindex_like", broken_reindex_like)
+
+        with pytest.raises(ValueError, match="could not be aligned"):
+            extract.extract_with_mask(data, mask)
+
     def test_unstack_coords_are_ordered_after_extract(self):
         """Test unstack produces ordered spatial coordinates after extract."""
         data = xr.DataArray(
