@@ -265,6 +265,128 @@ class TestLoadNifti:
         assert "slice_timing" in loaded.attrs
         assert "slice_encoding_direction" in loaded.attrs
 
+    def test_load_nifti_scalar_time_multiple_volume_timing_warns(
+        self, tmp_path: Path
+    ) -> None:
+        """Scalar reconstruction uses the first timestamp when `VolumeTiming` is longer."""
+        data = np.random.default_rng(0).random((5, 4, 3)).astype(np.float32)
+        path = tmp_path / "scalar_time_multiple_volume_timing.nii.gz"
+        nib.Nifti1Image(data, np.eye(4)).to_filename(path)
+
+        with open(tmp_path / "scalar_time_multiple_volume_timing.json", "w") as f:
+            json.dump({"VolumeTiming": [2.05, 3.05]}, f)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            loaded = load_nifti(path)
+
+        assert any("multiple entries" in str(w.message) for w in caught)
+        assert loaded.coords["time"].item() == pytest.approx(2.05)
+
+    def test_load_nifti_scalar_time_invalid_volume_timing_omits_time_coordinate(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-1D scalar `VolumeTiming` metadata is ignored after warning."""
+        data = np.random.default_rng(0).random((5, 4, 3)).astype(np.float32)
+        path = tmp_path / "scalar_time_invalid_volume_timing.nii.gz"
+        nib.Nifti1Image(data, np.eye(4)).to_filename(path)
+
+        with open(tmp_path / "scalar_time_invalid_volume_timing.json", "w") as f:
+            json.dump({"VolumeTiming": [[2.05]]}, f)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            loaded = load_nifti(path)
+
+        assert any("VolumeTiming" in str(w.message) for w in caught)
+        assert any("not a non-empty 1D array" in str(w.message) for w in caught)
+        assert "time" not in loaded.coords
+
+    def test_load_nifti_scalar_delay_after_trigger_without_repetition_time(
+        self, tmp_path: Path
+    ) -> None:
+        """Scalar reconstruction can fall back to `DelayAfterTrigger` alone."""
+        data = np.random.default_rng(0).random((5, 4, 3)).astype(np.float32)
+        path = tmp_path / "scalar_delay_after_trigger_only.nii.gz"
+        nib.Nifti1Image(data, np.eye(4)).to_filename(path)
+
+        with open(tmp_path / "scalar_delay_after_trigger_only.json", "w") as f:
+            json.dump({"DelayAfterTrigger": 1.25}, f)
+
+        with pytest.warns(
+            UserWarning,
+            match="recommends providing either RepetitionTime or VolumeTiming",
+        ):
+            loaded = load_nifti(path)
+
+        assert loaded.coords["time"].item() == pytest.approx(1.25)
+
+    def test_load_nifti_scalar_time_invalid_slice_timing_shape_skips_slice_coordinate(
+        self, tmp_path: Path
+    ) -> None:
+        """Non-1D scalar `SliceTiming` metadata is ignored after scalar time recovery."""
+        data = np.random.default_rng(0).random((5, 4, 3)).astype(np.float32)
+        path = tmp_path / "scalar_time_invalid_slice_timing_shape.nii.gz"
+        nib.Nifti1Image(data, np.eye(4)).to_filename(path)
+
+        with open(tmp_path / "scalar_time_invalid_slice_timing_shape.json", "w") as f:
+            json.dump(
+                {
+                    "VolumeTiming": [2.05],
+                    "SliceTiming": [[0.0, 0.1, 0.2]],
+                    "SliceEncodingDirection": "k",
+                },
+                f,
+            )
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            loaded = load_nifti(path)
+
+        assert any("SliceTiming" in str(w.message) for w in caught)
+        assert loaded.coords["time"].item() == pytest.approx(2.05)
+        assert "slice_time" not in loaded.coords
+
+    def test_load_nifti_delay_time_greater_than_repetition_time_warns(
+        self, tmp_path: Path
+    ) -> None:
+        """Loading warns when `DelayTime` prevents inferring a positive duration."""
+        data = np.random.default_rng(0).random((2, 3, 4, 5)).astype(np.float32)
+        path = tmp_path / "delay_time_too_large.nii.gz"
+        img = nib.Nifti1Image(data, np.eye(4))
+        img.header.set_zooms((1.0, 1.0, 1.0, 1.0))
+        img.to_filename(path)
+
+        with open(tmp_path / "delay_time_too_large.json", "w") as f:
+            json.dump({"RepetitionTime": 1.0, "DelayTime": 1.5}, f)
+
+        with pytest.warns(UserWarning, match="cannot be inferred"):
+            loaded = load_nifti(path)
+
+        assert "volume_acquisition_duration" not in loaded.coords["time"].attrs
+
+    def test_load_nifti_scalar_time_reverse_slice_direction_reverses_slice_order(
+        self, tmp_path: Path
+    ) -> None:
+        """Scalar `SliceEncodingDirection` with trailing `-` reverses slice timing."""
+        data = np.random.default_rng(0).random((5, 4, 3)).astype(np.float32)
+        path = tmp_path / "scalar_time_reverse_slice_direction.nii.gz"
+        nib.Nifti1Image(data, np.eye(4)).to_filename(path)
+
+        with open(tmp_path / "scalar_time_reverse_slice_direction.json", "w") as f:
+            json.dump(
+                {
+                    "VolumeTiming": [2.0],
+                    "SliceTiming": [0.0, 1.0, 2.0],
+                    "SliceEncodingDirection": "k-",
+                },
+                f,
+            )
+
+        loaded = load_nifti(path)
+
+        np.testing.assert_allclose(loaded.coords["slice_time"].values, [4.0, 3.0, 2.0])
+
     def test_load_nifti_derives_volume_duration_from_repetition_time_and_delay_time(
         self, tmp_path: Path
     ) -> None:
@@ -1140,6 +1262,296 @@ class TestSaveNifti:
 
         assert sidecar["SliceTiming"] == pytest.approx([0.0, 0.1, 0.2, 0.3])
         assert sidecar["SliceEncodingDirection"] == "k"
+
+    def test_save_1d_slice_time_requires_scalar_time_coordinate(self, tmp_path) -> None:
+        """A 1D `slice_time` on time-series data is rejected for BIDS export."""
+        da = xr.DataArray(
+            np.zeros((2, 4, 3, 2), dtype=np.float32),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    [0.0, 1.0],
+                    dims=["time"],
+                    attrs={"units": "s", "volume_acquisition_reference": "start"},
+                ),
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+                "slice_time": xr.DataArray(
+                    [0.0, 0.1, 0.2, 0.3], dims=["z"], attrs={"units": "s"}
+                ),
+            },
+        )
+
+        output_path = tmp_path / "slice_time_1d_requires_scalar.nii.gz"
+        with pytest.warns(UserWarning, match="A 1D `slice_time` coordinate can only"):
+            save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_1d_requires_scalar.json") as f:
+            sidecar = json.load(f)
+
+        assert "SliceTiming" not in sidecar
+
+    def test_save_1d_slice_time_without_time_coordinate_warns(self, tmp_path) -> None:
+        """A 1D `slice_time` without `time` cannot be exported to BIDS."""
+        da = xr.DataArray(
+            np.zeros((4, 3, 2), dtype=np.float32),
+            dims=["z", "y", "x"],
+            coords={
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+                "slice_time": xr.DataArray(
+                    [0.0, 0.1, 0.2, 0.3], dims=["z"], attrs={"units": "s"}
+                ),
+            },
+        )
+
+        output_path = tmp_path / "slice_time_1d_no_time.nii.gz"
+        with pytest.warns(UserWarning, match="without a `time` coordinate"):
+            save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_1d_no_time.json") as f:
+            sidecar = json.load(f)
+
+        assert "SliceTiming" not in sidecar
+
+    def test_save_1d_slice_time_without_frame_duration_warns(self, tmp_path) -> None:
+        """A scalar-time snapshot without frame duration cannot export `SliceTiming`."""
+        da = xr.DataArray(
+            np.zeros((4, 3, 2), dtype=np.float32),
+            dims=["z", "y", "x"],
+            coords={
+                "time": xr.DataArray(10.0, attrs={"units": "s"}),
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+                "slice_time": xr.DataArray(
+                    [10.0, 10.1, 10.2, 10.3], dims=["z"], attrs={"units": "s"}
+                ),
+            },
+        )
+
+        output_path = tmp_path / "slice_time_1d_no_duration.nii.gz"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            save_nifti(da, output_path)
+
+        assert any(
+            "Cannot infer frame acquisition duration for a 1D `slice_time` coordinate"
+            in str(w.message)
+            for w in caught
+        )
+
+        with open(tmp_path / "slice_time_1d_no_duration.json") as f:
+            sidecar = json.load(f)
+
+        assert "SliceTiming" not in sidecar
+
+    def test_save_1d_slice_time_converts_slice_reference_to_start(self, tmp_path) -> None:
+        """A 1D `slice_time` honors its own acquisition reference metadata."""
+        da = xr.DataArray(
+            np.zeros((2, 3, 2), dtype=np.float32),
+            dims=["z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    10.0,
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_duration": 0.25,
+                        "volume_acquisition_reference": "start",
+                    },
+                ),
+                "z": np.arange(2, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+                "slice_time": xr.DataArray(
+                    [10.2, 10.3],
+                    dims=["z"],
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_duration": 0.2,
+                        "volume_acquisition_reference": "end",
+                    },
+                ),
+            },
+        )
+
+        output_path = tmp_path / "slice_time_1d_end_reference.nii.gz"
+        save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_1d_end_reference.json") as f:
+            sidecar = json.load(f)
+
+        assert sidecar["SliceTiming"] == pytest.approx([0.0, 0.1])
+
+    def test_save_invalid_1d_slice_time_dimension_is_skipped(self, tmp_path) -> None:
+        """A 1D `slice_time` on a non-spatial dimension is skipped silently."""
+        da = xr.DataArray(
+            np.zeros((2, 4, 3, 2), dtype=np.float32),
+            dims=["channel", "z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    10.0,
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_duration": 0.25,
+                        "volume_acquisition_reference": "start",
+                    },
+                ),
+                "channel": [0, 1],
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+                "slice_time": xr.DataArray(
+                    [10.0, 10.1], dims=["channel"], attrs={"units": "s"}
+                ),
+            },
+        )
+
+        output_path = tmp_path / "slice_time_1d_invalid_dim.nii.gz"
+        save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_1d_invalid_dim.json") as f:
+            sidecar = json.load(f)
+
+        assert "SliceTiming" not in sidecar
+
+    def test_save_invalid_2d_slice_time_shape_warns(self, tmp_path, sample_4d_volume) -> None:
+        """A non-1D/non-2D `slice_time` is rejected with a warning."""
+        da = sample_4d_volume.copy()
+        da.coords["time"].attrs["volume_acquisition_reference"] = "start"
+        da = da.assign_coords(
+            slice_time=xr.DataArray(
+                np.zeros(
+                    (
+                        sample_4d_volume.sizes["time"],
+                        sample_4d_volume.sizes["z"],
+                        sample_4d_volume.sizes["y"],
+                    )
+                ),
+                dims=("time", "z", "y"),
+                attrs={"units": "s"},
+            )
+        )
+
+        output_path = tmp_path / "slice_time_invalid_shape.nii.gz"
+        with pytest.warns(UserWarning, match="must be either a 2D coordinate"):
+            save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_invalid_shape.json") as f:
+            sidecar = json.load(f)
+
+        assert "SliceTiming" not in sidecar
+
+    def test_save_2d_slice_time_on_non_spatial_dim_is_skipped(self, tmp_path) -> None:
+        """A 2D `slice_time` with a non-spatial companion dimension is skipped."""
+        da = xr.DataArray(
+            np.zeros((2, 2, 4, 3, 2), dtype=np.float32),
+            dims=["channel", "time", "z", "y", "x"],
+            coords={
+                "channel": [0, 1],
+                "time": xr.DataArray(
+                    [0.0, 1.0],
+                    dims=["time"],
+                    attrs={"units": "s", "volume_acquisition_reference": "start"},
+                ),
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+                "slice_time": xr.DataArray(
+                    np.zeros((2, 2)), dims=("time", "channel"), attrs={"units": "s"}
+                ),
+            },
+        )
+
+        output_path = tmp_path / "slice_time_2d_non_spatial_dim.nii.gz"
+        save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_2d_non_spatial_dim.json") as f:
+            sidecar = json.load(f)
+
+        assert "SliceTiming" not in sidecar
+
+    def test_save_2d_slice_time_without_time_coordinate_warns(self, tmp_path) -> None:
+        """A 2D `slice_time` without a `time` coordinate cannot be exported."""
+        da = xr.DataArray(
+            np.zeros((2, 4, 3, 2), dtype=np.float32),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+                "slice_time": xr.DataArray(
+                    np.zeros((2, 4)), dims=("time", "z"), attrs={"units": "s"}
+                ),
+            },
+        )
+
+        output_path = tmp_path / "slice_time_2d_no_time_coord.nii.gz"
+        with pytest.warns(UserWarning, match="without a `time` coordinate"):
+            save_nifti(da, output_path)
+
+        with open(tmp_path / "slice_time_2d_no_time_coord.json") as f:
+            sidecar = json.load(f)
+
+        assert "SliceTiming" not in sidecar
+
+    def test_save_2d_slice_time_without_frame_duration_warns(self, tmp_path) -> None:
+        """A single-volume 2D `slice_time` needs an explicit frame duration."""
+        da = xr.DataArray(
+            np.zeros((1, 4, 3, 2), dtype=np.float32),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    [10.0],
+                    dims=["time"],
+                    attrs={"units": "s", "volume_acquisition_reference": "start"},
+                ),
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+                "slice_time": xr.DataArray(
+                    np.zeros((1, 4)) + np.array([10.0, 10.1, 10.2, 10.3]),
+                    dims=("time", "z"),
+                    attrs={"units": "s"},
+                ),
+            },
+        )
+
+        output_path = tmp_path / "slice_time_2d_no_duration.nii.gz"
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            save_nifti(da, output_path)
+
+        assert any(
+            "Cannot infer frame acquisition duration for a 2D `slice_time` coordinate"
+            in str(w.message)
+            for w in caught
+        )
+
+    def test_save_invalid_time_reference_raises(self, tmp_path) -> None:
+        """Saving rejects invalid `volume_acquisition_reference` values."""
+        da = xr.DataArray(
+            np.zeros((4, 3, 2), dtype=np.float32),
+            dims=["z", "y", "x"],
+            coords={
+                "time": xr.DataArray(
+                    10.0,
+                    attrs={
+                        "units": "s",
+                        "volume_acquisition_duration": 0.25,
+                        "volume_acquisition_reference": "middle",
+                    },
+                ),
+                "z": np.arange(4, dtype=float),
+                "y": np.arange(3, dtype=float),
+                "x": np.arange(2, dtype=float),
+            },
+        )
+
+        with pytest.raises(ValueError, match="Unknown time volume_acquisition_reference"):
+            save_nifti(da, tmp_path / "invalid_time_reference.nii.gz")
 
     def test_save_nifti_validation_runtime_error_warns(
         self, tmp_path, sample_4d_volume
