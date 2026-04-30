@@ -152,12 +152,12 @@ def _build_physical_to_lab(
     """Convert `probeToLab` to a ConfUSIus `physical_to_lab` affine in mm.
 
     `probeToLab` maps probe physical `(x_probe, y_probe, z_probe, 1)` to Iconeus lab
-    space in metres. The Iconeus lab frame is aligned with the probe axes:
-    `x_lab = lateral`, `y_lab = elevation`, `z_lab = axial`.
+    space `(x_lab, y_lab, z_lab, 1)` in metres. The Iconeus lab frame is a fixed scanner
+    frame; `probeToLab` carries any rotation of the probe within it.
 
     We want `physical_to_lab` to map ConfUSIus physical `(z_conf, y_conf, x_conf, 1)`
-    to **ConfUSIus-ordered** lab space `(z_lab, y_lab, x_lab)` (elevation, depth,
-    lateral) in millimetres, using the same permutation `P` that maps between the two
+    (elevation, depth, lateral) to **ConfUSIus-ordered** lab space `(z_lab, y_lab,
+    x_lab)` in millimetres, using the same permutation `P` that maps between the two
     physical spaces:
 
     ```
@@ -191,15 +191,15 @@ def load_bps(bps_path: str | Path) -> npt.NDArray[np.float64]:
     BPS files are HDF5 sidecars produced by Iconeus' brain positioning system. They
     store a `BrainToLab` affine that maps Iconeus brain coordinates `(x_brain, y_brain,
     z_brain, 1)` to Iconeus lab coordinates `(x_lab, y_lab, z_lab, 1)` in meters.
-    Iconeus' lab axes are aligned with the probe: `x_lab = lateral`, `y_lab =
-    elevation`, `z_lab = axial`.
+    The Iconeus lab frame is a fixed scanner frame; `probeToLab` carries any rotation
+    of the probe within it.
 
     To compose this affine with the rest of the ConfUSIus pipeline we re-express
-    the lab side as **ConfUSIus-ordered** lab space `(z_lab, y_lab, x_lab)`
-    (elevation, depth, lateral) in millimeters, matching the convention used by
-    `physical_to_lab` (see `_build_physical_to_lab`). The brain side is left in
-    its original axis order (the brain coordinate units are not declared by the
-    BPS format and are therefore not converted).
+    the lab side as **ConfUSIus-ordered** lab space `(z_lab, y_lab, x_lab)` in
+    millimeters, matching the convention used by `physical_to_lab` (see
+    `_build_physical_to_lab`). The brain side is left in its original axis order
+    (the brain coordinate units are not declared by the BPS format and are
+    therefore not converted).
 
     The change of basis from ConfUSIus-ordered millimetre lab coordinates to
     Iconeus-ordered metre lab coordinates is

@@ -348,11 +348,11 @@ Provenance metadata from the file is stored in `da.attrs`: `scan_mode`, `subject
 
 Iconeus' BPS files are HDF5 containers produced by Iconeus' Brain Positioning System.
 They contain an affine matrix that maps Iconeus brain coordinates `(x_brain, y_brain,
-z_brain, 1)` to Iconeus lab coordinates `(x_lab, y_lab, z_lab, 1)` in meters. Iconeus'
-lab space axes are aligned with the probe: `x_lab = lateral`, `y_lab = elevation`,
-`z_lab = axial`. We chose to re-express this space as **ConfUSIus-ordered** lab space
-`(z_lab, y_lab, x_lab)` (elevation, depth, lateral) in millimeters, matching the
-convention used throughout the rest of the package.
+z_brain, 1)` to Iconeus lab coordinates `(x_lab, y_lab, z_lab, 1)` in meters. The
+Iconeus lab frame is a fixed scanner frame; `probeToLab` carries any rotation of the
+probe within it. We chose to re-express this space as **ConfUSIus-ordered** lab space
+`(z_lab, y_lab, x_lab)` in millimeters, matching the convention used throughout the
+rest of the package.
 
 The affine matrix in the BPS file can be loaded with [`confusius.io.load_bps`][confusius.io.load_bps].
 
