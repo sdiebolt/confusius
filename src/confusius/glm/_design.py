@@ -421,7 +421,7 @@ def _regressor_names(
     ----------
     condition_name : str
         Name of the experimental condition.
-    hrf_model : {"glover", "spm", "fir"} or None
+    hrf_model : {"glover", "spm", "claron2021", "fir"} or None
         HRF model. FIR models generate one column name per delay.
     fir_delays : list of int, optional
         FIR delays in volumes (required when `hrf_model="fir"`).
@@ -463,7 +463,7 @@ def _compute_condition_regressors(
         Stimulus amplitudes (modulations).
     volume_times : (n_volumes,) numpy.ndarray
         Acquisition times in seconds.
-    hrf_model : {"glover", "spm", "fir"} or None
+    hrf_model : {"glover", "spm", "claron2021", "fir"} or None
         HRF model.
     fir_delays : list of int, optional
         FIR delays in volumes (required when `hrf_model="fir"`).
@@ -597,7 +597,7 @@ def make_first_level_design_matrix(
         Acquisition time of each volume in seconds.
     events : pandas.DataFrame, optional
         Events table with `onset`, `duration`, and `trial_type` columns.
-    hrf_model : {"glover", "spm", "fir"} or None, default: "glover"
+    hrf_model : {"glover", "spm", "claron2021", "fir"} or None, default: "glover"
         Hemodynamic response function model.
     drift_model : {"cosine", "polynomial"} or None, default: "cosine"
         Drift model for low-frequency confounds.
