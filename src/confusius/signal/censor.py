@@ -97,7 +97,8 @@ def interpolate_samples(
         Boolean sample mask indicating which timepoints to keep (`True`) vs.
         interpolate (`False`). Must have a `time` dimension matching `signals`.
         If both `signals` and `sample_mask` have `time` coordinates, they must match
-        exactly.
+        within the default coordinate-comparison tolerance (`rtol=1e-5`,
+        `atol=1e-8`).
     method : {"linear", "nearest", "zero", "slinear", "quadratic", "cubic", "quintic", \
             "polynomial", "pchip", "barycentric", "krogh", "akima", "makima"}, \
             default: "linear"
@@ -225,7 +226,8 @@ def censor_samples(
     sample_mask : (time,) xarray.DataArray
         Boolean sample mask indicating which timepoints to keep (`True`) vs. remove
         (`False`). Must have a `time` dimension matching `signals`. If both
-        `signals` and `sample_mask` have `time` coordinates, they must match exactly.
+        `signals` and `sample_mask` have `time` coordinates, they must match within
+        the default coordinate-comparison tolerance (`rtol=1e-5`, `atol=1e-8`).
 
     Returns
     -------

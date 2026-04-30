@@ -314,6 +314,19 @@ def test_censor_accepts_small_time_coordinate_drift(sample_timeseries):
     assert result.sizes["time"] == np.sum(mask_values)
 
 
+def test_censor_rejects_mismatched_time_coordinate(sample_timeseries):
+    """Test censoring rejects genuinely mismatched time coordinates."""
+    signals = sample_timeseries(n_time=100)
+    sample_mask = xr.DataArray(
+        np.ones(100, dtype=bool),
+        dims=["time"],
+        coords={"time": signals.coords["time"].values + 1.0},
+    )
+
+    with pytest.raises(ValueError, match="time coordinates do not match"):
+        censor_samples(signals, sample_mask)
+
+
 def test_censor_all_censored_error(sample_timeseries):
     """Test error when all samples are censored."""
     signals = sample_timeseries(n_time=100)

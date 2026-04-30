@@ -218,7 +218,8 @@ def regress_confounds(
 
     confounds : (time, n_confounds) xarray.DataArray
         Confound regressors to remove. Can have shape `(time,)` for a single
-        confound. The time dimension and coordinates must match the signals exactly.
+        confound. The time dimension and coordinates must match the signals within
+        the default coordinate-comparison tolerance (`rtol=1e-5`, `atol=1e-8`).
     standardize_confounds : bool, default: True
         Whether to standardize confounds by their maximum absolute value before
         regression. This improves numerical stability while preserving constant terms.

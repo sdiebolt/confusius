@@ -96,12 +96,19 @@ def validate_matching_coordinates(
             raise ValueError(f"Left array is missing coordinate '{name}'.")
         if name not in right.coords:
             raise ValueError(f"Right array is missing coordinate '{name}'.")
-        if not _coordinates_match(
-            left.coords[name], right.coords[name], rtol=rtol, atol=atol
-        ):
+        left_coord = left.coords[name]
+        right_coord = right.coords[name]
+        if not _coordinates_match(left_coord, right_coord, rtol=rtol, atol=atol):
+            is_numeric = np.issubdtype(left_coord.dtype, np.number) and np.issubdtype(
+                right_coord.dtype, np.number
+            )
+            comparison = (
+                f"within rtol={rtol}, atol={atol}"
+                if is_numeric
+                else "with exact equality"
+            )
             raise ValueError(
-                f"Coordinate '{name}' does not match between arrays "
-                f"(within rtol={rtol}, atol={atol}).\n"
-                f"  Left {name}: {left.coords[name].values}\n"
-                f"  Right {name}: {right.coords[name].values}"
+                f"Coordinate '{name}' does not match between arrays ({comparison}).\n"
+                f"  Left {name}: {left_coord.values}\n"
+                f"  Right {name}: {right_coord.values}"
             )

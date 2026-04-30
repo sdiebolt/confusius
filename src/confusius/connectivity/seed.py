@@ -25,8 +25,8 @@ def _validate_seed_signals(seed_signals: xr.DataArray, data: xr.DataArray) -> No
     2. `seed_signals` has no unexpected dimensions — only `time` and an optional
        `region` dimension are allowed.
     3. The number of timepoints in `seed_signals` matches `data`.
-    4. When both arrays carry a `time` coordinate, those coordinates are equal
-       element-wise.
+    4. When both arrays carry a `time` coordinate, those coordinates match within the
+       default coordinate-comparison tolerance (`rtol=1e-5`, `atol=1e-8`).
 
     Parameters
     ----------
