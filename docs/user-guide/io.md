@@ -350,7 +350,7 @@ Iconeus' BPS files are HDF5 containers produced by Iconeus' Brain Positioning Sy
 They contain an affine matrix that maps Iconeus brain coordinates `(x_brain, y_brain,
 z_brain, 1)` to Iconeus lab coordinates `(x_lab, y_lab, z_lab, 1)` in meters. The
 Iconeus lab frame is a fixed scanner frame; `probeToLab` carries any rotation of the
-probe within it. We chose to re-express this space as **ConfUSIus-ordered** lab space
+probe within it. ConfUSIus re-expresses this space as **ConfUSIus-ordered** lab space
 `(z_lab, y_lab, x_lab)` in millimeters, matching the convention used throughout the
 rest of the package.
 
@@ -362,15 +362,14 @@ import confusius as cf
 bps = cf.io.load_bps("sub-01_task-awake_pwd.bps")
 ```
 
-A `physical_to_brain` matrix between Iconeus' brain space and ConfUSIus' physical space
-can be established and added to the DataArray's attributes by using the
-`physical_to_lab` affines from the SCAN file:
+Compute `physical_to_brain` (Iconeus brain space from ConfUSIus physical space) from
+the SCAN file `physical_to_lab` affine and store it in the DataArray attributes:
 
 ```python
 import confusius as cf
 import numpy as np
 
-da = cf.load("sub-01_task-awake_pwd.scan")
+da = cf.load("sub-01_task-awake_pwd.source.scan")
 bps = cf.io.load_bps("sub-01_task-awake_pwd.bps")
 
 physical_to_lab = da.attrs["affines"]["physical_to_lab"]
@@ -387,7 +386,7 @@ will be computed automatically and stored in the resulting DataArray's attribute
 import confusius as cf
 
 da = cf.load(
-    "sub-01_task-awake_pwd.scan",
+    "sub-01_task-awake_pwd.source.scan",
     bps_path="sub-01_task-awake_pwd.bps",
 )
 
