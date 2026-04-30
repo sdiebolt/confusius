@@ -180,6 +180,28 @@ class TestPlotVolume:
         assert plotter.axes is axes
         assert plotter.figure is fig
 
+    def test_single_axes_object_accepted(self, sample_3d_volume, matplotlib_pyplot):
+        """plot_volume accepts a bare Axes object, not only an ndarray of Axes.
+
+        Regression test for issue #66: previously raised
+        AttributeError: 'Axes' object has no attribute 'flat'.
+        """
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+        z_coord = sample_3d_volume.coords["z"].values[0]
+
+        plotter = plot_volume(
+            sample_3d_volume,
+            slice_mode="z",
+            slice_coords=[z_coord],
+            axes=ax,
+            show_colorbar=False,
+        )
+
+        assert plotter.figure is fig
+        assert len(ax.collections) == 1
+
     def test_axes_count_mismatch_raises(self, sample_3d_volume, matplotlib_pyplot):
         """plot_volume raises ValueError when axes count doesn't match slices."""
         import matplotlib.pyplot as plt
@@ -454,6 +476,39 @@ class TestPlotContours:
         mask = xr.DataArray(np.zeros((4, 6), dtype=int), dims=["y", "x"])
         with pytest.raises(ValueError, match="3D"):
             plot_contours(mask, slice_mode="y")
+
+    def test_single_axes_object_accepted(self, matplotlib_pyplot):
+        """plot_contours accepts a bare Axes object, not only an ndarray of Axes.
+
+        Regression test for issue #66: previously raised
+        AttributeError: 'Axes' object has no attribute 'flat'.
+        """
+        import matplotlib.pyplot as plt
+
+        mask = xr.DataArray(
+            np.array([[[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]]]),
+            dims=["z", "y", "x"],
+            coords={"z": [0.0], "y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]},
+        )
+        fig, ax = plt.subplots()
+
+        plotter = plot_contours(mask, slice_mode="z", axes=ax)
+
+        assert plotter.figure is fig
+
+    def test_axes_count_mismatch_raises(self, matplotlib_pyplot):
+        """plot_contours raises ValueError when axes count doesn't match slices."""
+        import matplotlib.pyplot as plt
+
+        mask = xr.DataArray(
+            np.ones((3, 4, 4), dtype=int),
+            dims=["z", "y", "x"],
+            coords={"z": [0.0, 1.0, 2.0], "y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]},
+        )
+        fig, ax = plt.subplots()
+
+        with pytest.raises(ValueError, match="must match number of axes"):
+            plot_contours(mask, slice_mode="z", axes=ax)
 
     def test_all_zero_mask_returns_without_figure(self, matplotlib_pyplot):
         """plot_contours returns early without creating a figure for all-zero mask."""
