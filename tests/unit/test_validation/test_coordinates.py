@@ -19,6 +19,50 @@ def test_validate_matching_coordinates_accepts_numeric_drift():
     validate_matching_coordinates(left, right, "time")
 
 
+def test_validate_matching_coordinates_checks_shared_dimension_coords_by_default():
+    """Default behavior checks shared dimension coordinates."""
+    left = xr.DataArray(
+        np.arange(6).reshape(3, 2),
+        dims=["time", "region"],
+        coords={"time": np.arange(3) * 0.1, "region": ["a", "b"]},
+    )
+    right = xr.DataArray(
+        np.arange(6).reshape(3, 2),
+        dims=["time", "region"],
+        coords={"time": np.arange(3) * 0.1 + 1e-10, "region": ["a", "b"]},
+    )
+
+    validate_matching_coordinates(left, right)
+
+
+def test_validate_matching_coordinates_accepts_iterable_coord_names():
+    """Explicit iterables of coordinate names are accepted."""
+    left = xr.DataArray(
+        np.arange(6).reshape(3, 2),
+        dims=["time", "region"],
+        coords={"time": np.arange(3), "region": ["a", "b"]},
+    )
+    right = xr.DataArray(
+        np.arange(6).reshape(3, 2),
+        dims=["time", "region"],
+        coords={"time": np.arange(3), "region": ["a", "b"]},
+    )
+
+    validate_matching_coordinates(left, right, ["time", "region"])
+
+
+def test_validate_matching_coordinates_accepts_matching_object_coordinates():
+    """Object-valued coordinates use exact equality."""
+    region_values = np.empty(2, dtype=object)
+    region_values[:] = [("a", 1), ("b", 2)]
+    left = xr.DataArray(np.arange(2), dims=["region"], coords={"region": region_values})
+    right = xr.DataArray(
+        np.arange(2), dims=["region"], coords={"region": region_values.copy()}
+    )
+
+    validate_matching_coordinates(left, right, "region")
+
+
 def test_validate_matching_coordinates_ignores_unrelated_attached_coords():
     """Attached scalar coordinates do not affect coordinate matching."""
     left = xr.DataArray(
