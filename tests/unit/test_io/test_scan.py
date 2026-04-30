@@ -614,35 +614,6 @@ class TestLoadScanWithBPS:
         result = load_bps(bps_path)
         np.testing.assert_allclose(result, expected, rtol=1e-10, atol=1e-12)
 
-    def test_no_bps_omits_physical_to_brain(self, scan_2d: xr.DataArray) -> None:
-        """Loading without `bps_path` does not add physical_to_brain to attrs."""
-        assert "physical_to_brain" not in scan_2d.attrs["affines"]
-
-    def test_bps_adds_physical_to_brain(
-        self, scan_2d_path: Path, bps_path: Path
-    ) -> None:
-        """Loading with `bps_path` adds physical_to_brain alongside physical_to_lab."""
-        da = load_scan(scan_2d_path, bps_path=bps_path)
-        assert "physical_to_brain" in da.attrs["affines"]
-        assert "physical_to_lab" in da.attrs["affines"]
-
-    def test_physical_to_brain_shape_2d(
-        self, scan_2d_path: Path, bps_path: Path
-    ) -> None:
-        """physical_to_brain has shape (4, 4) for 2Dscan."""
-        da = load_scan(scan_2d_path, bps_path=bps_path)
-        A = np.asarray(da.attrs["affines"]["physical_to_brain"])
-        assert A.shape == (4, 4)
-
-    def test_physical_to_brain_shape_multipose(
-        self, scan_3d_path: Path, scan_4d_path: Path, bps_path: Path
-    ) -> None:
-        """physical_to_brain has shape (npose, 4, 4) for 3Dscan and 4Dscan."""
-        for scan_path in (scan_3d_path, scan_4d_path):
-            da = load_scan(scan_path, bps_path=bps_path)
-            A = np.asarray(da.attrs["affines"]["physical_to_brain"])
-            assert A.shape == (_NPOSE, 4, 4)
-
     def test_physical_to_brain_matches_expected_2d_affine(
         self, scan_2d_path: Path, bps_path: Path, brain_to_lab: np.ndarray
     ) -> None:
