@@ -346,9 +346,39 @@ Provenance metadata from the file is stored in `da.attrs`: `scan_mode`, `subject
 
 #### Loading a `.bps` File
 
-If you have an Iconeus `.bps` sidecar (a Brain Positioning System file produced
-alongside the SCAN), pass it via the `bps_path` argument so the resulting DataArray
-carries an extra `physical_to_brain` affine in `da.attrs["affines"]`:
+Iconeus' `.bps` files are HDF5 containers produced by Iconeus' Brain Positioning System.
+They contain an affine matrix that maps Iconeus brain coordinates `(x_brain, y_brain,
+z_brain, 1)` to Iconeus lab coordinates `(x_lab, y_lab, z_lab, 1)` in meters. Iconeus'
+lab space axes are aligned with the probe: `x_lab = lateral`, `y_lab = elevation`,
+`z_lab = axial`. We chose to re-express this space as **ConfUSIus-ordered** lab space
+`(z_lab, y_lab, x_lab)` (elevation, depth, lateral) in millimeters, matching the
+convention used throughout the rest of the package.
+
+The affine matrix in the `.bps` file can be loaded with [`confusius.io.load_bps`][confusius.io.load_bps].
+
+```python
+import confusius as cf
+
+bps = cf.io.load_bps("sub-01_task-awake_pwd.bps")
+```
+
+A `physical_to_brain` matrix between Iconeus' brain space and ConfUSIus' physical space
+can be established by using the `physical_to_lab` affines from the SCAN file:
+
+```python
+import confusius as cf
+
+da = cf.load("sub-01_task-awake_pwd.scan")
+bps = cf.io.load_bps("sub-01_task-awake_pwd.bps")
+
+physical_to_lab = da.attrs["affines"]["physical_to_lab"]
+physical_to_brain = np.linalg.inv(bps) @ physical_to_lab
+```
+
+In fact, if you pass the `.bps` file using the `bps_path` argument when loading a
+`.scan` file with [`confusius.load`][confusius.load], the `physical_to_brain` affine
+will be computed automatically and stored in the resulting DataArray's attributes
+`affines` alongside the `physical_to_lab` affines:
 
 ```python
 import confusius as cf
@@ -361,12 +391,10 @@ da = cf.load(
 physical_to_brain = da.attrs["affines"]["physical_to_brain"]
 ```
 
-`physical_to_brain` maps ConfUSIus physical coordinates `(z, y, x, 1)` (mm) to
-Iconeus brain coordinates `(x_brain, y_brain, z_brain, 1)`. Compose it with
-brain-side affines (e.g. brain-to-CCFv3 from a brain atlas) to register fUSI data
-into atlas space without going through the Iconeus lab frame explicitly. For
-multi-pose files (`3Dscan`, `4Dscan`) the affine has shape `(npose, 4, 4)` and is
-indexed by pose, the same way `physical_to_lab` is.
+Compose it with brain-side affines (e.g. brain-to-CCFv3 from a brain atlas) to register
+fUSI data into atlas space directly. For multi-pose files (`3Dscan`, `4Dscan`) the
+affine has shape `(npose, 4, 4)` and is indexed by pose, the same way `physical_to_lab`
+is.
 
 #### Converting SCAN Data to NIfTI
 
