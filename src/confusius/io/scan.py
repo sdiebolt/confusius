@@ -18,7 +18,7 @@ from confusius.io.utils import check_path
 PHYSICAL_TO_PROBE_PERMUTATION: npt.NDArray[np.float64] = np.array(
     [[0, 0, 1, 0], [1, 0, 0, 0], [0, -1, 0, 0], [0, 0, 0, 1]], dtype=float
 )
-"""Permutation matrix P that maps ConfUSIus physical to probe physical.
+"""Permutation matrix that maps ConfUSIus physical to probe physical.
 
 ConfUSIus input (z_conf, y_conf, x_conf, 1) is mapped to the probe physical (x_probe,
 y_probe, z_probe, 1):
@@ -27,8 +27,8 @@ y_probe, z_probe, 1):
   y_probe =  z_conf      (elevation, same direction)
   z_probe = -y_conf      (axial depth, sign flip: y_conf = -z_probe > 0)
 
-Its transpose P^T maps probe physical (x_probe, y_probe, z_probe, 1) back to
-ConfUSIus physical (z_conf, y_conf, x_conf, 1):
+Its transpose maps probe physical (x_probe, y_probe, z_probe, 1) back to ConfUSIus
+physical (z_conf, y_conf, x_conf, 1):
 
   z_conf =  y_probe      (elevation)
   y_conf = -z_probe      (depth, sign flip)
@@ -160,13 +160,13 @@ def _build_physical_to_lab(
     x_lab)` in millimetres, using the same permutation `P` that maps between the two
     physical spaces:
 
-    ```
-    physical_to_lab = P^T @ probeToLab @ P
+    ```python
+    physical_to_lab = PHYSICAL_TO_PROBE_PERMUTATION^T @ probeToLab @ PHYSICAL_TO_PROBE_PERMUTATION
     ```
 
-    where `P = PHYSICAL_TO_PROBE_PERMUTATION`. This produces a ConfUSIus-ordered affine
-    whose rotation block is identity for a non-rotated probe, making it directly usable
-    in napari and other tools that expect `(z, y, x)` axis order.
+    This produces a ConfUSIus-ordered affine whose rotation block is identity for a
+    non-rotated probe, making it directly usable in napari and other tools that expect
+    `(z, y, x)` axis order.
 
     Parameters
     ----------
@@ -179,8 +179,9 @@ def _build_physical_to_lab(
         `physical_to_lab` affine(s) in millimetres. Shape matches input: `(4, 4)` for
         `2Dscan` or `(npose, 4, 4)` for `3Dscan`/`4Dscan`.
     """
-    P = PHYSICAL_TO_PROBE_PERMUTATION
-    physical_to_lab = P.T @ probe_to_lab @ P
+    physical_to_lab = (
+        PHYSICAL_TO_PROBE_PERMUTATION.T @ probe_to_lab @ PHYSICAL_TO_PROBE_PERMUTATION
+    )
     physical_to_lab[..., :3, 3] *= 1e3
     return physical_to_lab
 
@@ -205,13 +206,12 @@ def load_bps(bps_path: str | Path) -> npt.NDArray[np.float64]:
     Iconeus-ordered metre lab coordinates is
 
     ```
-    confusius_lab_to_iconeus_lab = mm_to_m @ P
+    confusius_lab_to_iconeus_lab = mm_to_m @ PHYSICAL_TO_PROBE_PERMUTATION
     ```
 
-    where `P = PHYSICAL_TO_PROBE_PERMUTATION` permutes the axes from ConfUSIus
-    order `(z, y, x)` to probe / Iconeus-lab order `(x, y, z)`, and
-    `mm_to_m = diag(1e-3, 1e-3, 1e-3, 1)` rescales the translation column. The
-    returned affine is then
+    `PHYSICAL_TO_PROBE_PERMUTATION` permutes the axes from ConfUSIus order `(z, y, x)`
+    to probe / Iconeus-lab order `(x, y, z)`, and `mm_to_m = diag(1e-3, 1e-3, 1e-3, 1)`
+    rescales the translation column. The returned affine is then
 
     ```
     brain_to_confusius_lab = inv(confusius_lab_to_iconeus_lab) @ BrainToLab
@@ -233,9 +233,8 @@ def load_bps(bps_path: str | Path) -> npt.NDArray[np.float64]:
     with h5py.File(bps_path, "r") as f:
         brain_to_lab = f["BrainToLab"][:]
 
-    P = PHYSICAL_TO_PROBE_PERMUTATION
     mm_to_m = np.diag([1e-3, 1e-3, 1e-3, 1.0])
-    confusius_lab_to_iconeus_lab = mm_to_m @ P
+    confusius_lab_to_iconeus_lab = mm_to_m @ PHYSICAL_TO_PROBE_PERMUTATION
 
     brain_to_confusius_lab = np.linalg.inv(confusius_lab_to_iconeus_lab) @ brain_to_lab
     return brain_to_confusius_lab
