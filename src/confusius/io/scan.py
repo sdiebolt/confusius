@@ -182,7 +182,7 @@ def _build_physical_to_lab(
 
 
 def load_bps(bps_path: str | Path) -> npt.NDArray[np.float64]:
-    """Load a `.bps` file and return a `brain_to_lab` affine in ConfUSIus lab space.
+    """Load a BPS file and return an affine from Iconeus' brain space to ConfUSIus lab space.
 
     BPS files are HDF5 sidecars produced by Iconeus' brain positioning system. They
     store a `BrainToLab` affine that maps Iconeus brain coordinates `(x_brain, y_brain,
