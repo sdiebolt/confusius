@@ -84,9 +84,9 @@ list_datasets()
 ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━┓
 ┃ Fetch function                   ┃     Size ┃ On disk ┃
 ┡━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━┩
-│ fetch_cybis_pereira_2026         │    12 GB │    ✗    │
-│ fetch_nunez_elizalde_2022        │ 6.503 GB │    ✗    │
-│ fetch_template_pepe_mariani_2026 │ 5.252 MB │    ✗    │
+│ fetch_cybis_pereira_2026         │ 12.88 GB │    ✗    │
+│ fetch_nunez_elizalde_2022        │ 6.983 GB │    ✗    │
+│ fetch_template_pepe_mariani_2026 │ 5.508 MB │    ✗    │
 └──────────────────────────────────┴──────────┴─────────┘
 ```
 

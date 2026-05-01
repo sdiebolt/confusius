@@ -55,7 +55,7 @@ def _format_bytes(size_bytes: int) -> str:
     for unit in _SIZE_UNITS[:-1]:
         if abs(size) < 1000:
             return f"{size:.4g} {unit}"
-        size /= 1024
+        size /= 1000
     return f"{size:.4g} {_SIZE_UNITS[-1]}"
 
 
