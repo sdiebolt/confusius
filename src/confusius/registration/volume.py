@@ -525,9 +525,9 @@ def register_volume(
     moving_reg = _expand_thin_dims(moving_sitk)
 
     # CenteredTransformInitializer (and the registration method) require both images to
-    # have the same pixel type. Cast to Float64 to normalise across dtype combinations.
-    fixed_reg = sitk.Cast(fixed_reg, sitk.sitkFloat64)
-    moving_reg = sitk.Cast(moving_reg, sitk.sitkFloat64)
+    # have the same pixel type. Cast moving to fixed's type when they differ.
+    if moving_reg.GetPixelID() != fixed_reg.GetPixelID():
+        moving_reg = sitk.Cast(moving_reg, fixed_reg.GetPixelID())
 
     ndim = fixed_reg.GetDimension()
 
