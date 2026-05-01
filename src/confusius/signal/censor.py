@@ -7,6 +7,7 @@ import xarray as xr
 from xarray.core.types import InterpOptions
 
 from confusius._utils import find_stack_level
+from confusius.validation.coordinates import validate_matching_coordinates
 
 
 def _validate_sample_mask(
@@ -49,10 +50,12 @@ def _validate_sample_mask(
     mask_values = np.asarray(mask_values)
 
     if "time" in signals.coords and "time" in sample_mask.coords:
-        if not signals.coords["time"].equals(sample_mask.coords["time"]):
+        try:
+            validate_matching_coordinates(signals, sample_mask, "time")
+        except ValueError as exc:
             raise ValueError(
                 "sample_mask time coordinates do not match signals time coordinates"
-            )
+            ) from exc
 
     if mask_values.dtype != bool:
         raise ValueError(
@@ -94,7 +97,8 @@ def interpolate_samples(
         Boolean sample mask indicating which timepoints to keep (`True`) vs.
         interpolate (`False`). Must have a `time` dimension matching `signals`.
         If both `signals` and `sample_mask` have `time` coordinates, they must match
-        exactly.
+        within the default coordinate-comparison tolerance (`rtol=1e-5`,
+        `atol=1e-8`).
     method : {"linear", "nearest", "zero", "slinear", "quadratic", "cubic", "quintic", \
             "polynomial", "pchip", "barycentric", "krogh", "akima", "makima"}, \
             default: "linear"
@@ -222,7 +226,8 @@ def censor_samples(
     sample_mask : (time,) xarray.DataArray
         Boolean sample mask indicating which timepoints to keep (`True`) vs. remove
         (`False`). Must have a `time` dimension matching `signals`. If both
-        `signals` and `sample_mask` have `time` coordinates, they must match exactly.
+        `signals` and `sample_mask` have `time` coordinates, they must match within
+        the default coordinate-comparison tolerance (`rtol=1e-5`, `atol=1e-8`).
 
     Returns
     -------

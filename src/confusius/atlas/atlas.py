@@ -555,31 +555,23 @@ class Atlas:
             default_value=0.0,
             sitk_threads=sitk_threads,
         )
-        resampled_ann = (
-            resample_like_da(
-                self.annotation.astype(np.float32),
-                reference,
-                transform,
-                interpolation="nearest",
-                default_value=0.0,
-                sitk_threads=sitk_threads,
-            )
-            .round()
-            .astype(np.int32)
+        resampled_ann = resample_like_da(
+            self.annotation,
+            reference,
+            transform,
+            interpolation="nearest",
+            default_value=0,
+            sitk_threads=sitk_threads,
         )
         resampled_ann.attrs = self.annotation.attrs.copy()
 
-        resampled_hemi = (
-            resample_like_da(
-                self.hemispheres.astype(np.float32),
-                reference,
-                transform,
-                interpolation="nearest",
-                default_value=0.0,
-                sitk_threads=sitk_threads,
-            )
-            .round()
-            .astype(np.int8)
+        resampled_hemi = resample_like_da(
+            self.hemispheres,
+            reference,
+            transform,
+            interpolation="nearest",
+            default_value=0,
+            sitk_threads=sitk_threads,
         )
 
         new_dataset = xr.Dataset(
