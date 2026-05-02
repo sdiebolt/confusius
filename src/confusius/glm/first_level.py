@@ -21,7 +21,12 @@ from confusius.glm._design import (
     make_first_level_design_matrix,
 )
 from confusius.glm._models import ARModel, OLSModel, RegressionResults
-from confusius.glm._utils import estimate_ar_coeffs, expression_to_contrast_vector
+from confusius.glm._utils import (
+    consensus_attrs,
+    estimate_ar_coeffs,
+    expression_to_contrast_vector,
+)
+from confusius.validation.coordinates import validate_matching_coordinates
 from confusius.validation.time_series import validate_time_series
 
 if TYPE_CHECKING:
@@ -182,7 +187,7 @@ class FirstLevelModel(BaseEstimator):
         ValueError
             If neither `events` nor `design_matrices` is provided, if list lengths
             are inconsistent across arguments, or if runs have different spatial
-            shapes.
+            shapes or mismatched spatial coordinates.
         """
         if isinstance(run_data, xr.DataArray):
             run_data = [run_data]
@@ -192,13 +197,25 @@ class FirstLevelModel(BaseEstimator):
             validate_time_series(run, f"FirstLevelModel fit (run {i})")
 
         if n_runs > 1:
-            ref_spatial = {d: s for d, s in run_data[0].sizes.items() if d != "time"}
+            ref_run = run_data[0]
+            ref_spatial = {d: s for d, s in ref_run.sizes.items() if d != "time"}
             for i, run in enumerate(run_data[1:], start=1):
                 spatial = {d: s for d, s in run.sizes.items() if d != "time"}
                 if spatial != ref_spatial:
                     raise ValueError(
                         f"All runs must have the same spatial shape. "
                         f"Run 0 has {ref_spatial}, run {i} has {spatial}."
+                    )
+                shared_coord_dims = [
+                    d for d in ref_spatial if d in ref_run.coords and d in run.coords
+                ]
+                if shared_coord_dims:
+                    validate_matching_coordinates(
+                        ref_run,
+                        run,
+                        shared_coord_dims,
+                        left_name="run 0",
+                        right_name=f"run {i}",
                     )
 
         design_matrices_list = self._resolve_design_matrices(
@@ -214,6 +231,7 @@ class FirstLevelModel(BaseEstimator):
         self._spatial_dims: tuple[str, ...] = spatial_dims
         self._spatial_shapes: list[tuple[int, ...]] = []
         self._run_coords: list[dict[str, xr.Variable]] = []
+        self._input_attrs: dict[str, object] = consensus_attrs(run_data)
 
         for run_index in range(n_runs):
             data_2d, s_dims, s_shape = _flatten_spatial(run_data[run_index])
@@ -618,13 +636,14 @@ class FirstLevelModel(BaseEstimator):
             volume = flat.reshape(spatial_shape)
             dims = self._spatial_dims
 
+        attrs = {**self._input_attrs, "long_name": name, "cmap": "coolwarm"}
         return xr.DataArray(
             volume,
             dims=dims,
             coords={
                 d: spatial_coords[d] for d in self._spatial_dims if d in spatial_coords
             },
-            attrs={"long_name": name, "cmap": "coolwarm"},
+            attrs=attrs,
         )
 
     def _check_is_fitted(self) -> None:

@@ -115,6 +115,21 @@ class TestSecondLevelModelFit:
         assert_allclose(z_map.coords["y"].values, spatial_maps[0].coords["y"].values)
         assert_allclose(z_map.coords["x"].values, spatial_maps[0].coords["x"].values)
 
+    def test_consensus_attrs_propagated_across_maps(self, spatial_maps):
+        """Attributes equal across all maps propagate; conflicting ones are dropped."""
+        for i, da in enumerate(spatial_maps):
+            da.attrs.update(
+                {"task": "stim", "contrast": "A-B", "subject_id": f"s{i:02d}"}
+            )
+        model = SecondLevelModel()
+        model.fit(spatial_maps)
+        z_map = model.compute_contrast("intercept")
+        assert z_map.attrs["task"] == "stim"
+        assert z_map.attrs["contrast"] == "A-B"
+        assert "subject_id" not in z_map.attrs
+        assert z_map.attrs["long_name"] == "z_score"
+        assert z_map.attrs["cmap"] == "coolwarm"
+
     def test_sklearn_is_fitted(self, spatial_maps):
         model = SecondLevelModel()
         assert not model.__sklearn_is_fitted__()
@@ -338,6 +353,17 @@ class TestSecondLevelModelErrors:
         ]
         model = SecondLevelModel()
         with pytest.raises(ValueError, match="dimensions"):
+            model.fit(maps)
+
+    def test_spatial_coord_mismatch_raises(self, spatial_maps):
+        """Mismatched spatial coordinates between maps raise an informative error."""
+        bad = spatial_maps[1].assign_coords(z=spatial_maps[0].coords["z"] + 10.0)
+        maps = [spatial_maps[0], bad]
+        model = SecondLevelModel()
+        with pytest.raises(
+            ValueError,
+            match=r"Coordinate 'z' does not match between map 0 and map 1",
+        ):
             model.fit(maps)
 
     def test_design_matrix_row_mismatch_raises(self):

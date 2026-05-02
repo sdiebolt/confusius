@@ -169,6 +169,23 @@ class TestFirstLevelModelFit:
         assert_allclose(z_map.coords["y"].values, fusi_data.coords["y"].values)
         assert_allclose(z_map.coords["x"].values, fusi_data.coords["x"].values)
 
+    def test_consensus_attrs_propagated_across_runs(self, fusi_data, events):
+        """Attributes equal across all runs propagate to the contrast map."""
+        run_a = fusi_data.copy()
+        run_a.attrs = {"subject_id": "s01", "task": "stim", "session": 1}
+        run_b = fusi_data.copy()
+        run_b.attrs = {"subject_id": "s01", "task": "stim", "session": 2}
+        model = FirstLevelModel(noise_model="ols")
+        model.fit([run_a, run_b], events=[events, events])
+        z_map = model.compute_contrast("A")
+        assert z_map.attrs["subject_id"] == "s01"
+        assert z_map.attrs["task"] == "stim"
+        # Conflicting key dropped.
+        assert "session" not in z_map.attrs
+        # Output-specific attrs still set.
+        assert z_map.attrs["long_name"] == "z_score"
+        assert z_map.attrs["cmap"] == "coolwarm"
+
 
 # -----------------------------------------------------------------------------
 # FirstLevelModel: contrasts
@@ -408,6 +425,26 @@ class TestFirstLevelModelErrors:
         )
         model = FirstLevelModel(noise_model="ols")
         with pytest.raises(ValueError, match="spatial shape"):
+            model.fit([data1, data2], events=[events, events])
+
+    def test_spatial_coord_mismatch_raises(self, rng, frame_times, events):
+        """Multi-run fit raises if runs have mismatched spatial coordinates."""
+        data1 = xr.DataArray(
+            rng.standard_normal((200, 2, 3, 4)),
+            dims=["time", "z", "y", "x"],
+            coords={
+                "time": frame_times,
+                "z": np.arange(2) * 0.5,
+                "y": np.arange(3) * 0.1,
+                "x": np.arange(4) * 0.1,
+            },
+        )
+        data2 = data1.assign_coords(z=np.arange(2) * 0.5 + 10.0)
+        model = FirstLevelModel(noise_model="ols")
+        with pytest.raises(
+            ValueError,
+            match=r"Coordinate 'z' does not match between run 0 and run 1",
+        ):
             model.fit([data1, data2], events=[events, events])
 
     def test_confounds_list_length_mismatch_raises(self, fusi_data, events, rng):

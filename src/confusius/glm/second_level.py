@@ -19,8 +19,9 @@ from sklearn.base import BaseEstimator
 
 from confusius.glm._contrasts import Contrast
 from confusius.glm._models import OLSModel, RegressionResults
-from confusius.glm._utils import expression_to_contrast_vector
+from confusius.glm._utils import consensus_attrs, expression_to_contrast_vector
 from confusius.glm.first_level import FirstLevelModel
+from confusius.validation.coordinates import validate_matching_coordinates
 
 if TYPE_CHECKING:
     import numpy.typing as npt
@@ -159,8 +160,9 @@ class SecondLevelModel(BaseEstimator):
         ------
         ValueError
             If `second_level_input` is empty, if `FirstLevelModel` objects are passed
-            without `first_level_contrast`, if maps have inconsistent spatial shapes,
-            or if `design_matrix` row count does not match the number of inputs.
+            without `first_level_contrast`, if maps have inconsistent spatial shapes
+            or mismatched spatial coordinates, or if `design_matrix` row count does
+            not match the number of inputs.
         TypeError
             If `second_level_input` is not a list of `FirstLevelModel` or
             `xarray.DataArray`.
@@ -187,6 +189,17 @@ class SecondLevelModel(BaseEstimator):
                     f"All maps must have the same shape. "
                     f"Map 0 has shape {ref_shape}, map {i} has {da.shape}."
                 )
+            shared_coord_dims = [
+                d for d in ref_dims if d in ref.coords and d in da.coords
+            ]
+            if shared_coord_dims:
+                validate_matching_coordinates(
+                    ref,
+                    da,
+                    shared_coord_dims,
+                    left_name="map 0",
+                    right_name=f"map {i}",
+                )
 
         if design_matrix is not None:
             if len(design_matrix) != n_subjects:
@@ -208,6 +221,7 @@ class SecondLevelModel(BaseEstimator):
         self._coords: dict[str, xr.Variable] = {
             str(d): ref.coords[d] for d in ref_dims if d in ref.coords
         }
+        self._input_attrs: dict[str, object] = consensus_attrs(maps)
 
         return self
 
@@ -443,13 +457,14 @@ class SecondLevelModel(BaseEstimator):
             volume = flat.reshape(self._spatial_shape)
             dims = self._spatial_dims
 
+        attrs = {**self._input_attrs, "long_name": name, "cmap": "coolwarm"}
         return xr.DataArray(
             volume,
             dims=dims,
             coords={
                 d: self._coords[d] for d in self._spatial_dims if d in self._coords
             },
-            attrs={"long_name": name, "cmap": "coolwarm"},
+            attrs=attrs,
         )
 
     def _check_is_fitted(self) -> None:

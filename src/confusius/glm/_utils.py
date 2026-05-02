@@ -3,14 +3,72 @@
 from __future__ import annotations
 
 import warnings
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from confusius._utils import find_stack_level
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     import numpy.typing as npt
+    import xarray as xr
+
+
+def _attrs_equal(a: Any, b: Any) -> bool:
+    """Return whether two attribute values are equal.
+
+    Handles `numpy.ndarray` values via `numpy.array_equal` and falls back to `==`
+    for everything else; returns `False` on comparison errors.
+    """
+    if a is b:
+        return True
+    if isinstance(a, np.ndarray) or isinstance(b, np.ndarray):
+        try:
+            return bool(np.array_equal(a, b))
+        except Exception:
+            return False
+    try:
+        result = a == b
+    except Exception:
+        return False
+    if isinstance(result, np.ndarray):
+        return bool(result.all())
+    return bool(result)
+
+
+def consensus_attrs(arrays: Sequence[xr.DataArray]) -> dict[str, Any]:
+    """Return DataArray attributes shared and equal across all `arrays`.
+
+    Used to propagate consistent provenance/metadata through reductions that
+    combine several inputs (e.g. multi-run first-level GLMs, second-level
+    group analyses). Keys whose values differ across inputs, or that are
+    missing from any input, are dropped.
+
+    Parameters
+    ----------
+    arrays : Sequence[xarray.DataArray]
+        DataArrays whose `attrs` dictionaries should be intersected.
+
+    Returns
+    -------
+    dict
+        Attributes present and equal in every array's `attrs`. Empty if
+        `arrays` is empty.
+    """
+    if not arrays:
+        return {}
+    if len(arrays) == 1:
+        return dict(arrays[0].attrs)
+
+    ref_attrs = arrays[0].attrs
+    rest = arrays[1:]
+    return {
+        key: ref_val
+        for key, ref_val in ref_attrs.items()
+        if all(key in da.attrs and _attrs_equal(da.attrs[key], ref_val) for da in rest)
+    }
 
 
 def _yule_walker_2d(
