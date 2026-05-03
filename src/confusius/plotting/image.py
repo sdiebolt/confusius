@@ -1165,6 +1165,7 @@ class VolumePlotter:
             self._coord_to_axis.clear()
             self._axis_xlims.clear()
             self._axis_ylims.clear()
+            self._hover_manager.clear()
 
 
 def plot_contours(

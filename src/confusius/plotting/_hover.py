@@ -54,8 +54,14 @@ class _RegionHoverManager:
     """
 
     def __init__(self):
-        self.roi_labels: dict[int, str] = dict()
+        self.roi_labels: dict[int, str] = {}
         self._ax_layers: dict["Axes", list[_SliceLayer]] = {}
+        self._attached = False
+
+    def clear(self) -> None:
+        """Clear all registered slices and ROI labels."""
+        self.roi_labels.clear()
+        self._ax_layers.clear()
         self._attached = False
 
     def is_attached(self) -> bool:
