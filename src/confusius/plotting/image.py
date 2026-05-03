@@ -738,17 +738,17 @@ class VolumePlotter:
             slice_da = unthresholded_slices[slice_idx]
 
             if dim_col in slice_da.coords:
-                x_vals = _centers_to_edges(
-                    slice_da.coords[dim_col].values.astype(float)
-                )
+                hover_x = slice_da.coords[dim_col].values.astype(float)
+                x_vals = _centers_to_edges(hover_x)
             else:
+                hover_x = np.arange(slice_da.sizes[dim_col], dtype=float)
                 x_vals = np.arange(slice_da.sizes[dim_col] + 1, dtype=float)
 
             if dim_row in slice_da.coords:
-                y_vals = _centers_to_edges(
-                    slice_da.coords[dim_row].values.astype(float)
-                )
+                hover_y = slice_da.coords[dim_row].values.astype(float)
+                y_vals = _centers_to_edges(hover_y)
             else:
+                hover_y = np.arange(slice_da.sizes[dim_row], dtype=float)
                 y_vals = np.arange(slice_da.sizes[dim_row] + 1, dtype=float)
 
             im = ax.pcolormesh(
@@ -762,8 +762,8 @@ class VolumePlotter:
             self._attach_or_update_hover_manager(resolved_roi_labels)
             self._hover_manager.register_data_to_axis(
                 ax,
-                x_vals,
-                y_vals,
+                hover_x,
+                hover_y,
                 slice_da.values,
                 role="labels" if resolved_roi_labels else "volume",
                 name=str(data.name) if data.name is not None else "value",
