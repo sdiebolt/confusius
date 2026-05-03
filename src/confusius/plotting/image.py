@@ -414,13 +414,11 @@ class VolumePlotter:
             Mapping from integer label to display name during mouse hover.
         """
 
-        if self.figure is None:
-            return
+        if self.figure is not None:
+            if not self._hover_manager.is_attached():
+                self._hover_manager.attach_figure(self.figure)
 
-        if not self._hover_manager.is_attached():
-            self._hover_manager.attach_figure(self.figure)
-
-        self._hover_manager.roi_labels.update(roi_labels)
+            self._hover_manager.roi_labels.update(roi_labels)
 
     def _find_matching_axes(
         self, actual_coords: list[float], tolerance: float = 1e-6
@@ -1777,10 +1775,9 @@ def _attach_roi_labels_to_napari(layer: "Labels", roi_labels: dict[int, str]) ->
     names: list[float | str] = [float("nan")]
     for sid, name in roi_labels.items():
         sid_int = int(sid)
-        if sid_int == 0:
-            continue
-        ids.append(sid_int)
-        names.append(str(name))
+        if sid_int != 0:
+            ids.append(sid_int)
+            names.append(str(name))
     layer.features = pd.DataFrame({"index": ids, "name": names})
 
 
