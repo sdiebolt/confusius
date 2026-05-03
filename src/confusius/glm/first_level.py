@@ -94,9 +94,10 @@ class FirstLevelModel(BaseEstimator):
         Oversampling factor for HRF convolution.
     min_onset : float, default: -24.0
         Minimum onset time in seconds for event regressors.
-    uniformity_tolerance : float, default: 1e-5
-        Maximum allowed relative range of consecutive intervals in the run `time`
-        coordinate, defined as `(max_interval - min_interval) / median_interval`.
+    uniformity_tolerance : float, default: 1e-2
+        Maximum allowed per-interval relative deviation from the median consecutive
+        interval in the run `time` coordinate (see
+        [`get_representative_step`][confusius._utils.get_representative_step]).
         Increase this value to tolerate slight timestamp jitter.
 
     Attributes
@@ -138,7 +139,7 @@ class FirstLevelModel(BaseEstimator):
         minimize_memory: bool = True,
         oversampling: int = 50,
         min_onset: float = -24.0,
-        uniformity_tolerance: float = 1e-5,
+        uniformity_tolerance: float = 1e-2,
     ) -> None:
         self.hrf_model = hrf_model
         self.drift_model = drift_model

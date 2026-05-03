@@ -31,7 +31,7 @@ VALID_EVENT_COLUMNS = {"onset", "duration", "trial_type", "modulation"}
 def _compute_sampling_interval(
     volume_times: npt.NDArray[np.floating],
     *,
-    uniformity_tolerance: float = 1e-5,
+    uniformity_tolerance: float = 1e-2,
 ) -> float:
     """Compute the sampling interval from uniformly spaced volume times.
 
@@ -40,10 +40,12 @@ def _compute_sampling_interval(
     volume_times : (n_volumes,) numpy.ndarray
         Volume acquisition times in seconds. Must be strictly increasing and
         uniformly spaced.
-    uniformity_tolerance : float, default: 1e-5
-        Maximum allowed relative range of consecutive intervals, defined as
-        `(max_interval - min_interval) / median_interval`. Increase this value to
-        tolerate slight timestamp jitter (e.g. from acquisition clocks).
+    uniformity_tolerance : float, default: 1e-2
+        Maximum allowed per-interval relative deviation from the median consecutive
+        interval (see
+        [`get_representative_step`][confusius._utils.get_representative_step]).
+        Increase this value to tolerate slight timestamp jitter (e.g. from
+        acquisition clocks).
 
     Returns
     -------
@@ -462,7 +464,7 @@ def _compute_condition_regressors(
     oversampling: int = 50,
     min_onset: float = -24.0,
     *,
-    uniformity_tolerance: float = 1e-5,
+    uniformity_tolerance: float = 1e-2,
 ) -> npt.NDArray[np.floating]:
     """Compute design matrix regressors for one experimental condition.
 
@@ -487,9 +489,10 @@ def _compute_condition_regressors(
         Temporal oversampling factor for HRF convolution.
     min_onset : float, default: -24.0
         Earliest onset relative to the first volume that will be modeled.
-    uniformity_tolerance : float, default: 1e-5
-        Maximum allowed relative range of consecutive intervals in `volume_times`,
-        defined as `(max_interval - min_interval) / median_interval`.
+    uniformity_tolerance : float, default: 1e-2
+        Maximum allowed per-interval relative deviation from the median consecutive
+        interval in `volume_times` (see
+        [`get_representative_step`][confusius._utils.get_representative_step]).
 
     Returns
     -------
@@ -612,7 +615,7 @@ def make_first_level_design_matrix(
     confound_names: list[str] | None = None,
     oversampling: int = 50,
     min_onset: float = -24.0,
-    uniformity_tolerance: float = 1e-5,
+    uniformity_tolerance: float = 1e-2,
 ) -> pd.DataFrame:
     """Create a first-level design matrix from events and confounds.
 
@@ -643,10 +646,11 @@ def make_first_level_design_matrix(
         Oversampling factor for HRF convolution.
     min_onset : float, default: -24.0
         Minimum onset time in seconds for event regressors.
-    uniformity_tolerance : float, default: 1e-5
-        Maximum allowed relative range of consecutive intervals in `volume_times`,
-        defined as `(max_interval - min_interval) / median_interval`. Raise a
-        `ValueError` if the time coordinate exceeds this threshold. Increase this
+    uniformity_tolerance : float, default: 1e-2
+        Maximum allowed per-interval relative deviation from the median consecutive
+        interval in `volume_times` (see
+        [`get_representative_step`][confusius._utils.get_representative_step]).
+        Raise a `ValueError` if any interval exceeds this threshold. Increase this
         value to tolerate slight timestamp jitter (e.g. from acquisition clocks).
 
     Returns
