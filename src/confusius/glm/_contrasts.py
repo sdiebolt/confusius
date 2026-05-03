@@ -147,7 +147,6 @@ class Contrast:
             warnings.warn(
                 f"stat_type='t' is incompatible with a {self.dim}-dimensional contrast; "
                 "switching to 'F'.",
-                UserWarning,
                 stacklevel=find_stack_level(),
             )
             stat_type = "F"
