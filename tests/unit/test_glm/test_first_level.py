@@ -145,6 +145,39 @@ class TestFirstLevelModelFit:
         assert z_map.dims == ("y", "x")
         assert z_map.shape == (5, 6)
 
+    def test_minimize_memory_strips_diagnostic_fields(self, fusi_data, events):
+        """minimize_memory=True drops Y/whitened_Y/whitened_residuals/model post-fit.
+
+        Contrast-relevant fields (theta, cov, dispersion, df_residuals) must
+        survive so contrasts still work; diagnostic accessors raise.
+        """
+        model = FirstLevelModel(noise_model="ols", minimize_memory=True)
+        model.fit(fusi_data, events=events)
+        results = model.results_[0]
+        assert results.Y is None
+        assert results.whitened_Y is None
+        assert results.whitened_residuals is None
+        assert results.model is None
+        assert results.theta is not None
+        # Contrast still works after stripping.
+        z_map = model.compute_contrast("A - B")
+        assert np.all(np.isfinite(z_map.values))
+        # Diagnostic accessors raise an informative error.
+        with pytest.raises(RuntimeError, match="minimize_memory"):
+            _ = results.residuals
+        with pytest.raises(RuntimeError, match="minimize_memory"):
+            _ = results.predicted
+
+    def test_minimize_memory_false_keeps_fields(self, fusi_data, events):
+        """minimize_memory=False keeps the full RegressionResults."""
+        model = FirstLevelModel(noise_model="ols", minimize_memory=False)
+        model.fit(fusi_data, events=events)
+        results = model.results_[0]
+        assert results.Y is not None
+        assert results.whitened_residuals is not None
+        # Diagnostic accessors work.
+        assert np.all(np.isfinite(results.residuals))
+
     def test_fit_with_confounds(self, fusi_data, events, rng):
         confounds = pd.DataFrame(
             {"motion_x": rng.standard_normal(200), "motion_y": rng.standard_normal(200)}
@@ -266,6 +299,36 @@ class TestFirstLevelModelContrastMultiRun:
         assert z_map.shape == (2, 3, 4)
         assert np.all(np.isfinite(z_map.values))
 
+    def test_multi_run_effect_is_pooled_average(self, rng, frame_times, events):
+        """Multi-run effect_size is the pooled fixed-effects average, not the sum.
+
+        Subjects with more runs would contribute proportionally larger
+        effect/variance maps to second-level inputs if `compute_contrast` did
+        not divide by `n_runs` after summing.
+        """
+        data1 = xr.DataArray(
+            rng.standard_normal((200, 2, 3, 4)),
+            dims=["time", "z", "y", "x"],
+            coords={"time": frame_times},
+        )
+        data2 = xr.DataArray(
+            rng.standard_normal((200, 2, 3, 4)),
+            dims=["time", "z", "y", "x"],
+            coords={"time": frame_times},
+        )
+        single = FirstLevelModel(noise_model="ols")
+        single.fit(data1, events=events)
+        e_single = single.compute_contrast("A - B", output_type="effect").values
+
+        multi = FirstLevelModel(noise_model="ols")
+        multi.fit([data1, data2], events=[events, events])
+        e_multi = multi.compute_contrast("A - B", output_type="effect").values
+
+        # Without averaging the multi-run effect would be roughly twice as
+        # large as a single-run effect; with averaging it stays on the same
+        # scale (mean of two unbiased estimates).
+        assert np.median(np.abs(e_multi)) < 1.5 * np.median(np.abs(e_single))
+
     def test_multi_run_confounds_as_list(self, rng, frame_times, events):
         """Multi-run fit with per-run confounds as a list."""
         data1 = xr.DataArray(
@@ -330,6 +393,42 @@ class TestFirstLevelModelFContrast:
         c[1, 1] = -1.0
         z_map = self.model.compute_contrast(c, stat_type="F")
         assert z_map.shape == (2, 3, 4)
+
+    def test_f_contrast_matches_underlying_quadratic_form(self):
+        """F-contrast statistic matches the proper quadratic form.
+
+        Regression test: an earlier implementation reduced the per-voxel
+        contrast covariance to the mean of its diagonal, which only happens
+        to be correct for orthogonal designs. A non-axis-aligned contrast on
+        non-orthogonal columns exposes the bug.
+        """
+        dm = self.model.design_matrices_[0]
+        a = list(dm.columns).index("A")
+        b = list(dm.columns).index("B")
+        # Non-axis-aligned 2-row contrast — rows are not orthogonal in design space.
+        c = np.zeros((2, len(dm.columns)))
+        c[0, a] = 1.0
+        c[0, b] = 1.0
+        c[1, a] = 1.0
+        c[1, b] = -1.0
+
+        stat_map = self.model.compute_contrast(
+            c, stat_type="F", output_type="statistic"
+        )
+
+        # Independent reference: pull theta/cov/dispersion from the fitted
+        # results and compute F = ctheta' · invcov · ctheta / (q · dispersion)
+        # voxelwise without going through the contrast wrapper.
+        results = self.model.results_[0]
+        ctheta = c @ results.theta  # (q, V)
+        cov_q = c @ results.cov @ c.T  # (q, q)
+        invcov = np.linalg.inv(cov_q)
+        f_expected = np.einsum("qv,qp,pv->v", ctheta, invcov, ctheta) / (
+            2 * results.dispersion
+        )
+        assert_allclose(
+            stat_map.values.ravel(), f_expected, rtol=1e-10, atol=1e-12
+        )
 
 
 # -----------------------------------------------------------------------------

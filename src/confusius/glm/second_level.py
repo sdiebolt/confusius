@@ -331,10 +331,13 @@ class SecondLevelModel(BaseEstimator):
         else:
             f_res = self.results_.f_contrast(contrast_vec)
             q = int(f_res["df_num"])
-            variance = f_res["covariance"][:, np.arange(q), np.arange(q)].mean(axis=1)
+            # Whitened-effect + per-voxel residual variance form the F-contrast
+            # so that `Contrast` can recover the correct quadratic-form F via
+            # `sum(effect²) / dim / variance` — see
+            # [`f_contrast`][confusius.glm._models.RegressionResults.f_contrast].
             contrast_obj = Contrast.from_estimate(
-                effect=f_res["effect"],
-                variance=variance,
+                effect=f_res["whitened_effect"],
+                variance=f_res["dispersion"],
                 dof=float(f_res["df_den"]),
                 stat_type="F",
                 dim=int(q),

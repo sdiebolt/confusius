@@ -396,16 +396,37 @@ class RegressionResults:
     ) -> None:
         """Initialize regression results container."""
         self.theta = theta
-        self.Y = Y
-        self.model = model
-        self.whitened_Y = whitened_Y
-        self.whitened_residuals = whitened_residuals
         self.dispersion = dispersion
         self.cov = cov
+
+        # Heavy fields. Kept for diagnostics (residuals/predicted/sse/mse) but
+        # dropped by `_strip_heavy_fields` when the parent estimator runs with
+        # `minimize_memory=True`. Once stripped, the diagnostic properties
+        # raise; contrast methods (`t_contrast`, `f_contrast`) keep working
+        # because they only depend on `theta`, `cov`, `dispersion`,
+        # `df_residuals`.
+        self.Y: npt.NDArray[np.floating] | None = Y
+        self.model: OLSModel | ARModel | None = model
+        self.whitened_Y: npt.NDArray[np.floating] | None = whitened_Y
+        self.whitened_residuals: npt.NDArray[np.floating] | None = whitened_residuals
 
         self.df_total = Y.shape[0]
         self.df_model = model.df_model
         self.df_residuals = self.df_total - self.df_model
+
+    def _strip_heavy_fields(self) -> None:
+        """Drop arrays only used by diagnostic properties.
+
+        Frees `Y`, `whitened_Y`, `whitened_residuals`, and the `model`
+        reference. After this call, contrast computations still work but
+        `residuals`, `predicted`, `sse`, `mse` raise. Used by
+        [`FirstLevelModel`][confusius.glm.first_level.FirstLevelModel] when
+        `minimize_memory=True`.
+        """
+        self.Y = None
+        self.model = None
+        self.whitened_Y = None
+        self.whitened_residuals = None
 
     @property
     def residuals(self) -> npt.NDArray[np.floating]:
@@ -415,7 +436,17 @@ class RegressionResults:
         -------
         (n_timepoints, n_voxels) numpy.ndarray
             Raw residuals.
+
+        Raises
+        ------
+        RuntimeError
+            If the heavy fields were stripped via `minimize_memory=True`.
         """
+        if self.Y is None:
+            raise RuntimeError(
+                "Y was dropped by minimize_memory=True; refit with "
+                "minimize_memory=False to access residuals."
+            )
         return self.Y - self.predicted
 
     @property
@@ -426,7 +457,17 @@ class RegressionResults:
         -------
         (n_timepoints, n_voxels) numpy.ndarray
             Fitted values.
+
+        Raises
+        ------
+        RuntimeError
+            If the model reference was dropped via `minimize_memory=True`.
         """
+        if self.model is None:
+            raise RuntimeError(
+                "model was dropped by minimize_memory=True; refit with "
+                "minimize_memory=False to access predicted."
+            )
         return self.model.design @ self.theta
 
     @property
@@ -437,7 +478,17 @@ class RegressionResults:
         -------
         (n_voxels,) numpy.ndarray
             Sum of squared whitened residuals per voxel.
+
+        Raises
+        ------
+        RuntimeError
+            If `whitened_residuals` was dropped via `minimize_memory=True`.
         """
+        if self.whitened_residuals is None:
+            raise RuntimeError(
+                "whitened_residuals was dropped by minimize_memory=True; "
+                "refit with minimize_memory=False to access sse/mse."
+            )
         return np.sum(self.whitened_residuals**2, axis=0)
 
     @property
@@ -512,8 +563,16 @@ class RegressionResults:
         -------
         dict
             Dictionary with keys:
-            - `"effect"`: Contrast effect vector `(q, n_voxels)`.
-            - `"covariance"`: Covariance matrix.
+
+            - `"effect"`: Raw contrast effect `c·θ`, shape `(q, n_voxels)`.
+            - `"whitened_effect"`: Effect whitened by `cholesky(invcov)`, shape
+              `(q, n_voxels)`. Designed so that
+              `sum(whitened_effect**2, axis=0) / q / dispersion == F`, which is
+              what [`Contrast`][confusius.glm._contrasts.Contrast] consumes
+              downstream.
+            - `"covariance"`: Per-voxel contrast covariance with dispersion,
+              shape `(n_voxels, q, q)`.
+            - `"dispersion"`: Per-voxel residual variance, shape `(n_voxels,)`.
             - `"F"`: *F*-statistic `(n_voxels,)`.
             - `"df_num"`: Numerator degrees of freedom (`q`).
             - `"df_den"`: Denominator degrees of freedom.
@@ -523,23 +582,33 @@ class RegressionResults:
 
         ctheta = contrast @ self.theta  # (q, n_voxels)
 
-        # cov is (V, K, K) for per-voxel AR, (K, K) for OLS.
+        # Build the per-voxel q×q contrast covariance at unit dispersion, then
+        # whiten the effect with the Cholesky factor of its inverse. With
+        # L @ L.T == invcov, `whitened = L.T @ ctheta` satisfies
+        # ||whitened||² == ctheta' · invcov · ctheta, which is the quadratic
+        # form that defines the F-statistic. This is the trick nilearn uses
+        # (with sqrtm) so that downstream code only needs the standard
+        # `sum(effect²) / dim / variance` formula to recover the correct F.
         if self.cov.ndim == 3:
-            # Per-voxel contrast covariance: (V, q, q)
-            cov = np.einsum("qk,vkl,pl->vqp", contrast, self.cov, contrast)
-            invcov = np.linalg.inv(cov)
-            ctheta_v = ctheta.T  # (V, q)
-            f_stat = np.einsum("vij,vj,vi->v", invcov, ctheta_v, ctheta_v) / (
-                q * self.dispersion
-            )
+            cov_q = np.einsum("qk,vkl,pl->vqp", contrast, self.cov, contrast)
+            invcov = np.linalg.inv(cov_q)
+            L = np.linalg.cholesky(invcov)  # (V, q, q)
+            whitened = np.einsum("vpq,pv->qv", L, ctheta)  # (q, V)
+            cov_full = cov_q * self.dispersion[:, None, None]
         else:
-            cov = contrast @ self.cov @ contrast.T  # (q, q)
-            invcov = spl.inv(cov)
-            f_stat = np.sum((invcov @ ctheta) * ctheta, axis=0) / (q * self.dispersion)
+            cov_q = contrast @ self.cov @ contrast.T  # (q, q)
+            invcov = spl.inv(cov_q)
+            L = np.linalg.cholesky(invcov)  # (q, q)
+            whitened = L.T @ ctheta  # (q, V)
+            cov_full = cov_q[None, ...] * self.dispersion[:, None, None]
+
+        f_stat = np.sum(whitened**2, axis=0) / (q * self.dispersion)
 
         return {
             "effect": ctheta,
-            "covariance": cov * self.dispersion[:, np.newaxis, np.newaxis],
+            "whitened_effect": whitened,
+            "covariance": cov_full,
+            "dispersion": self.dispersion,
             "F": f_stat,
             "df_num": q,
             "df_den": self.df_residuals,

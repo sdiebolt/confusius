@@ -352,18 +352,33 @@ class TestRegressionResults:
 
         f_result = results.f_contrast(contrast)
 
-        assert "effect" in f_result
-        assert "covariance" in f_result
-        assert "F" in f_result
-        assert "df_num" in f_result
-        assert "df_den" in f_result
+        for key in (
+            "effect",
+            "whitened_effect",
+            "covariance",
+            "dispersion",
+            "F",
+            "df_num",
+            "df_den",
+        ):
+            assert key in f_result
 
-        # Shapes
+        # Shapes.
         assert f_result["effect"].shape == (3, 10)  # (q, n_voxels)
+        assert f_result["whitened_effect"].shape == (3, 10)  # (q, n_voxels)
         assert f_result["covariance"].shape == (10, 3, 3)  # (n_voxels, q, q)
+        assert f_result["dispersion"].shape == (10,)
         assert f_result["F"].shape == (10,)  # (n_voxels,)
         assert f_result["df_num"] == 3
         assert f_result["df_den"] == 30
+        # Whitening invariant: ||whitened||² / q / dispersion == F.
+        assert_allclose(
+            np.sum(f_result["whitened_effect"] ** 2, axis=0)
+            / 3
+            / f_result["dispersion"],
+            f_result["F"],
+            rtol=1e-10,
+        )
 
     def test_f_vs_t_equivalence(self, design_matrix, response_matrix):
         """F-statistic with 1 df should equal t-statistic squared."""

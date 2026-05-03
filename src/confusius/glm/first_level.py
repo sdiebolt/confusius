@@ -268,6 +268,13 @@ class FirstLevelModel(BaseEstimator):
                 ar_model = ARModel(design_array, rho_per_voxel)
                 results = ar_model.fit(data_2d)
 
+            if self.minimize_memory:
+                # Drop large per-run arrays (Y, whitened_Y, whitened_residuals
+                # and the model reference) once the contrast-relevant fields
+                # are computed. Diagnostic accessors (residuals/predicted/sse/
+                # mse) raise after this; contrasts keep working.
+                results._strip_heavy_fields()
+
             self.results_.append(results)
 
         return self
@@ -507,14 +514,15 @@ class FirstLevelModel(BaseEstimator):
             else:
                 f_res = results.f_contrast(contrast_vec)
                 q = int(f_res["df_num"])
-                # Per-voxel variance: mean of diagonal of each voxel's contrast
-                # covariance matrix. covariance is always (V, q, q).
-                variance = f_res["covariance"][:, np.arange(q), np.arange(q)].mean(
-                    axis=1
-                )  # (V,)
+                # The F-contrast is fed to Contrast as a "whitened effect +
+                # per-voxel residual variance" pair so that
+                # sum(effect²) / dim / variance recovers the proper quadratic
+                # form ctheta' · invcov · ctheta / (q · dispersion). See
+                # [`f_contrast`][confusius.glm._models.RegressionResults.f_contrast]
+                # for the whitening derivation.
                 run_contrast = Contrast.from_estimate(
-                    effect=f_res["effect"],
-                    variance=variance,
+                    effect=f_res["whitened_effect"],
+                    variance=f_res["dispersion"],
                     dof=float(f_res["df_den"]),
                     stat_type="F",
                     dim=int(q),
@@ -524,7 +532,12 @@ class FirstLevelModel(BaseEstimator):
             combined = run_contrast if combined is None else combined + run_contrast
 
         assert combined is not None  # At least one run guaranteed.
-        return combined
+        # Average across runs: sum-then-scale gives the pooled fixed-effects
+        # estimate (effect / n, variance / n²). The test statistic is invariant
+        # to this scaling; only the readable effect/variance change. This is
+        # the same pattern as `nilearn.glm.contrasts.compute_fixed_effect_contrast`.
+        n_runs = len(self.results_)
+        return combined * (1.0 / n_runs) if n_runs > 1 else combined
 
     def _resolve_contrast_vector(
         self,
