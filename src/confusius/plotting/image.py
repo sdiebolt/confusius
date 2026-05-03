@@ -13,6 +13,10 @@ from napari.utils.colormaps import DirectLabelColormap
 from confusius._utils import find_stack_level, get_coordinate_spacings_best_effort
 from confusius.atlas._structures import _build_atlas_cmap_and_norm
 from confusius.extract import extract_with_mask
+from confusius.plotting._hover import (
+    _normalize_roi_labels,
+    _RegionHoverManager,
+)
 from confusius.signal import clean
 from confusius.validation import validate_time_series
 
@@ -357,6 +361,8 @@ class VolumePlotter:
         self._axis_xlims: dict[int, tuple[float, float]] = {}
         self._axis_ylims: dict[int, tuple[float, float]] = {}
 
+        self._hover_manager = _RegionHoverManager()
+
     def _ensure_figure(
         self,
         n_slices: int,
@@ -398,6 +404,21 @@ class VolumePlotter:
 
         self.axes = np.array(axes_array)
         self.figure.patch.set_facecolor("black" if self._black_bg else "white")
+
+    def _attach_or_update_hover_manager(self, roi_labels: dict[int, str]) -> None:
+        """Ensure hover manager is attached to figure and update its ROI labels.
+
+        Parameters
+        ----------
+        roi_labels : dict[int, str]
+            Mapping from integer label to display name during mouse hover.
+        """
+
+        if self.figure is not None:
+            if not self._hover_manager.is_attached():
+                self._hover_manager.attach_figure(self.figure)
+
+            self._hover_manager.roi_labels.update(roi_labels)
 
     def _find_matching_axes(
         self, actual_coords: list[float], tolerance: float = 1e-6
@@ -513,6 +534,7 @@ class VolumePlotter:
         alpha: float = 1.0,
         show_colorbar: bool = True,
         cbar_label: str | None = None,
+        roi_labels: dict[int, str] | None = None,
         show_titles: bool = True,
         show_axis_labels: bool = True,
         show_axis_ticks: bool = True,
@@ -560,6 +582,10 @@ class VolumePlotter:
             Whether to add a colorbar.
         cbar_label : str, optional
             Label for the colorbar.
+        roi_labels : dict[int, str], optional
+            Mapping from integer label to display name. When provided (or when
+            `data.attrs["roi_labels"]` is populated), hovering the cursor over a
+            voxel shows `<layer.name>=<id> (<name>)` in the matplotlib status bar.
         show_titles : bool, default: True
             Whether to display subplot titles.
         show_axis_labels : bool, default: True
@@ -591,6 +617,9 @@ class VolumePlotter:
         import matplotlib.pyplot as plt
 
         data = _coerce_complex_to_magnitude(data, caller="VolumePlotter.add_volume")
+        resolved_roi_labels = _normalize_roi_labels(
+            roi_labels if roi_labels is not None else data.attrs.get("roi_labels")
+        )
 
         squeeze_dims = [
             d for d in data.dims if d != self.slice_mode and data.sizes[d] == 1
@@ -709,17 +738,17 @@ class VolumePlotter:
             slice_da = unthresholded_slices[slice_idx]
 
             if dim_col in slice_da.coords:
-                x_vals = _centers_to_edges(
-                    slice_da.coords[dim_col].values.astype(float)
-                )
+                hover_x = slice_da.coords[dim_col].values.astype(float)
+                x_vals = _centers_to_edges(hover_x)
             else:
+                hover_x = np.arange(slice_da.sizes[dim_col], dtype=float)
                 x_vals = np.arange(slice_da.sizes[dim_col] + 1, dtype=float)
 
             if dim_row in slice_da.coords:
-                y_vals = _centers_to_edges(
-                    slice_da.coords[dim_row].values.astype(float)
-                )
+                hover_y = slice_da.coords[dim_row].values.astype(float)
+                y_vals = _centers_to_edges(hover_y)
             else:
+                hover_y = np.arange(slice_da.sizes[dim_row], dtype=float)
                 y_vals = np.arange(slice_da.sizes[dim_row] + 1, dtype=float)
 
             im = ax.pcolormesh(
@@ -729,6 +758,16 @@ class VolumePlotter:
                 cmap=cmap,
                 norm=norm,
                 alpha=alpha,
+            )
+            self._attach_or_update_hover_manager(resolved_roi_labels)
+            self._hover_manager.register_data_to_axis(
+                ax,
+                hover_x,
+                hover_y,
+                slice_da.values,
+                role="labels" if resolved_roi_labels else "volume",
+                name=str(data.name) if data.name is not None else "value",
+                units=data.attrs.get("units"),
             )
             ax.set_aspect("equal")
             self._style_ax(ax)
@@ -792,6 +831,7 @@ class VolumePlotter:
         linestyles: str = "solid",
         match_coordinates: bool = True,
         slice_coords: list[float] | None = None,
+        roi_labels: dict[int, str] | None = None,
         **kwargs,
     ) -> "VolumePlotter":
         """Add mask contours to existing axes.
@@ -830,6 +870,12 @@ class VolumePlotter:
             Coordinate values along the plotter's `slice_mode` at which to draw
             contours. Slices are selected by nearest-neighbour lookup. If not
             provided, all coordinate values along `slice_mode` are used.
+        roi_labels : dict[int, str], optional
+            Mapping from integer label to display name. When provided (or when
+            `mask.attrs["roi_labels"]` is populated), hovering the cursor over a
+            voxel shows `<data_name>=<id> (<roi_name>)` in the matplotlib status bar. The
+            cursor samples the underlying label map directly, so hovering inside
+            a closed contour is sufficient — there is no need to be on the line.
         **kwargs
             Additional keyword arguments passed to
             [`matplotlib.axes.Axes.plot`][matplotlib.axes.Axes.plot].
@@ -848,6 +894,10 @@ class VolumePlotter:
         """
         import matplotlib.colors as mcolors
         from skimage.measure import find_contours
+
+        resolved_roi_labels = _normalize_roi_labels(
+            roi_labels if roi_labels is not None else mask.attrs.get("roi_labels")
+        )
 
         # Stacked mask format: (mask, z, y, x) — one layer per region.
         if "mask" in mask.dims:
@@ -888,6 +938,7 @@ class VolumePlotter:
                     linestyles=linestyles,
                     match_coordinates=match_coordinates,
                     slice_coords=slice_coords,
+                    roi_labels=resolved_roi_labels or None,
                     **kwargs,
                 )
             return self
@@ -1040,6 +1091,17 @@ class VolumePlotter:
                         **kwargs,
                     )
 
+            if resolved_roi_labels and self.figure is not None:
+                self._attach_or_update_hover_manager(resolved_roi_labels)
+                self._hover_manager.register_data_to_axis(
+                    ax,
+                    x_coords=np.asarray(x_coords, dtype=float),
+                    y_coords=np.asarray(y_coords, dtype=float),
+                    data_2d=np.asarray(slice_data),
+                    role="labels",
+                    name=str(mask.name) if mask.name is not None else "label",
+                )
+
             if not match_coordinates:
                 ax.set_aspect("equal")
 
@@ -1103,6 +1165,7 @@ class VolumePlotter:
             self._coord_to_axis.clear()
             self._axis_xlims.clear()
             self._axis_ylims.clear()
+            self._hover_manager.clear()
 
 
 def plot_contours(
@@ -1118,6 +1181,7 @@ def plot_contours(
     black_bg: bool = True,
     figure: "Figure | None" = None,
     axes: "npt.NDArray[Any] | Axes | None" = None,
+    roi_labels: dict[int, str] | None = None,
     **kwargs,
 ) -> VolumePlotter:
     """Plot mask contours as a grid of 2D slice panels.
@@ -1169,6 +1233,10 @@ def plot_contours(
         [`matplotlib.axes.Axes`][matplotlib.axes.Axes] or a 2D array of them. A single
         `Axes` is wrapped automatically. If not provided, new axes are created inside
         `figure`.
+    roi_labels : dict[int, str], optional
+        Mapping from integer label to display name. When provided (or when
+        `mask.attrs["roi_labels"]` is populated), hovering the cursor over a
+        voxel shows `<data_name>=<id> (<roi_name>)` in the matplotlib status bar.
     **kwargs
         Additional keyword arguments passed to
         [`matplotlib.axes.Axes.plot`][matplotlib.axes.Axes.plot].
@@ -1228,6 +1296,7 @@ def plot_contours(
         linestyles=linestyles,
         match_coordinates=False,
         slice_coords=slice_coords,
+        roi_labels=roi_labels,
         **kwargs,
     )
 
@@ -1246,6 +1315,7 @@ def plot_volume(
     alpha: float = 1.0,
     show_colorbar: bool = True,
     cbar_label: str | None = None,
+    roi_labels: dict[int, str] | None = None,
     show_titles: bool = True,
     show_axis_labels: bool = True,
     show_axis_ticks: bool = True,
@@ -1306,6 +1376,10 @@ def plot_volume(
         Whether to add a shared colorbar to the figure.
     cbar_label : str, optional
         Label for the colorbar.
+    roi_labels : dict[int, str], optional
+        Mapping from integer label to display name. When provided (or when
+        `data.attrs["roi_labels"]` is populated), hovering the cursor over a
+        voxel shows `<data_name>=<id> (<roi_name>)` in the matplotlib status bar.
     show_titles : bool, default: True
         Whether to display subplot titles showing the slice coordinate.
     show_axis_labels : bool, default: True
@@ -1335,6 +1409,10 @@ def plot_volume(
         Number of columns in the subplot grid. If not provided, computed automatically.
     dpi : int, optional
         Figure resolution in dots per inch. Ignored when `figure` is provided.
+    roi_labels : dict[int, str], optional
+        Mapping from integer label to display name. When provided (or when
+        `data.attrs["roi_labels"]` is populated), hovering the cursor over a
+        voxel shows `<data_name>=<id> (<roi_name>)` in the matplotlib status bar.
 
     Returns
     -------
@@ -1419,6 +1497,7 @@ def plot_volume(
         nrows=nrows,
         ncols=ncols,
         dpi=dpi,
+        roi_labels=roi_labels,
     )
 
 
@@ -1654,6 +1733,9 @@ def plot_napari(
             **layer_kwargs,
         )
 
+        if (roi_labels := data.attrs.get("roi_labels")) is not None:
+            _attach_roi_labels_to_napari(layer, roi_labels)
+
     else:
         raise ValueError(
             f"Unknown layer_type: {layer_type!r}. Expected 'image' or 'labels'."
@@ -1668,6 +1750,36 @@ def plot_napari(
         viewer.scale_bar.unit = scale_bar_unit
 
     return viewer, layer
+
+
+def _attach_roi_labels_to_napari(layer: "Labels", roi_labels: dict[int, str]) -> None:
+    """Make a napari Labels layer report the ROI name in the status bar.
+
+    Sets `layer.features` so that napari's built-in
+    `napari.layers.Labels.get_status` appends `name: <roi name>` to the status
+    bar (and the cursor tooltip when `viewer.tooltip.visible` is `True`)
+    whenever the cursor is over a labelled voxel.
+
+    A row for label `0` is included with a NaN name so background hovers do not
+    show napari's default `[No Properties]` placeholder.
+
+    Parameters
+    ----------
+    layer : napari.layers.Labels
+        Layer whose `features` table will be replaced.
+    roi_labels : dict[int, str]
+        Mapping from integer ROI id to display name.
+    """
+    import pandas as pd
+
+    ids: list[int] = [0]
+    names: list[float | str] = [float("nan")]
+    for sid, name in roi_labels.items():
+        sid_int = int(sid)
+        if sid_int != 0:
+            ids.append(sid_int)
+            names.append(str(name))
+    layer.features = pd.DataFrame({"index": ids, "name": names})
 
 
 def draw_napari_labels(

@@ -53,6 +53,10 @@ def _build_dataset(bg_atlas: "BrainGlobeAtlas") -> xr.Dataset:
 
     rgb_lookup = _build_rgb_lookup(bg_atlas.structures)
     cmap, norm = _build_atlas_cmap_and_norm(rgb_lookup)
+    roi_labels = {
+        int(sid): str(info["name"] + f" ({info['acronym']})")
+        for sid, info in bg_atlas.structures.items()
+    }
 
     reference = xr.DataArray(
         bg_atlas.reference.astype(np.float32),
@@ -67,7 +71,12 @@ def _build_dataset(bg_atlas: "BrainGlobeAtlas") -> xr.Dataset:
         coords={d: xr.Variable(d, v, attrs=a) for d, (v, a) in coords.items()},
         # cmap and norm are non-serializable but are skipped automatically when saving
         # to zarr; rgb_lookup is the serializable source of truth.
-        attrs={"rgb_lookup": rgb_lookup, "cmap": cmap, "norm": norm},
+        attrs={
+            "rgb_lookup": rgb_lookup,
+            "roi_labels": roi_labels,
+            "cmap": cmap,
+            "norm": norm,
+        },
     )
 
     hemispheres = xr.DataArray(
