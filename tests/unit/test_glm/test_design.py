@@ -227,6 +227,26 @@ class TestHRF:
 
         assert_allclose(observed, reference)
 
+    def test_gamma_hrf_invalid_oversampling(self):
+        """gamma_hrf rejects non-positive oversampling."""
+        with pytest.raises(ValueError, match="oversampling"):
+            gamma_hrf(0.1, oversampling=0)
+
+    def test_gamma_hrf_invalid_dispersion(self):
+        """gamma_hrf rejects non-positive dispersion (would produce NaN HRF)."""
+        with pytest.raises(ValueError, match="dispersion"):
+            gamma_hrf(0.1, dispersion=0.0)
+
+    def test_gamma_hrf_invalid_peak_delay(self):
+        """gamma_hrf rejects negative peak_delay."""
+        with pytest.raises(ValueError, match="peak_delay"):
+            gamma_hrf(0.1, peak_delay=-1.0)
+
+    def test_inverse_gamma_hrf_invalid_oversampling(self):
+        """inverse_gamma_hrf rejects non-positive oversampling."""
+        with pytest.raises(ValueError, match="oversampling"):
+            inverse_gamma_hrf(0.1, oversampling=0)
+
 
 # -----------------------------------------------------------------------------
 # Sampling interval tests

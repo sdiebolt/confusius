@@ -167,6 +167,8 @@ class TestFirstLevelModelFit:
             _ = results.residuals
         with pytest.raises(RuntimeError, match="minimize_memory"):
             _ = results.predicted
+        with pytest.raises(RuntimeError, match="minimize_memory"):
+            _ = results.sse
 
     def test_minimize_memory_false_keeps_fields(self, fusi_data, events):
         """minimize_memory=False keeps the full RegressionResults."""

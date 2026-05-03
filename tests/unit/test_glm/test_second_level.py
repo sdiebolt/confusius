@@ -246,6 +246,33 @@ class TestSecondLevelModelFContrast:
         assert e_map.dims[0] == "contrast_dim"
         assert e_map.shape[0] == 2
 
+    def test_short_contrast_vector_is_zero_padded(self, spatial_maps):
+        """A 1-D contrast shorter than the design is zero-padded on the right.
+
+        The result must equal the corresponding manually-padded contrast,
+        not just match in shape.
+        """
+        confounds = pd.DataFrame({"group": [0.0] * 5 + [1.0] * 5})
+        model = SecondLevelModel()
+        model.fit(spatial_maps, confounds=confounds)
+        # Short vector targets only the first column (group).
+        short = np.array([1.0])
+        padded = np.array([1.0, 0.0])
+        z_short = model.compute_contrast(short).values
+        z_padded = model.compute_contrast(padded).values
+        assert_allclose(z_short, z_padded, rtol=1e-12, atol=1e-12)
+
+    def test_short_contrast_matrix_is_zero_padded(self, spatial_maps):
+        """A 2-D contrast narrower than the design is zero-padded on the right."""
+        confounds = pd.DataFrame({"group": [0.0] * 5 + [1.0] * 5})
+        model = SecondLevelModel()
+        model.fit(spatial_maps, confounds=confounds)
+        short = np.array([[1.0]])
+        padded = np.array([[1.0, 0.0]])
+        z_short = model.compute_contrast(short, stat_type="F").values
+        z_padded = model.compute_contrast(padded, stat_type="F").values
+        assert_allclose(z_short, z_padded, rtol=1e-12, atol=1e-12)
+
 
 # -----------------------------------------------------------------------------
 # SecondLevelModel: reference check against manual computation

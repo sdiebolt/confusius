@@ -34,18 +34,20 @@ if TYPE_CHECKING:
 
 def _pvalues_to_zscore(
     pvalue: npt.NDArray[np.float64],
-    one_minus_pvalue: npt.NDArray[np.float64] | None = None,
+    one_minus_pvalue: npt.NDArray[np.float64],
 ) -> npt.NDArray[np.float64]:
     """Convert p-values to z-scores.
 
-    This function was adapted from `nilearn.glm._utils.zscore`.
+    Uses the survival function for the upper tail and the CDF (via
+    `one_minus_pvalue`) for the lower tail to avoid catastrophic cancellation
+    near the tails. Adapted from `nilearn.glm._utils.zscore`.
 
     Parameters
     ----------
     pvalue : (n,) numpy.ndarray
         p-values to convert.
-    one_minus_pvalue : (n,) numpy.ndarray, optional
-        1 - p-values for numerical stability. If `None`, computed as `1 - pvalue`.
+    one_minus_pvalue : (n,) numpy.ndarray
+        `1 - pvalue` computed via the CDF for numerical stability.
 
     Returns
     -------
@@ -53,19 +55,14 @@ def _pvalues_to_zscore(
         z-scores corresponding to the p-values.
     """
     pvalue = np.clip(pvalue, 1.0e-300, 1.0 - 1.0e-16)
+    one_minus_pvalue = np.clip(one_minus_pvalue, 1.0e-300, 1.0 - 1.0e-16)
     z_scores_sf = sps.norm.isf(pvalue)
-
-    if one_minus_pvalue is not None:
-        one_minus_pvalue = np.clip(one_minus_pvalue, 1.0e-300, 1.0 - 1.0e-16)
-        z_scores_cdf = sps.norm.ppf(one_minus_pvalue)
-        z_scores = np.empty(pvalue.size)
-        use_cdf = z_scores_sf < 0
-        use_sf = np.logical_not(use_cdf)
-        z_scores[np.atleast_1d(use_cdf)] = z_scores_cdf[use_cdf]
-        z_scores[np.atleast_1d(use_sf)] = z_scores_sf[use_sf]
-    else:
-        z_scores = z_scores_sf
-
+    z_scores_cdf = sps.norm.ppf(one_minus_pvalue)
+    z_scores = np.empty(pvalue.size)
+    use_cdf = z_scores_sf < 0
+    use_sf = np.logical_not(use_cdf)
+    z_scores[np.atleast_1d(use_cdf)] = z_scores_cdf[use_cdf]
+    z_scores[np.atleast_1d(use_sf)] = z_scores_sf[use_sf]
     return z_scores
 
 
