@@ -598,6 +598,95 @@ class TestVolumePlotterAddContours:
             plotter.add_contours(mask, colors="red")
 
 
+class TestRoiHover:
+    """Tests for the ROI hover feature wired into add_volume / add_contours."""
+
+    @staticmethod
+    def _fire_motion(ax, xdata, ydata):
+        """Synthesise a `motion_notify_event` at axes-data `(xdata, ydata)`."""
+        from matplotlib.backend_bases import MouseEvent
+
+        fig = ax.figure
+        fig.canvas.draw()
+        x_disp, y_disp = ax.transData.transform((xdata, ydata))
+        ev = MouseEvent("motion_notify_event", fig.canvas, x_disp, y_disp)
+        fig.canvas.callbacks.process("motion_notify_event", ev)
+        return ev
+
+    def test_hover_shows_value_and_roi(self, matplotlib_pyplot):
+        """Cover the three hover paths: label-only, value-only, and overlay.
+
+        Uses a single labelled voxel `(y=0.5, x=0.5)` (label 7 / "somatosensory")
+        and exercises `plot_volume` with `roi_labels`, `plot_volume` on a non-atlas
+        float volume, and a stacked overlay of both on one `VolumePlotter`.
+        """
+        coords = {"z": [0.0], "y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]}
+        labels = xr.DataArray(
+            np.array(
+                [
+                    [[0, 0, 0, 0], [0, 7, 7, 0], [0, 7, 42, 0], [0, 0, 42, 0]],
+                ],
+                dtype=np.int32,
+            ),
+            dims=["z", "y", "x"],
+            coords=coords,
+        )
+        rng = np.random.default_rng(0)
+        volume = xr.DataArray(
+            rng.normal(size=(1, 4, 4)).astype(np.float32),
+            dims=["z", "y", "x"],
+            coords=coords,
+            attrs={"long_name": "PD", "units": "dB"},
+            name="pd",
+        )
+        roi_labels = {7: "somatosensory", 42: "visual"}
+        x, y = 0.5, 0.5
+        sampled_value = float(volume.sel(z=0.0, y=y, x=x).values)
+
+        # Atlas-only: ROI line, no value (label IS the value, no need to repeat).
+        atlas_plotter = plot_volume(
+            labels,
+            slice_mode="z",
+            slice_coords=[0.0],
+            show_colorbar=False,
+            roi_labels=roi_labels,
+        )
+        ax = atlas_plotter.axes.flat[0]
+        self._fire_motion(ax, x, y)
+        assert ax.format_coord(x, y) == f"x={x:.3g}, y={y:.3g}; ROI: somatosensory (7)"
+
+        # Background voxel (label=0) suppresses the ROI suffix.
+        bg_x, bg_y = 0.5, 1.5  # mask[3, 1] == 0.
+        self._fire_motion(ax, bg_x, bg_y)
+        bg_info = ax.format_coord(bg_x, bg_y)
+        assert "ROI:" not in bg_info and "id=" not in bg_info
+
+        # Volume-only: value with long_name + units, no ROI.
+        volume_plotter = plot_volume(
+            volume, slice_mode="z", slice_coords=[0.0], show_colorbar=False
+        )
+        ax = volume_plotter.axes.flat[0]
+        self._fire_motion(ax, x, y)
+        assert (
+            ax.format_coord(x, y)
+            == f"x={x:.3g}, y={y:.3g}; PD={sampled_value:.4g} dB"
+        )
+
+        # Overlay: BOTH value and ROI in the same hover string.
+        overlay = VolumePlotter(slice_mode="z")
+        overlay.add_volume(
+            volume, slice_coords=[0.0], match_coordinates=False, show_colorbar=False
+        )
+        overlay.add_contours(labels, slice_coords=[0.0], roi_labels=roi_labels)
+        ax = overlay.axes.flat[0]
+        self._fire_motion(ax, x, y)
+        assert (
+            ax.format_coord(x, y)
+            == f"x={x:.3g}, y={y:.3g}; PD={sampled_value:.4g} dB"
+            "; ROI: somatosensory (7)"
+        )
+
+
 class TestPlotNapari:
     """Tests for plot_napari scale and translate parameters."""
 
@@ -722,6 +811,54 @@ class TestPlotNapari:
 
 # Image comparison tests with pytest-mpl
 # These generate baseline images for visual regression testing
+
+
+    def test_napari_labels_hover_shows_roi_name(
+        self, make_napari_viewer
+    ) -> None:
+        """`plot_napari(layer_type='labels')` makes napari's status bar show ROI names.
+
+        Sets `attrs["roi_labels"]` on a tiny integer label map; calls
+        `plot_napari(..., layer_type="labels")`; then directly invokes
+        `Labels.get_status` (the function napari calls to populate the status
+        bar) at one labelled and one background voxel.
+        """
+        roi_labels = {7: "somatosensory", 42: "visual"}
+        labels = xr.DataArray(
+            np.array([[0, 0, 0, 0], [0, 7, 7, 0], [0, 7, 42, 0], [0, 0, 42, 0]]),
+            dims=["y", "x"],
+            coords={"y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]},
+            attrs={"roi_labels": roi_labels},
+        )
+
+        viewer = make_napari_viewer()
+        _, layer = plot_napari(
+            labels,
+            viewer=viewer,
+            layer_type="labels",
+            show_scale_bar=False,
+        )
+
+        # `world=True` means positions are in physical coordinates (the same
+        # space the user hovers in the canvas).
+        # Voxel (y=0.5, x=0.5) holds label 7.
+        roi_status = layer.get_status(
+            (0.5, 0.5),
+            view_direction=np.array([1.0, 0.0]),
+            dims_displayed=[0, 1],
+            world=True,
+        )
+        assert "name: somatosensory" in roi_status["coordinates"]
+
+        # Background voxel: NaN row hides the default `[No Properties]` placeholder.
+        bg_status = layer.get_status(
+            (0.0, 0.0),
+            view_direction=np.array([1.0, 0.0]),
+            dims_displayed=[0, 1],
+            world=True,
+        )
+        assert "[No Properties]" not in bg_status["coordinates"]
+        viewer.close()
 
 
 def _create_deterministic_volume():
