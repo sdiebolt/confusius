@@ -1733,6 +1733,9 @@ def plot_napari(
             **layer_kwargs,
         )
 
+        if (roi_labels := data.attrs.get("roi_labels")) is not None:
+            _attach_roi_labels_to_napari(layer, roi_labels)
+
     else:
         raise ValueError(
             f"Unknown layer_type: {layer_type!r}. Expected 'image' or 'labels'."
@@ -1747,6 +1750,37 @@ def plot_napari(
         viewer.scale_bar.unit = scale_bar_unit
 
     return viewer, layer
+
+
+def _attach_roi_labels_to_napari(layer: "Labels", roi_labels: dict[int, str]) -> None:
+    """Make a napari Labels layer report the ROI name in the status bar.
+
+    Sets `layer.features` so that napari's built-in
+    `napari.layers.Labels.get_status` appends `name: <roi name>` to the status
+    bar (and the cursor tooltip when `viewer.tooltip.visible` is `True`)
+    whenever the cursor is over a labelled voxel.
+
+    A row for label `0` is included with a NaN name so background hovers do not
+    show napari's default `[No Properties]` placeholder.
+
+    Parameters
+    ----------
+    layer : napari.layers.Labels
+        Layer whose `features` table will be replaced.
+    roi_labels : dict[int, str]
+        Mapping from integer ROI id to display name.
+    """
+    import pandas as pd
+
+    ids: list[int] = [0]
+    names: list[float | str] = [float("nan")]
+    for sid, name in roi_labels.items():
+        sid_int = int(sid)
+        if sid_int == 0:
+            continue
+        ids.append(sid_int)
+        names.append(str(name))
+    layer.features = pd.DataFrame({"index": ids, "name": names})
 
 
 def draw_napari_labels(
