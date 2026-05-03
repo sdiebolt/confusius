@@ -585,7 +585,7 @@ class VolumePlotter:
         roi_labels : dict[int, str], optional
             Mapping from integer label to display name. When provided (or when
             `data.attrs["roi_labels"]` is populated), hovering the cursor over a
-            voxel shows `<data_name>=<id> (<roi_name>)` in the matplotlib status bar.
+            voxel shows `<layer.name>=<id> (<name>)` in the matplotlib status bar.
         show_titles : bool, default: True
             Whether to display subplot titles.
         show_axis_labels : bool, default: True
