@@ -768,7 +768,7 @@ class VolumePlotter:
                 y_vals,
                 slice_da.values,
                 role="labels" if resolved_roi_labels else "volume",
-                value_label=data.attrs.get("long_name") or str(data.name or "value"),
+                name=str(data.name) if data.name is not None else "value",
                 units=data.attrs.get("units"),
             )
             ax.set_aspect("equal")
@@ -1101,6 +1101,7 @@ class VolumePlotter:
                     y_coords=np.asarray(y_coords, dtype=float),
                     data_2d=np.asarray(slice_data),
                     role="labels",
+                    name=str(mask.name) if mask.name is not None else "label",
                 )
 
             if not match_coordinates:

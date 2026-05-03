@@ -37,8 +37,8 @@ class _SliceLayer:
     """The values to sample, shape `(len(y_coords), len(x_coords))`."""
     role: Literal["volume", "labels"]
     """How to interpret samples: as a numeric value or as an integer ROI id."""
-    value_label: str = "value"
-    """Display name for the numeric value (used only when `role == 'volume'`)."""
+    name: str = "value"
+    """Display name for this slice's sampled value (typically `DataArray.name`)."""
     units: str | None = None
     """Units string appended to the numeric value, if any."""
 
@@ -88,7 +88,7 @@ class _RegionHoverManager:
         y_coords: np.ndarray,
         data_2d: np.ndarray,
         role: Literal["volume", "labels"],
-        value_label: str = "value",
+        name: str = "value",
         units: str | None = None,
     ) -> None:
         """Attach a 2D slice for hover lookup on `ax`.
@@ -105,8 +105,9 @@ class _RegionHoverManager:
             Numeric values sampled at `(y_coords, x_coords)`.
         role : {"volume", "labels"}
             How to interpret the slice: as a numeric volume or as integer labels.
-        value_label : str, default: "value"
-            Display name shown next to the sampled value.
+        name : str, default: "value"
+            Display name shown next to the sampled value (typically the source
+            `xarray.DataArray.name`).
         units : str, optional
             Units string appended after the value.
         """
@@ -116,7 +117,7 @@ class _RegionHoverManager:
                 y_coords=np.asarray(y_coords),
                 data_2d=np.asarray(data_2d),
                 role=role,
-                value_label=value_label,
+                name=name,
                 units=units,
             )
         )
@@ -141,47 +142,39 @@ class _RegionHoverManager:
 
         x = float(event.xdata)
         y = float(event.ydata)
-        info = f"x={x:.3g}, y={y:.3g}"
-        value_part: str | None = None
-        roi_part: str | None = None
+        parts = [f"x={x:.3g}, y={y:.3g}"]
+        for layer in layers:
+            segment = self._format_layer(layer, x, y)
+            if segment is not None:
+                parts.append(segment)
 
-        # Iterate latest-first so an overlay shadows earlier registrations.
-        for layer in reversed(layers):
-            sample = _sample(layer, x, y)
-            if sample is None:
-                continue
-            if layer.role == "volume" and value_part is None:
-                value_part = _format_value(sample, layer)
-            elif layer.role == "labels" and roi_part is None:
-                label = int(sample)
-                if label != 0:
-                    name = self.roi_labels.get(label)
-                    if name is not None:
-                        roi_part = f"ROI: {name} ({label})"
-                    else:
-                        roi_part = f"id={label}"
-
-        if value_part is not None:
-            info += "; " + value_part
-        if roi_part is not None:
-            info += "; " + roi_part
-
+        info = "; ".join(parts)
         ax.format_coord = lambda x, y, _info=info: _info  # type: ignore[method-assign]
 
+    def _format_layer(self, layer: _SliceLayer, x: float, y: float) -> str | None:
+        """Build the hover segment for one registered slice, or `None` to skip it."""
+        sample = _sample(layer, x, y)
+        if layer.role == "volume":
+            return _format_volume(sample, layer)
+        # role == "labels": skip background voxels and append the ROI name when known.
+        label = int(sample)
+        if label == 0:
+            return None
+        roi_name = self.roi_labels.get(label)
+        if roi_name is None:
+            return f"{layer.name}={label}"
+        return f"{layer.name}={label} ({roi_name})"
 
-def _sample(layer: _SliceLayer, x: float, y: float) -> float | None:
+
+def _sample(layer: _SliceLayer, x: float, y: float) -> float:
     """Return the value at `(x, y)` using nearest-coordinate lookup."""
-    if x < layer.x_coords.min() or x > layer.x_coords.max():
-        return None
-    if y < layer.y_coords.min() or y > layer.y_coords.max():
-        return None
     j = int(np.argmin(np.abs(layer.x_coords - x)))
     i = int(np.argmin(np.abs(layer.y_coords - y)))
     return float(layer.data_2d[i, j])
 
 
-def _format_value(value: float, layer: _SliceLayer) -> str:
-    """Format a sampled volume value as `<label>=<value>[ <units>]`."""
+def _format_volume(value: float, layer: _SliceLayer) -> str:
+    """Format a sampled volume value as `<name>=<value>[ <units>]`."""
     if np.isnan(value):
         rendered = "nan"
     elif np.issubdtype(layer.data_2d.dtype, np.integer):
@@ -189,8 +182,8 @@ def _format_value(value: float, layer: _SliceLayer) -> str:
     else:
         rendered = f"{value:.4g}"
     if layer.units:
-        return f"{layer.value_label}={rendered} {layer.units}"
-    return f"{layer.value_label}={rendered}"
+        return f"{layer.name}={rendered} {layer.units}"
+    return f"{layer.name}={rendered}"
 
 
 def _custom_mouse_event_to_message(event):

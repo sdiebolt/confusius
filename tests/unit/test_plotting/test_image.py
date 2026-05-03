@@ -503,7 +503,11 @@ class TestPlotContours:
         mask = xr.DataArray(
             np.ones((3, 4, 4), dtype=int),
             dims=["z", "y", "x"],
-            coords={"z": [0.0, 1.0, 2.0], "y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]},
+            coords={
+                "z": [0.0, 1.0, 2.0],
+                "y": [0.0, 0.5, 1.0, 1.5],
+                "x": [0.0, 0.5, 1.0, 1.5],
+            },
         )
         fig, ax = plt.subplots()
 
@@ -616,9 +620,9 @@ class TestRoiHover:
     def test_hover_shows_value_and_roi(self, matplotlib_pyplot):
         """Cover the three hover paths: label-only, value-only, and overlay.
 
-        Uses a single labelled voxel `(y=0.5, x=0.5)` (label 7 / "somatosensory")
-        and exercises `plot_volume` with `roi_labels`, `plot_volume` on a non-atlas
-        float volume, and a stacked overlay of both on one `VolumePlotter`.
+        Each registered slice contributes its own `<DataArray.name>=<value>`
+        segment, so the overlay path produces both segments without either
+        shadowing the other.
         """
         coords = {"z": [0.0], "y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]}
         labels = xr.DataArray(
@@ -630,20 +634,21 @@ class TestRoiHover:
             ),
             dims=["z", "y", "x"],
             coords=coords,
+            name="annotation",
         )
         rng = np.random.default_rng(0)
         volume = xr.DataArray(
             rng.normal(size=(1, 4, 4)).astype(np.float32),
             dims=["z", "y", "x"],
             coords=coords,
-            attrs={"long_name": "PD", "units": "dB"},
+            attrs={"units": "dB"},
             name="pd",
         )
         roi_labels = {7: "somatosensory", 42: "visual"}
         x, y = 0.5, 0.5
         sampled_value = float(volume.sel(z=0.0, y=y, x=x).values)
 
-        # Atlas-only: ROI line, no value (label IS the value, no need to repeat).
+        # Atlas-only: one segment from the labels slice, no value-line.
         atlas_plotter = plot_volume(
             labels,
             slice_mode="z",
@@ -653,26 +658,28 @@ class TestRoiHover:
         )
         ax = atlas_plotter.axes.flat[0]
         self._fire_motion(ax, x, y)
-        assert ax.format_coord(x, y) == f"x={x:.3g}, y={y:.3g}; ROI: somatosensory (7)"
+        assert (
+            ax.format_coord(x, y)
+            == f"x={x:.3g}, y={y:.3g}; annotation=7 (somatosensory)"
+        )
 
-        # Background voxel (label=0) suppresses the ROI suffix.
+        # Background voxel (label=0) drops the labels segment entirely.
         bg_x, bg_y = 0.5, 1.5  # mask[3, 1] == 0.
         self._fire_motion(ax, bg_x, bg_y)
         bg_info = ax.format_coord(bg_x, bg_y)
-        assert "ROI:" not in bg_info and "id=" not in bg_info
+        assert "annotation" not in bg_info
 
-        # Volume-only: value with long_name + units, no ROI.
+        # Volume-only: one segment using `data.name` and `units`.
         volume_plotter = plot_volume(
             volume, slice_mode="z", slice_coords=[0.0], show_colorbar=False
         )
         ax = volume_plotter.axes.flat[0]
         self._fire_motion(ax, x, y)
         assert (
-            ax.format_coord(x, y)
-            == f"x={x:.3g}, y={y:.3g}; PD={sampled_value:.4g} dB"
+            ax.format_coord(x, y) == f"x={x:.3g}, y={y:.3g}; pd={sampled_value:.4g} dB"
         )
 
-        # Overlay: BOTH value and ROI in the same hover string.
+        # Overlay: both segments in registration order, neither shadowing the other.
         overlay = VolumePlotter(slice_mode="z")
         overlay.add_volume(
             volume, slice_coords=[0.0], match_coordinates=False, show_colorbar=False
@@ -681,9 +688,8 @@ class TestRoiHover:
         ax = overlay.axes.flat[0]
         self._fire_motion(ax, x, y)
         assert (
-            ax.format_coord(x, y)
-            == f"x={x:.3g}, y={y:.3g}; PD={sampled_value:.4g} dB"
-            "; ROI: somatosensory (7)"
+            ax.format_coord(x, y) == f"x={x:.3g}, y={y:.3g}; pd={sampled_value:.4g} dB"
+            "; annotation=7 (somatosensory)"
         )
 
 
@@ -808,14 +814,10 @@ class TestPlotNapari:
         assert np.all(np.diff(layer.metadata["xarray"].coords["x"].values) > 0)
         viewer.close()
 
+    # Image comparison tests with pytest-mpl
+    # These generate baseline images for visual regression testing
 
-# Image comparison tests with pytest-mpl
-# These generate baseline images for visual regression testing
-
-
-    def test_napari_labels_hover_shows_roi_name(
-        self, make_napari_viewer
-    ) -> None:
+    def test_napari_labels_hover_shows_roi_name(self, make_napari_viewer) -> None:
         """`plot_napari(layer_type='labels')` makes napari's status bar show ROI names.
 
         Sets `attrs["roi_labels"]` on a tiny integer label map; calls
