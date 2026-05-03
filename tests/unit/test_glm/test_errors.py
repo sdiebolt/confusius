@@ -100,6 +100,19 @@ class TestDesignErrors:
 
         assert "stim" in design.columns
 
+    def test_make_first_level_design_matrix_verhoef2025_hrf(self):
+        """Verhoef 2025 HRF path produces a design matrix."""
+        frame_times = np.arange(0, 10, 0.1)
+        events = pd.DataFrame(
+            {"trial_type": ["stim"], "onset": [1.0], "duration": [1.0]}
+        )
+
+        design = make_first_level_design_matrix(
+            frame_times, events, hrf_model="verhoef2025"
+        )
+
+        assert "stim" in design.columns
+
     def test_make_first_level_design_matrix_fir_default_delay(self):
         """FIR defaults to a zero-delay regressor when delays are omitted."""
         frame_times = np.arange(0, 10, 0.1)
@@ -421,5 +434,4 @@ class TestUtils:
         """3D array input raises ValueError."""
         with pytest.raises(ValueError, match="Expected 1D or 2D"):
             estimate_ar_coeffs(np.zeros((5, 5, 5)))
-
 

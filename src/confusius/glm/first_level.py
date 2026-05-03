@@ -74,7 +74,7 @@ class FirstLevelModel(BaseEstimator):
 
     Parameters
     ----------
-    hrf_model : {"glover", "spm", "claron2021", "fir"}, callable, or None, default: "glover"
+    hrf_model : {"glover", "spm", "verhoef2025", "claron2021", "fir"}, callable, or None, default: "glover"
         Hemodynamic response function model. A callable matching the
         [HRFModel][confusius.glm._hrf_models.HRFModel] protocol (a function
         taking `dt` and `oversampling` and returning a 1-D array) is invoked

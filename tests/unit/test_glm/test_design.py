@@ -13,9 +13,11 @@ from confusius.glm._design import (
 )
 from confusius.glm._hrf_models import (
     claron2021_hrf,
+    gamma_hrf,
     glover_hrf,
     inverse_gamma_hrf,
     spm_hrf,
+    verhoef2025_hrf,
 )
 
 
@@ -58,6 +60,34 @@ def _inverse_gamma_hrf_reference(
         / spspecial.gamma(alpha)
         * t ** (-(alpha + 1.0))
         * np.exp(-beta / t)
+    )
+    hrf /= hrf.sum()
+    return hrf
+
+
+def _gamma_hrf_reference(
+    dt: float,
+    oversampling: int = 50,
+    time_length: float = 32.0,
+    peak_delay: float = 5.0,
+    dispersion: float = 1.0,
+    onset: float = 0.0,
+) -> np.ndarray:
+    """Reference positive-only gamma HRF sampled on the implementation grid."""
+    time_stamps = _oversampled_time_grid(
+        dt,
+        oversampling=oversampling,
+        time_length=time_length,
+        onset=onset,
+    )
+    hrf = np.zeros_like(time_stamps)
+    positive = time_stamps >= 0
+    t = time_stamps[positive]
+    shape = peak_delay / dispersion + 1.0
+    hrf[positive] = (
+        t ** (shape - 1.0)
+        * np.exp(-t / dispersion)
+        / (spspecial.gamma(shape) * dispersion**shape)
     )
     hrf /= hrf.sum()
     return hrf
@@ -154,6 +184,46 @@ class TestHRF:
 
         observed = claron2021_hrf(dt)
         reference = inverse_gamma_hrf(dt, alpha=2.5, beta=12.7)
+
+        assert_allclose(observed, reference)
+
+    def test_gamma_hrf_matches_reference(self):
+        """Positive-only gamma HRF matches the explicit reference equation."""
+        dt = 0.1
+
+        reference = _gamma_hrf_reference(dt)
+        observed = gamma_hrf(dt)
+
+        assert_allclose(observed, reference)
+
+    def test_gamma_hrf_matches_reference_with_custom_parameters(self):
+        """Gamma HRF keeps the reference parameterization when overridden."""
+        dt = 0.1
+        peak_delay = 3.5
+        dispersion = 0.8
+        onset = 0.2
+
+        reference = _gamma_hrf_reference(
+            dt,
+            peak_delay=peak_delay,
+            dispersion=dispersion,
+            onset=onset,
+        )
+        observed = gamma_hrf(
+            dt,
+            peak_delay=peak_delay,
+            dispersion=dispersion,
+            onset=onset,
+        )
+
+        assert_allclose(observed, reference)
+
+    def test_verhoef2025_hrf_is_gamma_preset(self):
+        """Verhoef 2025 HRF is a thin preset around the generic gamma HRF."""
+        dt = 0.1
+
+        observed = verhoef2025_hrf(dt)
+        reference = gamma_hrf(dt, peak_delay=5.0, dispersion=1.0)
 
         assert_allclose(observed, reference)
 
@@ -399,6 +469,17 @@ class TestDesignMatrix:
         )
 
         assert_allclose(design["stim"].to_numpy(), reference["stim"].to_numpy())
+
+    def test_design_matrix_verhoef2025_hrf(self, frame_times, basic_events):
+        """Named Verhoef 2025 HRF path produces a design matrix."""
+        design = make_first_level_design_matrix(
+            frame_times,
+            basic_events,
+            hrf_model="verhoef2025",
+            drift_model=None,
+        )
+
+        assert "stim" in design.columns
 
     def test_design_matrix_hrf_none(self, frame_times, basic_events):
         """Design matrix with hrf_model=None creates stick functions."""

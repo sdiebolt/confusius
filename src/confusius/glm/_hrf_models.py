@@ -168,6 +168,63 @@ def spm_hrf(
     )
 
 
+def gamma_hrf(
+    dt: float,
+    oversampling: int = 50,
+    time_length: float = 32.0,
+    peak_delay: float = 5.0,
+    dispersion: float = 1.0,
+    onset: float = 0.0,
+) -> npt.NDArray[np.floating]:
+    """Return a positive-only gamma HRF on an oversampled time grid.
+
+    HRF model for functional ultrasound signals that show a single positive lobe
+    without a BOLD-like post-stimulus undershoot. The gamma distribution is
+    parameterized so that its mode occurs `peak_delay` seconds after onset and its
+    scale is `dispersion` seconds.
+
+    Parameters
+    ----------
+    dt : float
+        Sampling interval of the original data in seconds.
+    oversampling : int, default: 50
+        Oversampling factor for the HRF time grid.
+    time_length : float, default: 32.0
+        Total length of the HRF in seconds.
+    peak_delay : float, default: 5.0
+        Time in seconds at which the gamma HRF peaks.
+    dispersion : float, default: 1.0
+        Scale parameter of the gamma distribution in seconds.
+    onset : float, default: 0.0
+        Onset of the HRF in seconds.
+
+    Returns
+    -------
+    (n_samples,) numpy.ndarray
+        HRF values on the oversampled time grid, normalized to sum to 1.
+    """
+    oversampling = int(oversampling)
+    if oversampling < 1:
+        raise ValueError("oversampling must be >= 1.")
+    if dispersion <= 0:
+        raise ValueError("dispersion must be > 0.")
+    if peak_delay < 0:
+        raise ValueError("peak_delay must be >= 0.")
+
+    high_res_dt = float(dt) / oversampling
+    time_stamps = np.linspace(
+        0,
+        time_length,
+        np.rint(float(time_length) / high_res_dt).astype(int),
+    )
+    time_stamps -= onset
+
+    shape = peak_delay / dispersion + 1.0
+    hrf = sps.gamma.pdf(time_stamps, shape, loc=0, scale=dispersion)
+    hrf /= hrf.sum()
+    return hrf
+
+
 def inverse_gamma_hrf(
     dt: float,
     oversampling: int = 50,
@@ -177,6 +234,11 @@ def inverse_gamma_hrf(
     onset: float = 0.0,
 ) -> npt.NDArray[np.floating]:
     """Return an HRF modeled as an inverse gamma distribution.
+
+    Continuous-time inverse-gamma HRF whose sampled kernel is normalized to unit
+    mass for GLM convolution. This corresponds to the shape
+    `beta**alpha / gamma(alpha) * t**(-(alpha + 1)) * exp(-beta / t)` for
+    `t > 0`, omitting any overall amplitude prefactor.
 
     Parameters
     ----------
@@ -215,6 +277,59 @@ def inverse_gamma_hrf(
     return hrf
 
 
+def verhoef2025_hrf(
+    dt: float,
+    oversampling: int = 50,
+    time_length: float = 32.0,
+    peak_delay: float = 5.0,
+    dispersion: float = 1.0,
+    onset: float = 0.0,
+) -> npt.NDArray[np.floating]:
+    """Return the Verhoef et al. (2025) single-gamma human fUSI HRF preset.
+
+    HRF model proposed for human 4D functional ultrasound imaging in Verhoef
+    _et al._ (2025). The preset follows the reported single-gamma HRF, excluding
+    any post-stimulus undershoot.
+
+    Parameters
+    ----------
+    dt : float
+        Sampling interval of the original data in seconds.
+    oversampling : int, default: 50
+        Oversampling factor for the HRF time grid.
+    time_length : float, default: 32.0
+        Total length of the HRF in seconds.
+    peak_delay : float, default: 5.0
+        Time in seconds at which the HRF peaks.
+    dispersion : float, default: 1.0
+        Scale parameter of the gamma distribution in seconds.
+    onset : float, default: 0.0
+        Onset of the HRF in seconds.
+
+    Returns
+    -------
+    (n_samples,) numpy.ndarray
+        HRF values on the oversampled time grid, normalized to sum to 1.
+
+    References
+    ----------
+    [^1]:
+        Verhoef, L., Soloukey, S., Springeling, G., Flikweert, A. J., Lippe, B.,
+        de Jong, A. J., Radeljic-Jakic, N., Baas, M., Voorneveld, J., Vincent,
+        A. J. P. E., & Kruizinga, P. (2025). Miniaturized Four-Dimensional
+        Functional Ultrasound for Mapping Human Brain Activity. medRxiv.
+        https://doi.org/10.1101/2025.08.19.25332261
+    """
+    return gamma_hrf(
+        dt,
+        oversampling=oversampling,
+        time_length=time_length,
+        peak_delay=peak_delay,
+        dispersion=dispersion,
+        onset=onset,
+    )
+
+
 def claron2021_hrf(
     dt: float,
     oversampling: int = 50,
@@ -238,7 +353,7 @@ def claron2021_hrf(
         Total length of the HRF in seconds.
     alpha : float, default: 2.5
         Shape parameter of the inverse gamma distribution.
-    beta : float, default: 6.7
+    beta : float, default: 12.7
         Scale parameter of the inverse gamma distribution.
     onset : float, default: 0.0
         Onset of the HRF in seconds.
@@ -277,7 +392,7 @@ def _hrf_kernel(
 
     Parameters
     ----------
-    hrf_model : {"glover", "spm", "claron2021", "fir"}, callable, or None
+    hrf_model : {"glover", "spm", "verhoef2025", "claron2021", "fir"}, callable, or None
         HRF model. A callable matching the
         [HRFModel][confusius.glm._hrf_models.HRFModel] protocol is invoked with
         `dt` and `oversampling` to produce the kernel. If None, an impulse kernel
@@ -309,6 +424,8 @@ def _hrf_kernel(
             return [spm_hrf(dt, oversampling=oversampling)]
         if hrf_model == "glover":
             return [glover_hrf(dt, oversampling=oversampling)]
+        if hrf_model == "verhoef2025":
+            return [verhoef2025_hrf(dt, oversampling=oversampling)]
         if hrf_model == "claron2021":
             return [claron2021_hrf(dt, oversampling=oversampling)]
         if hrf_model == "fir":
