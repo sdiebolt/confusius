@@ -7,6 +7,7 @@ import numpy as np
 import numpy.typing as npt
 import xarray as xr
 
+from confusius._utils import is_h5py_backed
 from confusius.registration.motion import create_motion_dataframe
 from confusius.registration.volume import register_volume
 
@@ -107,12 +108,41 @@ def register_volumewise(
     xarray.DataArray
         Registered data with the same coordinates as input, input attributes, and added
         motion metadata in `attrs["reference_time"]` and `attrs["motion_params"]`.
+
+    Raises
+    ------
+    TypeError
+        If `n_jobs != 1` and `data` is backed by an h5py dataset. See Notes.
+
+    Notes
+    -----
+    SCAN files are HDF5 files loaded lazily via h5py. h5py datasets cannot be pickled,
+    so they cannot be passed to joblib workers for parallel processing. Materialize the
+    data before calling this function:
+
+    ```python
+    import confusius as cf
+
+    fusi = cf.load("recording.scan").compute()  # load into memory first
+    fusi = cf.registration.register_volumewise(fusi)
+    ```
+
+    Alternatively, use `n_jobs=1` for serial processing (slower but works with lazy
+    SCAN data).
     """
     from joblib import Parallel, delayed
     from joblib_progress import joblib_progress
 
     if "time" not in data.dims:
         raise ValueError("Time dimension 'time' not found in data")
+
+    if n_jobs != 1 and is_h5py_backed(data):
+        raise TypeError(
+            "Data is backed by an h5py dataset, which cannot be serialized for "
+            "parallel processing with joblib. Call .compute() to materialize the "
+            "data into memory before calling register_volumewise, or use n_jobs=1 "
+            "for serial processing."
+        )
 
     data_moved = data.transpose("time", ...)
 

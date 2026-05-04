@@ -17,6 +17,31 @@ class TestRegisterVolumewise:
         with pytest.raises(ValueError, match="Time dimension 'time' not found"):
             register_volumewise(data)
 
+    def test_h5py_backed_raises_with_parallel_jobs(self, scan_2d):
+        """h5py-backed DataArray (from a .scan file) raises TypeError when n_jobs != 1."""
+        with pytest.raises(TypeError, match="h5py dataset"):
+            register_volumewise(scan_2d, n_jobs=2)
+
+    def test_h5py_backed_works_with_n_jobs_1(self, scan_2d):
+        """h5py-backed DataArray (from a .scan file) with n_jobs=1 does not raise."""
+        # n_jobs=1 (serial) should not raise for h5py-backed data.
+        result = register_volumewise(scan_2d, n_jobs=1, transform="translation")
+        assert result.shape == scan_2d.shape
+
+    def test_non_h5py_dask_backed_does_not_raise(self, sample_2d_dataarray):
+        """Dask-backed (non-h5py) DataArray with n_jobs != 1 does not raise TypeError."""
+        import dask.array as da
+
+        # Build a dask-backed DataArray that is NOT backed by h5py; is_h5py_backed
+        # should return False and registration should proceed normally.
+        dask_data = xr.DataArray(
+            da.from_array(sample_2d_dataarray.values),
+            dims=sample_2d_dataarray.dims,
+            coords=sample_2d_dataarray.coords,
+        )
+        result = register_volumewise(dask_data, n_jobs=2, transform="translation")
+        assert result.shape == sample_2d_dataarray.shape
+
     def test_wrong_dimensionality_raises(self):
         """Data that is neither 2D+t nor 3D+t raises ValueError."""
         # 1D+time = 2D total.
