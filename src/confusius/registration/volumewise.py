@@ -116,9 +116,9 @@ def register_volumewise(
 
     Notes
     -----
-    **SCAN file users**: `.scan` files are HDF5 files loaded lazily via h5py. h5py
-    datasets cannot be pickled, so they cannot be passed to joblib workers for parallel
-    processing. Materialize the data before calling this function:
+    SCAN files are HDF5 files loaded lazily via h5py. h5py datasets cannot be pickled,
+    so they cannot be passed to joblib workers for parallel processing. Materialize the
+    data before calling this function:
 
     ```python
     import confusius as cf
