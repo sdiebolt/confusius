@@ -39,7 +39,7 @@ def is_h5py_backed(data: xr.DataArray) -> bool:
 
 
 def get_representative_step(
-    values: npt.NDArray[np.floating], uniformity_tolerance: float = 1e-5
+    values: npt.NDArray[np.floating], uniformity_tolerance: float = 1e-2
 ) -> tuple[float | None, bool]:
     """Return a representative step size for a 1D coordinate array.
 
@@ -47,9 +47,13 @@ def get_representative_step(
     ----------
     values : numpy.ndarray
         One-dimensional coordinate values.
-    uniformity_tolerance : float, default: 1e-5
-        Maximum allowed relative range `(max_diff - min_diff) / median_diff` for the
-        coordinate to be considered uniform.
+    uniformity_tolerance : float, default: 1e-2
+        Maximum allowed per-interval relative deviation from the median consecutive
+        difference. Each interval must satisfy
+        `|interval - median| <= uniformity_tolerance * |median|` for the coordinate
+        to be considered uniform. Bounds the worst single drift, which is what
+        matters for downstream frequency-domain operations (filtering, FFT,
+        HRF convolution).
 
     Returns
     -------
@@ -68,9 +72,9 @@ def get_representative_step(
     if np.isclose(median, 0.0):
         is_uniform = np.isclose(np.max(diffs), np.min(diffs))
     else:
-        is_uniform = (np.max(diffs) - np.min(diffs)) / abs(
-            median
-        ) <= uniformity_tolerance
+        is_uniform = bool(
+            np.allclose(diffs, median, rtol=uniformity_tolerance, atol=0.0)
+        )
 
     if is_uniform:
         return median, False
@@ -125,7 +129,9 @@ def get_coordinate_spacing_info(
     data : xarray.DataArray
         DataArray whose coordinate to inspect.
     uniformity_tolerance : float
-        Maximum allowed relative range `(max_diff - min_diff) / median_diff`.
+        Maximum allowed per-interval relative deviation from the median consecutive
+        difference (see
+        [`get_representative_step`][confusius._utils.get_representative_step]).
 
     Returns
     -------
@@ -188,17 +194,17 @@ def get_coordinate_spacings(
     - If the coordinate doesn't have int or float dtype, returns `None` without a
       warning.
 
-    Uniformity is assessed as `(max_diff - min_diff) / median_diff`, i.e. the
-    relative range of consecutive differences.
+    Uniformity is assessed per-interval: each consecutive difference must satisfy
+    `|diff - median| <= uniformity_tolerance * |median|`.
 
     Parameters
     ----------
     data : xarray.DataArray
         DataArray whose coordinate spacing to compute.
     uniformity_tolerance : float, default: 1e-2
-        Maximum allowed relative range of consecutive differences, defined as
-        `(max_diff - min_diff) / median_diff`. Coordinates whose relative range
-        exceeds this threshold are considered non-uniform.
+        Maximum allowed per-interval relative deviation from the median consecutive
+        difference. Coordinates with any interval exceeding this threshold are
+        considered non-uniform.
 
     Returns
     -------
