@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 def _positive_reciprocal(x: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
-    """Return element-wise reciprocal, but replace 0 with 0.
+    """Return element-wise reciprocal, but replace 1 / 0 with 0.
 
     Parameters
     ----------
@@ -37,9 +37,8 @@ def _positive_reciprocal(x: npt.NDArray[np.floating]) -> npt.NDArray[np.floating
 class OLSModel:
     """Ordinary Least Squares regression model.
 
-    Implements standard OLS regression for GLM analysis. The model is specified
-    with a design matrix and fit using the [`fit`][confusius.glm._models.OLSModel]
-    method.
+    Implements standard OLS regression for GLM analysis. The model is specified with a
+    design matrix and fit using the [`fit`][confusius.glm._models.OLSModel] method.
 
     This implementation is adapted from
     [`nilearn.glm.regression.OLSModel`][nilearn.glm.regression.OLSModel].
@@ -47,7 +46,7 @@ class OLSModel:
     Parameters
     ----------
     design : (n_timepoints, n_regressors) numpy.ndarray
-        Design matrix. Observations in rows, regressors in columns.
+        Design matrix.
 
     Attributes
     ----------
@@ -55,10 +54,11 @@ class OLSModel:
         The design matrix.
     whitened_design : (n_timepoints, n_regressors) numpy.ndarray
         Whitened design matrix (same as design for OLS).
-    calc_beta : (n_regressors, n_timepoints) numpy.ndarray
-        Moore-Penrose pseudoinverse of whitened design.
-    normalized_cov_beta : (n_regressors, n_regressors) numpy.ndarray
-        Normalized covariance matrix: `calc_beta @ calc_beta.T`.
+    pinv_design : (n_regressors, n_timepoints) numpy.ndarray
+        Moore-Penrose pseudoinverse of the whitened design.
+    normalized_cov : (n_regressors, n_regressors) numpy.ndarray
+        Parameter covariance up to the dispersion scale, `pinv_design @ pinv_design.T`.
+        Per-voxel covariance is recovered as `dispersion[v] * normalized_cov`.
     df_total : int
         Total degrees of freedom (n_timepoints).
     df_model : int
@@ -84,11 +84,11 @@ class OLSModel:
         # Whitening is identity for OLS
         self.whitened_design = self.whiten(self.design)
 
-        # Moore-Penrose pseudoinverse
-        self.calc_beta = spl.pinv(self.whitened_design)
+        # Moore-Penrose pseudoinverse: solves `beta = pinv_design @ Y`.
+        self.pinv_design = spl.pinv(self.whitened_design)
 
-        # Normalized covariance: (X^T X)^-1 for OLS
-        self.normalized_cov_beta = self.calc_beta @ self.calc_beta.T
+        # Parameter covariance up to dispersion: `(X^T X)^-1` for OLS.
+        self.normalized_cov = self.pinv_design @ self.pinv_design.T
 
         # Degrees of freedom
         self.df_total = self.whitened_design.shape[0]
@@ -126,13 +126,13 @@ class OLSModel:
         Returns
         -------
         RegressionResults
-            Fitted model results containing parameter estimates,
-            residuals, and statistics.
+            Fitted model results containing parameter estimates, residuals, and
+            statistics.
         """
         whitened_Y = self.whiten(Y)
 
         # Estimate parameters: beta = (X^T X)^-1 X^T Y.
-        beta = self.calc_beta @ whitened_Y
+        beta = self.pinv_design @ whitened_Y
 
         # Compute whitened residuals.
         whitened_residuals = whitened_Y - self.whitened_design @ beta
@@ -151,7 +151,7 @@ class OLSModel:
             whitened_Y=whitened_Y,
             whitened_residuals=whitened_residuals,
             dispersion=dispersion,
-            cov=self.normalized_cov_beta,
+            cov=self.normalized_cov,
         )
 
 

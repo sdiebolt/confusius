@@ -103,7 +103,7 @@ class TestOLSModel:
         model = OLSModel(design_matrix)
 
         # Check symmetry
-        cov = model.normalized_cov_beta
+        cov = model.normalized_cov
         assert_array_equal(cov, cov.T)
 
         # Check it's positive semi-definite (eigenvalues >= 0)
@@ -119,11 +119,11 @@ class TestOLSModel:
         assert_allclose(results.mse, expected_mse)
 
     def test_pseudoinverse_computation(self, design_matrix):
-        """calc_beta should be pseudoinverse of design."""
+        """`pinv_design` should be the pseudoinverse of the design."""
         model = OLSModel(design_matrix)
 
-        # calc_beta @ design should be close to identity
-        product = model.calc_beta @ design_matrix
+        # pinv_design @ design should be close to identity.
+        product = model.pinv_design @ design_matrix
         identity = np.eye(design_matrix.shape[1])
         assert_allclose(product, identity, atol=1e-10)
 
