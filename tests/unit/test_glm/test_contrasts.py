@@ -15,27 +15,9 @@ from confusius.glm._contrasts import Contrast
 class TestContrastFromEstimate:
     """Tests for Contrast.from_estimate construction and input validation."""
 
-    def test_basic_initialization(self):
-        """Basic Contrast creation."""
-        effect = np.array([1.0, 2.0, 3.0])
-        variance = np.array([0.5, 0.5, 0.5])
-
-        contrast = Contrast.from_estimate(effect, variance)
-
-        assert_array_equal(contrast.effect, effect)
-        assert_array_equal(contrast.variance, variance)
-        assert contrast.stat_type == "t"
-        assert contrast.dim == 1
-        assert contrast.baseline == 0.0
-
-    def test_f_contrast_initialization(self):
-        """F-type contrast with multi-dimensional effect."""
-        effect = np.ones((3, 5))  # 3 contrasts, 5 voxels
-        variance = np.ones(5)
-
-        contrast = Contrast.from_estimate(effect, variance, stat_type="F")
-
-        assert contrast.stat_type == "F"
+    def test_dim_inferred_from_effect_shape(self):
+        """`dim` is inferred from a 2D effect's leading axis when not given."""
+        contrast = Contrast.from_estimate(np.ones((3, 5)), np.ones(5), stat_type="F")
         assert contrast.dim == 3
 
     def test_auto_t_to_f_conversion(self):
@@ -199,28 +181,16 @@ class TestPValues:
 class TestZScores:
     """Tests for z-score computation."""
 
-    def test_zscore_basic(self):
-        """z-scores from p-values."""
-        effect = np.array([0.0, 2.0, -2.0])
-        variance = np.ones(3)
-
-        contrast = Contrast.from_estimate(effect, variance, dof=30)
-
-        # z = 0 for t=0.
-        assert_almost_equal(contrast.zscore[0], 0, decimal=5)
-        # z > 0 for positive t.
-        assert contrast.zscore[1] > 0
-        # z < 0 for negative t.
-        assert contrast.zscore[2] < 0
-
-    def test_zscore_symmetry(self):
-        """z-scores should be symmetric around 0."""
-        effect = np.array([2.0, -2.0])
-        variance = np.ones(2)
-
-        contrast = Contrast.from_estimate(effect, variance, dof=100)
-
+    def test_zscore_symmetric_for_opposite_t(self):
+        """For `±t` with the same `|t|`, the z-scores are negatives of each other —
+        the standard-normal mapping must respect the t distribution's symmetry."""
+        contrast = Contrast.from_estimate(np.array([2.0, -2.0]), np.ones(2), dof=100)
         assert_almost_equal(contrast.zscore[0], -contrast.zscore[1], decimal=5)
+
+    def test_zscore_zero_at_zero_effect(self):
+        """An effect of zero gives zero z-score (independently of dof)."""
+        contrast = Contrast.from_estimate(np.array([0.0]), np.ones(1), dof=30)
+        assert_almost_equal(contrast.zscore[0], 0.0, decimal=10)
 
 
 # -----------------------------------------------------------------------------
@@ -352,14 +322,13 @@ class TestFixedEffects:
         # Variances sum.
         assert_allclose(combined.variance, np.array([5.0]))
 
-    def test_fixed_effects_zscore_consistency(self):
-        """z-scores should be consistent after fixed-effects combination."""
-        # Two identical contrasts.
-        con1 = Contrast.from_estimate(np.ones(5) * 2, np.ones(5), dof=20)
-        con2 = Contrast.from_estimate(np.ones(5) * 2, np.ones(5), dof=20)
+    def test_fixed_effects_tightens_zscore(self):
+        """Combining two identical estimates increases the z-score by `sqrt(2)`:
+        the test statistic is `(2·E) / sqrt(2·V) = sqrt(2) · E / sqrt(V)`.
 
-        combined = con1 + con2
+        This is the property that makes fixed-effects combination useful — more
+        observations → tighter inference."""
+        con = Contrast.from_estimate(np.ones(5) * 2, np.ones(5), dof=20)
+        combined = con + con
 
-        # Both should be positive and significant.
-        assert np.all(con1.zscore > 0)
-        assert np.all(combined.zscore > 0)
+        assert_allclose(combined.statistic, np.sqrt(2) * con.statistic, rtol=1e-12)

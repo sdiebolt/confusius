@@ -13,39 +13,6 @@ from confusius.glm import (
 )
 from confusius.glm._models import OLSModel
 
-# -----------------------------------------------------------------------------
-# Fixtures
-# -----------------------------------------------------------------------------
-
-
-@pytest.fixture
-def spatial_maps(rng):
-    """10 spatial maps of shape (2, 3, 4) for group-level testing."""
-    return [
-        xr.DataArray(
-            rng.standard_normal((2, 3, 4)),
-            dims=["z", "y", "x"],
-            coords={
-                "z": np.arange(2) * 0.5,
-                "y": np.arange(3) * 0.1,
-                "x": np.arange(4) * 0.1,
-            },
-        )
-        for _ in range(10)
-    ]
-
-
-@pytest.fixture
-def spatial_maps_2d(rng):
-    """8 spatial maps of shape (5, 6) for group-level testing."""
-    return [
-        xr.DataArray(
-            rng.standard_normal((5, 6)),
-            dims=["y", "x"],
-        )
-        for _ in range(8)
-    ]
-
 
 # -----------------------------------------------------------------------------
 # make_second_level_design_matrix tests
@@ -81,36 +48,33 @@ class TestMakeSecondLevelDesignMatrix:
 class TestSecondLevelModelFit:
     """Tests for SecondLevelModel.fit."""
 
-    def test_basic_fit(self, spatial_maps):
-        model = SecondLevelModel()
-        result = model.fit(spatial_maps)
-        assert result is model
-        assert hasattr(model, "results_")
-        assert hasattr(model, "design_matrix_")
-        assert list(model.design_matrix_.columns) == ["intercept"]
-        assert len(model.design_matrix_) == 10
-
     def test_fit_2d_spatial(self, spatial_maps_2d):
+        """Fitting `(y, x)` maps yields a contrast map with the same dims/shape."""
         model = SecondLevelModel()
         model.fit(spatial_maps_2d)
         z_map = model.compute_contrast("intercept")
         assert z_map.dims == ("y", "x")
         assert z_map.shape == (5, 6)
 
-    def test_fit_with_confounds(self, spatial_maps, rng):
+    def test_fit_confounds_pass_through_to_design_matrix(self, spatial_maps, rng):
+        """User confounds appear in the design matrix with the user's values."""
         confounds = pd.DataFrame({"age": rng.standard_normal(10)})
         model = SecondLevelModel()
         model.fit(spatial_maps, confounds=confounds)
-        assert "age" in model.design_matrix_.columns
-        assert "intercept" in model.design_matrix_.columns
+        assert_allclose(
+            model.design_matrix_["age"].to_numpy(), confounds["age"].to_numpy()
+        )
+        assert_allclose(model.design_matrix_["intercept"].to_numpy(), np.ones(10))
 
     def test_fit_with_prebuilt_design_matrix(self, spatial_maps):
+        """A pre-built design matrix is used as-is."""
         dm = make_second_level_design_matrix(10)
         model = SecondLevelModel()
         model.fit(spatial_maps, design_matrix=dm)
         assert model.design_matrix_ is dm
 
     def test_fit_preserves_spatial_coords(self, spatial_maps):
+        """Spatial coords are propagated from the inputs to the contrast map."""
         model = SecondLevelModel()
         model.fit(spatial_maps)
         z_map = model.compute_contrast("intercept")
@@ -182,41 +146,30 @@ class TestSecondLevelModelContrast:
         self.model = SecondLevelModel()
         self.model.fit(spatial_maps)
 
-    def test_default_intercept_contrast(self):
-        z_map = self.model.compute_contrast()
-        assert z_map.dims == ("z", "y", "x")
-        assert z_map.shape == (2, 3, 4)
-        assert np.all(np.isfinite(z_map.values))
+    def test_default_and_explicit_intercept_match(self):
+        """Default contrast (`compute_contrast()`) is `"intercept"`, and
+        passing `"intercept"` explicitly must yield identical maps."""
+        z_default = self.model.compute_contrast()
+        z_explicit = self.model.compute_contrast("intercept")
 
-    def test_explicit_string_contrast(self):
-        z_map = self.model.compute_contrast("intercept")
-        assert z_map.shape == (2, 3, 4)
+        assert_allclose(z_default.values, z_explicit.values, rtol=1e-12)
+        assert z_default.dims == ("z", "y", "x")
 
-    def test_array_contrast(self):
-        vec = np.array([1.0])
-        z_map = self.model.compute_contrast(vec)
-        assert z_map.shape == (2, 3, 4)
+    def test_string_and_array_contrast_agree(self):
+        """The string `"intercept"` resolves to `[1.0]`; both must produce
+        identical maps."""
+        z_string = self.model.compute_contrast("intercept")
+        z_array = self.model.compute_contrast(np.array([1.0]))
 
-    def test_output_type_statistic(self):
-        t_map = self.model.compute_contrast(output_type="statistic")
-        assert t_map.attrs["long_name"] == "statistic"
+        assert_allclose(z_string.values, z_array.values, rtol=1e-12)
 
-    def test_output_type_pvalue(self):
+    def test_output_type_pvalue_in_unit_interval(self):
         p_map = self.model.compute_contrast(output_type="pvalue")
-        assert np.all(p_map.values >= 0)
-        assert np.all(p_map.values <= 1)
+        assert np.all((p_map.values >= 0) & (p_map.values <= 1))
 
-    def test_output_type_effect(self):
-        e_map = self.model.compute_contrast(output_type="effect")
-        assert e_map.shape == (2, 3, 4)
-
-    def test_output_type_variance(self):
+    def test_output_type_variance_non_negative(self):
         v_map = self.model.compute_contrast(output_type="variance")
         assert np.all(v_map.values >= 0)
-
-    def test_explicit_stat_type_t(self):
-        z_map = self.model.compute_contrast("intercept", stat_type="t")
-        assert z_map.shape == (2, 3, 4)
 
     def test_invalid_output_type_raises(self):
         with pytest.raises(ValueError, match="output_type"):
@@ -226,26 +179,16 @@ class TestSecondLevelModelContrast:
 class TestSecondLevelModelFContrast:
     """Test F-contrast path."""
 
-    def test_f_contrast_2d_array(self, spatial_maps, rng):
-        """F-contrast with a 2D matrix produces a spatial z-map."""
-        confounds = pd.DataFrame({"group": [0.0] * 5 + [1.0] * 5})
-        model = SecondLevelModel()
-        model.fit(spatial_maps, confounds=confounds)
-        # 2-row contrast over group and intercept.
-        c = np.eye(2)
-        z_map = model.compute_contrast(c, stat_type="F")
-        assert z_map.shape == (2, 3, 4)
-        assert np.all(np.isfinite(z_map.values))
-
-    def test_f_contrast_effect_has_contrast_dim(self, spatial_maps, rng):
-        """F-contrast effect output has a contrast_dim dimension."""
+    def test_f_contrast_effect_has_contrast_dim_axis(self, spatial_maps):
+        """F-contrast `output_type="effect"` returns a `(contrast_dim, *spatial)`
+        array whose components remain accessible for downstream inspection."""
         confounds = pd.DataFrame({"group": [0.0] * 5 + [1.0] * 5})
         model = SecondLevelModel()
         model.fit(spatial_maps, confounds=confounds)
         c = np.eye(2)
         e_map = model.compute_contrast(c, stat_type="F", output_type="effect")
-        assert e_map.dims[0] == "contrast_dim"
-        assert e_map.shape[0] == 2
+        assert e_map.dims == ("contrast_dim", "z", "y", "x")
+        assert e_map.shape == (2, 2, 3, 4)
 
     def test_short_contrast_vector_is_zero_padded(self, spatial_maps):
         """A 1D contrast shorter than the design is zero-padded on the right.

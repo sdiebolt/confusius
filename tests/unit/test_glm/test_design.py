@@ -4,13 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 import scipy.special as spspecial
-from numpy.testing import assert_allclose, assert_array_equal
+from numpy.testing import assert_allclose
 
-from confusius.glm._design import (
-    _compute_sampling_interval,
-    _make_drift_regressors,
-    make_first_level_design_matrix,
-)
+from confusius.glm._design import make_first_level_design_matrix
 from confusius.glm._hrf_models import (
     claron2021_hrf,
     gamma_hrf,
@@ -99,13 +95,17 @@ def _gamma_hrf_reference(
 
 @pytest.fixture
 def frame_times():
-    """Volume times for 30 seconds at 10 Hz."""
+    """Volume times for 30 seconds at 10 Hz.
+
+    Shadows the conftest fixture: design/HRF tests don't fit a model, so the
+    short, dense series is faster and produces meaningful HRF coverage.
+    """
     return np.arange(0, 30, 0.1)
 
 
 @pytest.fixture
 def basic_events():
-    """Simple events DataFrame."""
+    """Simple events DataFrame with two trial types."""
     return pd.DataFrame(
         {
             "trial_type": ["stim", "stim", "control"],
@@ -249,115 +249,6 @@ class TestHRF:
 
 
 # -----------------------------------------------------------------------------
-# Sampling interval tests
-# -----------------------------------------------------------------------------
-
-
-class TestSamplingInterval:
-    """Tests for sampling interval computation."""
-
-    def test_uniform_spacing(self):
-        """Compute sampling interval from uniform frame times."""
-        frame_times = np.arange(0, 10, 0.1)  # 10 Hz
-
-        dt = _compute_sampling_interval(frame_times)
-
-        assert dt == pytest.approx(0.1)
-
-    def test_non_uniform_spacing_raises(self):
-        """Non-uniform frame times raise ValueError."""
-        frame_times = np.array([0, 0.1, 0.25, 0.3])  # Irregular
-
-        with pytest.raises(ValueError, match="uniformly spaced"):
-            _compute_sampling_interval(frame_times)
-
-    def test_single_timepoint_raises(self):
-        """Single timepoint raises ValueError."""
-        frame_times = np.array([0.0])
-
-        with pytest.raises(ValueError, match="at least 2 timepoints"):
-            _compute_sampling_interval(frame_times)
-
-    def test_two_timepoints(self):
-        """Two timepoints works correctly."""
-        frame_times = np.array([0.0, 0.1])
-
-        dt = _compute_sampling_interval(frame_times)
-
-        assert dt == pytest.approx(0.1)
-
-
-# -----------------------------------------------------------------------------
-# Drift regressor tests
-# -----------------------------------------------------------------------------
-
-
-class TestDriftRegressors:
-    """Tests for drift regressor creation."""
-
-    def test_cosine_drift_basic(self):
-        """Cosine drift regressors created correctly."""
-        n_scans = 1000
-        dt = 0.1
-        high_pass = 0.01  # 0.01 Hz = 100s period
-
-        drift_regs, names = _make_drift_regressors(
-            n_scans, "cosine", high_pass, drift_order=1, dt=dt
-        )
-
-        # Should have ~2*1000*0.1*0.01 = 2 cosine regressors
-        assert drift_regs.shape[1] >= 1
-        assert len(names) == drift_regs.shape[1]
-        assert all("cosine" in name for name in names[:-1])
-        assert names[-1] == "constant"
-
-    def test_cosine_drift_orthogonal(self):
-        """Cosine drift regressors are orthogonal."""
-        n_scans = 200
-        dt = 0.1
-
-        drift_regs, _ = _make_drift_regressors(n_scans, "cosine", 0.01, 1, dt)
-
-        if drift_regs.shape[1] > 1:
-            # Dot product between different cosines should be ~0
-            dot = drift_regs[:, 0] @ drift_regs[:, 1]
-            assert abs(dot) < 1e-10
-
-    def test_polynomial_drift(self):
-        """Polynomial drift regressors created correctly."""
-        n_scans = 100
-        drift_regs, names = _make_drift_regressors(
-            n_scans, "polynomial", 0.01, drift_order=2, dt=0.1
-        )
-
-        # Should have order + 1 = 3 regressors (linear, quadratic, constant)
-        assert drift_regs.shape == (100, 3)
-        assert names[-1] == "constant"
-        assert "poly_1" in names
-        assert "poly_2" in names
-
-    def test_polynomial_last_column_constant(self):
-        """Polynomial drift last column is constant (1s)."""
-        drift_regs, _ = _make_drift_regressors(
-            50, "polynomial", 0.01, drift_order=1, dt=0.1
-        )
-
-        assert_array_equal(drift_regs[:, -1], np.ones(50))
-
-    def test_no_drift_model(self):
-        """drift_model=None returns an intercept only."""
-        drift_regs, names = _make_drift_regressors(100, None, 0.01, 1, 0.1)
-
-        assert drift_regs.shape == (100, 1)
-        assert names == ["constant"]
-
-    def test_invalid_drift_model(self):
-        """Invalid drift model raises ValueError."""
-        with pytest.raises(ValueError, match="drift_model"):
-            _make_drift_regressors(100, "invalid", 0.01, 1, 0.1)
-
-
-# -----------------------------------------------------------------------------
 # Design matrix tests
 # -----------------------------------------------------------------------------
 
@@ -365,28 +256,37 @@ class TestDriftRegressors:
 class TestDesignMatrix:
     """Tests for design matrix creation."""
 
-    def test_basic_design_matrix(self, frame_times, basic_events):
-        """Basic design matrix creation."""
+    def test_design_matrix_columns_and_index(self, frame_times, basic_events):
+        """Design matrix exposes one column per trial type plus drift, and its
+        index matches the input frame times."""
         design = make_first_level_design_matrix(
             frame_times, basic_events, hrf_model="glover"
         )
 
-        # Should have columns for stim, control, and drift
         assert "stim" in design.columns
         assert "control" in design.columns
         assert design.shape[0] == len(frame_times)
+        assert_allclose(design.index.to_numpy(dtype=float), frame_times)
 
     def test_design_matrix_no_events(self, frame_times):
-        """Design matrix with no events (only drift)."""
+        """Without events and only a drift model, the design reduces to the
+        drift regressors plus the constant."""
         design = make_first_level_design_matrix(
             frame_times, events=None, drift_model="cosine"
         )
 
         assert list(design.columns) == ["constant"]
 
-    def test_design_matrix_with_confounds(self, frame_times, basic_events):
-        """Design matrix with confound regressors."""
-        confounds = np.random.randn(len(frame_times), 2)
+    def test_design_matrix_array_confounds_pass_through(
+        self, frame_times, basic_events
+    ):
+        """Array confounds keep the user's values column-by-column."""
+        confounds = np.column_stack(
+            [
+                np.linspace(0.0, 1.0, len(frame_times)),
+                np.linspace(1.0, 0.0, len(frame_times)),
+            ]
+        )
 
         design = make_first_level_design_matrix(
             frame_times,
@@ -395,33 +295,91 @@ class TestDesignMatrix:
             confound_names=["motion_x", "motion_y"],
         )
 
-        assert "motion_x" in design.columns
-        assert "motion_y" in design.columns
+        assert_allclose(design["motion_x"].to_numpy(), confounds[:, 0])
+        assert_allclose(design["motion_y"].to_numpy(), confounds[:, 1])
 
-    def test_design_matrix_fir_model(self, frame_times, basic_events):
-        """FIR model design matrix."""
+    def test_design_matrix_dataframe_confounds_pass_through(
+        self, frame_times, basic_events
+    ):
+        """DataFrame confounds keep both their names and values."""
+        confounds = pd.DataFrame(
+            {
+                "motion_x": np.linspace(0, 1, len(frame_times)),
+                "motion_y": np.linspace(1, 0, len(frame_times)),
+            }
+        )
+
+        design = make_first_level_design_matrix(
+            frame_times,
+            basic_events,
+            confounds=confounds,
+        )
+
+        assert_allclose(design["motion_x"].to_numpy(), confounds["motion_x"].to_numpy())
+        assert_allclose(design["motion_y"].to_numpy(), confounds["motion_y"].to_numpy())
+
+    def test_design_matrix_fir_delays_are_time_shifted(self, frame_times, basic_events):
+        """FIR regressors with delays 0, 1, 2 are exact one-sample shifts of each
+        other (the FIR basis is meant to capture lagged responses)."""
         design = make_first_level_design_matrix(
             frame_times,
             basic_events,
             hrf_model="fir",
             fir_delays=[0, 1, 2],
+            drift_model=None,
         )
 
-        # Should have stim_delay_0, stim_delay_1, etc.
-        assert any("stim_delay_0" in col for col in design.columns)
-        assert any("stim_delay_1" in col for col in design.columns)
-        assert any("stim_delay_2" in col for col in design.columns)
+        d0 = design["stim_delay_0"].to_numpy()
+        d1 = design["stim_delay_1"].to_numpy()
+        d2 = design["stim_delay_2"].to_numpy()
+
+        # Each delay column is the previous one shifted forward by one frame.
+        assert_allclose(d1[1:], d0[:-1], atol=1e-12)
+        assert_allclose(d2[1:], d1[:-1], atol=1e-12)
 
     def test_design_matrix_no_drift(self, frame_times, basic_events):
-        """Design matrix without drift still includes an intercept."""
+        """`drift_model=None` keeps only condition columns plus the constant."""
         design = make_first_level_design_matrix(
             frame_times, basic_events, drift_model=None
         )
 
         assert set(design.columns) == {"stim", "control", "constant"}
 
+    def test_design_matrix_polynomial_drift(self, frame_times, basic_events):
+        """Polynomial drift adds `drift_order` columns plus the constant. After
+        orthogonalization the constant column is unit-valued by construction."""
+        design = make_first_level_design_matrix(
+            frame_times,
+            basic_events,
+            drift_model="polynomial",
+            drift_order=2,
+        )
+
+        poly_cols = [c for c in design.columns if c.startswith("poly_")]
+        assert poly_cols == ["poly_1", "poly_2"]
+        assert_allclose(design["constant"].to_numpy(), np.ones(len(frame_times)))
+
+    def test_design_matrix_cosine_drift_orthogonal(
+        self, frame_times, basic_events
+    ):
+        """Cosine drift regressors emitted by the design matrix are orthogonal,
+        which is the property that makes them safe to use as a high-pass basis."""
+        design = make_first_level_design_matrix(
+            frame_times,
+            basic_events,
+            drift_model="cosine",
+            low_cutoff=0.05,
+        )
+        cosine_cols = [c for c in design.columns if c.startswith("cosine")]
+        assert len(cosine_cols) >= 2  # the test only makes sense with >1 column.
+
+        cosines = design[cosine_cols].to_numpy()
+        gram = cosines.T @ cosines
+        off_diagonal = gram - np.diag(np.diagonal(gram))
+        assert np.all(np.abs(off_diagonal) < 1e-10)
+
     def test_design_matrix_default_trial_type(self, frame_times):
-        """Events without trial_type get default 'dummy' label."""
+        """Events without `trial_type` default to a 'dummy' label and warn."""
         events = pd.DataFrame(
             {
                 "onset": [0.0, 10.0],
@@ -436,44 +394,11 @@ class TestDesignMatrix:
 
         assert "dummy" in design.columns
 
-    def test_design_matrix_preserves_frame_times_index(self, frame_times, basic_events):
-        """Design matrix index matches frame_times."""
-        design = make_first_level_design_matrix(frame_times, basic_events)
-
-        assert_allclose(design.index.to_numpy(dtype=float), frame_times)
-
-    def test_design_matrix_with_dataframe_confounds(self, frame_times, basic_events):
-        """DataFrame confounds keep their column names."""
-        confounds = pd.DataFrame(
-            {
-                "motion_x": np.linspace(0, 1, len(frame_times)),
-                "motion_y": np.linspace(1, 0, len(frame_times)),
-            }
-        )
-
-        design = make_first_level_design_matrix(
-            frame_times,
-            basic_events,
-            confounds=confounds,
-        )
-
-        assert "motion_x" in design.columns
-        assert "motion_y" in design.columns
-
-    def test_design_matrix_values_shape(self, frame_times, basic_events):
-        """Design matrix regressor values have correct shape."""
-        design = make_first_level_design_matrix(
-            frame_times, basic_events, hrf_model="glover", drift_model=None
-        )
-
-        # Should have same number of rows as frame_times
-        assert design.shape[0] == len(frame_times)
-        # Should have stim and control columns
-        assert "stim" in design.columns
-        assert "control" in design.columns
-
-    def test_design_matrix_callable_hrf(self, frame_times, basic_events):
-        """Custom callable HRF is invoked to build the regressors."""
+    def test_design_matrix_callable_hrf_matches_named(
+        self, frame_times, basic_events
+    ):
+        """A callable HRF produces the same regressors as the equivalent
+        named-string HRF — confirming the callable plumbing is wired up."""
         design = make_first_level_design_matrix(
             frame_times,
             basic_events,
@@ -490,28 +415,16 @@ class TestDesignMatrix:
 
         assert_allclose(design["stim"].to_numpy(), reference["stim"].to_numpy())
 
-    def test_design_matrix_verhoef2025_hrf(self, frame_times, basic_events):
-        """Named Verhoef 2025 HRF path produces a design matrix."""
-        design = make_first_level_design_matrix(
-            frame_times,
-            basic_events,
-            hrf_model="verhoef2025",
-            drift_model=None,
-        )
-
-        assert "stim" in design.columns
-
-    def test_design_matrix_hrf_none(self, frame_times, basic_events):
-        """Design matrix with hrf_model=None creates stick functions."""
+    def test_design_matrix_hrf_none_is_boxcar(self, frame_times, basic_events):
+        """`hrf_model=None` returns boxcar regressors with values in {0, 1}."""
         design = make_first_level_design_matrix(
             frame_times, basic_events, hrf_model=None, drift_model=None
         )
 
-        # Should still create regressors (boxcar/stick functions)
-        assert "stim" in design.columns
-        assert "control" in design.columns
-        # Values should be 0 or 1 (boxcar)
         assert set(np.unique(design["stim"])).issubset({0, 1})
+        # Two stim events of duration 2.0 at dt=0.1 should each activate ~20
+        # frames → ~40 active frames total.
+        assert design["stim"].sum() == pytest.approx(40.0, abs=1.0)
 
 
 # -----------------------------------------------------------------------------
@@ -523,41 +436,12 @@ class TestEdgeCases:
     """Edge cases and error handling."""
 
     def test_empty_events(self, frame_times):
-        """Empty events DataFrame works."""
+        """Empty events DataFrame yields a design with only the constant."""
         events = pd.DataFrame(columns=["trial_type", "onset", "duration"])
 
         design = make_first_level_design_matrix(frame_times, events, drift_model=None)
 
         assert list(design.columns) == ["constant"]
-
-    def test_single_event(self, frame_times):
-        """Single event in design matrix."""
-        events = pd.DataFrame(
-            {
-                "trial_type": ["stim"],
-                "onset": [5.0],
-                "duration": [1.0],
-            }
-        )
-
-        design = make_first_level_design_matrix(frame_times, events, drift_model=None)
-
-        assert "stim" in design.columns
-        assert design.shape[1] == 2
-
-    def test_event_at_time_zero(self, frame_times):
-        """Event at time 0."""
-        events = pd.DataFrame(
-            {
-                "trial_type": ["stim"],
-                "onset": [0.0],
-                "duration": [1.0],
-            }
-        )
-
-        design = make_first_level_design_matrix(frame_times, events, drift_model=None)
-
-        assert np.any(design["stim"][:50] > 0)
 
     def test_zero_duration_event_with_no_hrf_is_not_persistent(self, frame_times):
         """Zero-duration events stay impulse-like when no HRF is used."""
@@ -581,20 +465,184 @@ class TestEdgeCases:
         assert np.count_nonzero(stim) == 1
         assert stim.sum() == pytest.approx(1.0)
 
-    def test_very_short_event(self, frame_times):
-        """Event with very short but non-zero duration."""
-        # Use duration >= dt so the event is captured at the sampling resolution
+    def test_non_uniform_frame_times_raise(self, basic_events):
+        """Non-uniform frame times raise instead of silently using the median."""
+        irregular = np.array([0.0, 0.1, 0.25, 0.30, 0.40])
+        with pytest.raises(ValueError, match="uniformly spaced"):
+            make_first_level_design_matrix(irregular, basic_events)
+
+    def test_invalid_drift_model_raises(self, frame_times, basic_events):
+        """Unknown drift_model values raise."""
+        with pytest.raises(ValueError, match="drift_model"):
+            make_first_level_design_matrix(
+                frame_times, basic_events, drift_model="unknown"
+            )
+
+
+# -----------------------------------------------------------------------------
+# Public-API error tests
+# -----------------------------------------------------------------------------
+
+
+class TestDesignMatrixInputValidation:
+    """Errors and warnings surfaced from `make_first_level_design_matrix` for
+    malformed user input."""
+
+    @pytest.fixture
+    def stim_event(self):
+        return pd.DataFrame(
+            {"trial_type": ["stim"], "onset": [1.0], "duration": [1.0]}
+        )
+
+    def test_invalid_hrf_model_raises(self, frame_times, stim_event):
+        with pytest.raises(ValueError, match="Unknown hrf_model"):
+            make_first_level_design_matrix(
+                frame_times, stim_event, hrf_model="invalid"
+            )
+
+    def test_invalid_drift_order_raises(self, frame_times, stim_event):
+        with pytest.raises(ValueError, match="drift_order must be >= 0"):
+            make_first_level_design_matrix(
+                frame_times, stim_event, drift_model="polynomial", drift_order=-1
+            )
+
+    def test_high_low_cutoff_warns(self, stim_event):
+        """A `low_cutoff` close to the Nyquist frequency saturates the cosine
+        basis with redundant high-frequency regressors and should warn."""
+        # 10 frames at dt=0.1s, low_cutoff at 10 Hz → frequency far above Nyquist.
+        frame_times = np.arange(0, 1, 0.1)
+        with pytest.warns(UserWarning, match="saturate the design matrix"):
+            make_first_level_design_matrix(
+                frame_times,
+                stim_event,
+                drift_model="cosine",
+                low_cutoff=10.0,
+            )
+
+    def test_events_must_be_dataframe(self, frame_times):
+        with pytest.raises(TypeError, match="pandas DataFrame"):
+            make_first_level_design_matrix(frame_times, events=[1, 2, 3])
+
+    def test_events_missing_onset_column_raises(self, frame_times):
+        events = pd.DataFrame({"trial_type": ["stim"], "duration": [1.0]})
+        with pytest.raises(ValueError, match="no onset column"):
+            make_first_level_design_matrix(frame_times, events)
+
+    def test_events_nan_onset_raises(self, frame_times):
+        events = pd.DataFrame(
+            {"trial_type": ["stim"], "onset": [np.nan], "duration": [1.0]}
+        )
+        with pytest.raises(ValueError, match="must not contain nan values"):
+            make_first_level_design_matrix(frame_times, events)
+
+    def test_events_non_numeric_onset_raises(self, frame_times):
+        events = pd.DataFrame(
+            {"trial_type": ["stim"], "onset": ["oops"], "duration": [1.0]}
+        )
+        with pytest.raises(ValueError, match="Could not cast onset"):
+            make_first_level_design_matrix(frame_times, events)
+
+    def test_events_negative_duration_raises(self, frame_times):
+        events = pd.DataFrame(
+            {"trial_type": ["stim"], "onset": [1.0], "duration": [-1.0]}
+        )
+        with pytest.raises(ValueError, match="non-negative"):
+            make_first_level_design_matrix(frame_times, events)
+
+    def test_events_unexpected_column_warns(self, frame_times):
         events = pd.DataFrame(
             {
                 "trial_type": ["stim"],
-                "onset": [10.0],
-                "duration": [0.1],  # One sampling interval
+                "onset": [1.0],
+                "duration": [1.0],
+                "response_time": [0.5],
             }
         )
+        with pytest.warns(UserWarning, match="unexpected columns"):
+            make_first_level_design_matrix(frame_times, events)
 
-        design = make_first_level_design_matrix(frame_times, events, drift_model=None)
+    def test_events_modulation_nan_raises(self, frame_times):
+        events = pd.DataFrame(
+            {
+                "trial_type": ["stim"],
+                "onset": [1.0],
+                "duration": [1.0],
+                "modulation": [np.nan],
+            }
+        )
+        with pytest.raises(ValueError, match="modulation"):
+            make_first_level_design_matrix(frame_times, events)
 
-        # Should still create a regressor with some non-zero values
-        assert "stim" in design.columns
-        # The HRF convolution will spread the brief event over time
-        assert np.any(design["stim"] != 0)
+    def test_events_modulation_non_numeric_raises(self, frame_times):
+        events = pd.DataFrame(
+            {
+                "trial_type": ["stim"],
+                "onset": [1.0],
+                "duration": [1.0],
+                "modulation": ["oops"],
+            }
+        )
+        with pytest.raises(ValueError, match="Could not cast modulation"):
+            make_first_level_design_matrix(frame_times, events)
+
+    def test_duplicate_events_warn(self, frame_times):
+        events = pd.DataFrame(
+            {
+                "trial_type": ["stim", "stim"],
+                "onset": [1.0, 1.0],
+                "duration": [1.0, 1.0],
+                "modulation": [1.0, 2.0],
+            }
+        )
+        with pytest.warns(UserWarning, match="Duplicated events"):
+            make_first_level_design_matrix(frame_times, events, hrf_model=None)
+
+    def test_event_before_min_onset_warns(self, frame_times):
+        events = pd.DataFrame(
+            {"trial_type": ["stim"], "onset": [-25.0], "duration": [1.0]}
+        )
+        with pytest.warns(UserWarning, match="earlier than"):
+            make_first_level_design_matrix(frame_times, events, min_onset=-24.0)
+
+    def test_array_confounds_promoted_to_one_column(self, frame_times):
+        """1D array confounds are promoted to a single regressor column."""
+        confounds = np.linspace(0, 1, len(frame_times))
+        design = make_first_level_design_matrix(frame_times, confounds=confounds)
+        assert_allclose(design["confound_0"].to_numpy(), confounds)
+
+    def test_confounds_bad_ndim_raises(self, frame_times):
+        with pytest.raises(ValueError, match="1D or 2D"):
+            make_first_level_design_matrix(
+                frame_times, confounds=np.zeros((2, 3, 4))
+            )
+
+    def test_confounds_length_mismatch_raises(self, frame_times):
+        with pytest.raises(ValueError, match="Incorrect specification of confounds"):
+            make_first_level_design_matrix(
+                frame_times, confounds=np.zeros((len(frame_times) - 1, 2))
+            )
+
+    def test_confounds_with_nan_raises(self, frame_times):
+        confounds = np.zeros((len(frame_times), 1))
+        confounds[0, 0] = np.nan
+        with pytest.raises(ValueError, match="Confounds contain NaN values"):
+            make_first_level_design_matrix(frame_times, confounds=confounds)
+
+    def test_confound_names_count_mismatch_raises(self, frame_times):
+        confounds = np.zeros((len(frame_times), 2))
+        with pytest.raises(ValueError, match="Incorrect number of confound names"):
+            make_first_level_design_matrix(
+                frame_times,
+                confounds=confounds,
+                confound_names=["only_one"],
+            )
+
+    def test_duplicate_regressor_names_raises(self, frame_times):
+        """Confound names colliding with auto-added regressors are rejected."""
+        confounds = np.zeros((len(frame_times), 1))
+        with pytest.raises(ValueError, match="unique names"):
+            make_first_level_design_matrix(
+                frame_times,
+                confounds=confounds,
+                confound_names=["constant"],
+            )

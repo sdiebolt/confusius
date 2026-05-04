@@ -40,21 +40,6 @@ def design_with_intercept(rng):
 class TestOLSModel:
     """Tests for Ordinary Least Squares model."""
 
-    def test_basic_fit(self, design_matrix, response_matrix):
-        """Basic fitting returns correct shapes and df."""
-        model = OLSModel(design_matrix)
-        results = model.fit(response_matrix)
-
-        # Check degrees of freedom
-        assert results.df_total == 40
-        assert results.df_model == 10
-        assert results.df_residuals == 30
-
-        # Check output shapes
-        assert results.theta.shape == (10, 10)  # (n_regressors, n_voxels)
-        assert results.residuals.shape == (40, 10)  # (n_timepoints, n_voxels)
-        assert results.predicted.shape == (40, 10)
-
     def test_residuals_mean_zero_with_intercept(
         self, design_with_intercept, response_matrix
     ):
@@ -136,17 +121,6 @@ class TestOLSModel:
 class TestARModel:
     """Tests for Autoregressive model."""
 
-    def test_ar1_basic_fit(self, design_matrix, response_matrix):
-        """AR(1) model fits correctly."""
-        n_voxels = response_matrix.shape[1]
-        rho = np.full((1, n_voxels), 0.4)
-        model = ARModel(design_matrix, rho=rho)
-        results = model.fit(response_matrix)
-
-        assert results.df_total == 40
-        assert results.df_residuals == 30
-        assert results.residuals.shape == (40, 10)
-
     def test_ar1_whitening_reduces_autocorrelation(self):
         """AR(1) fitting reduces autocorrelation in whitened residuals."""
         rng = np.random.default_rng(0)
@@ -176,25 +150,6 @@ class TestARModel:
         )
         assert abs(white_ac) < abs(raw_ac)
 
-    def test_ar_multi_order(self, design_matrix, response_matrix):
-        """AR(p) model with p > 1 works correctly."""
-        n_voxels = response_matrix.shape[1]
-        rho = np.tile([0.3, 0.2], (n_voxels, 1)).T  # (2, n_voxels)
-        model = ARModel(design_matrix, rho=rho)
-        results = model.fit(response_matrix)
-
-        assert model.order == 2
-        assert results.df_total == 40
-
-    def test_ar_per_voxel_cov(self, design_matrix, response_matrix):
-        """Per-voxel AR fit produces per-voxel covariance matrix."""
-        n_voxels = response_matrix.shape[1]
-        rho = np.full((1, n_voxels), 0.4)
-        model = ARModel(design_matrix, rho=rho)
-        results = model.fit(response_matrix)
-
-        assert results.cov.shape == (n_voxels, design_matrix.shape[1], design_matrix.shape[1])
-
     def test_ar_degenerate_design(self, design_matrix, response_matrix):
         """AR model handles collinear design columns."""
         design_matrix[:, 0] = design_matrix[:, 1] + design_matrix[:, 2]
@@ -217,21 +172,6 @@ class TestARModel:
         model = ARModel(design_matrix, rho=rho)
         with pytest.raises(ValueError, match="voxels"):
             model.fit(response_matrix)
-
-    def test_ar_t_contrast_per_voxel(self, design_matrix, response_matrix):
-        """AR compute_t_contrast uses per-voxel covariance and returns correct shapes."""
-        n_voxels = response_matrix.shape[1]
-        rho = np.full((1, n_voxels), 0.4)
-        model = ARModel(design_matrix, rho=rho)
-        results = model.fit(response_matrix)
-
-        contrast = np.zeros(design_matrix.shape[1])
-        contrast[0] = 1.0
-        t_result = results.compute_t_contrast(contrast)
-
-        assert t_result["effect"].shape == (n_voxels,)
-        assert t_result["sd"].shape == (n_voxels,)
-        assert t_result["t"].shape == (n_voxels,)
 
     def test_ar_f_equals_t_squared(self, design_matrix, response_matrix):
         """AR F-statistic with 1 numerator df equals t-statistic squared."""
@@ -284,36 +224,6 @@ class TestRegressionResults:
         expected_predicted = design_matrix @ results.theta
         assert_array_equal(results.predicted, expected_predicted)
 
-    def test_sse_positive(self, design_matrix, response_matrix):
-        """Sum of squared errors should be non-negative."""
-        model = OLSModel(design_matrix)
-        results = model.fit(response_matrix)
-
-        assert np.all(results.sse >= 0)
-        assert np.all(results.mse >= 0)
-
-    def test_t_contrast_basic(self, design_matrix, response_matrix):
-        """t-contrast returns correct keys and shapes."""
-        model = OLSModel(design_matrix)
-        results = model.fit(response_matrix)
-
-        # Contrast: test first regressor
-        contrast = np.zeros(10)
-        contrast[0] = 1.0
-
-        t_result = results.compute_t_contrast(contrast)
-
-        assert "effect" in t_result
-        assert "sd" in t_result
-        assert "t" in t_result
-        assert "df_den" in t_result
-
-        # Shape should be (n_voxels,) for each
-        assert t_result["effect"].shape == (10,)
-        assert t_result["sd"].shape == (10,)
-        assert t_result["t"].shape == (10,)
-        assert t_result["df_den"] == 30
-
     def test_t_contrast_1d_vs_2d(self, design_matrix, response_matrix):
         """t-contrast handles both 1D and 2D contrast vectors."""
         model = OLSModel(design_matrix)
@@ -342,39 +252,19 @@ class TestRegressionResults:
         with pytest.raises(ValueError, match="single row"):
             results.compute_t_contrast(contrast)
 
-    def test_f_contrast_basic(self, design_matrix, response_matrix):
-        """F-contrast returns correct keys and shapes."""
+    def test_f_contrast_whitening_invariant(self, design_matrix, response_matrix):
+        """The whitened-effect representation satisfies
+        `||whitened||² / q / dispersion == F`, which is the property the
+        downstream Contrast wrapper relies on."""
         model = OLSModel(design_matrix)
         results = model.fit(response_matrix)
-
-        # F-contrast: test first 3 regressors
         contrast = np.eye(10)[:3]
 
         f_result = results.compute_f_contrast(contrast)
 
-        for key in (
-            "effect",
-            "whitened_effect",
-            "covariance",
-            "dispersion",
-            "F",
-            "df_num",
-            "df_den",
-        ):
-            assert key in f_result
-
-        # Shapes.
-        assert f_result["effect"].shape == (3, 10)  # (q, n_voxels)
-        assert f_result["whitened_effect"].shape == (3, 10)  # (q, n_voxels)
-        assert f_result["covariance"].shape == (10, 3, 3)  # (n_voxels, q, q)
-        assert f_result["dispersion"].shape == (10,)
-        assert f_result["F"].shape == (10,)  # (n_voxels,)
-        assert f_result["df_num"] == 3
-        assert f_result["df_den"] == 30
-        # Whitening invariant: ||whitened||² / q / dispersion == F.
         assert_allclose(
             np.sum(f_result["whitened_effect"] ** 2, axis=0)
-            / 3
+            / f_result["df_num"]
             / f_result["dispersion"],
             f_result["F"],
             rtol=1e-10,
@@ -417,49 +307,16 @@ class TestRegressionResults:
 
 
 class TestEdgeCases:
-    """Edge cases and error handling."""
+    """Edge cases on degenerate sample sizes."""
 
-    def test_single_observation(self, rng):
-        """Model with single observation."""
-        X = rng.standard_normal(size=(1, 1))
-        Y = rng.standard_normal(size=(1, 1))
+    def test_saturated_model_dispersion_is_nan(self, rng):
+        """A square design (`n_obs == n_regressors`) leaves zero residual df, so
+        dispersion is undefined and should surface as NaN."""
+        X = rng.standard_normal(size=(5, 5))
+        Y = rng.standard_normal(size=(5, 3))
 
         model = OLSModel(X)
         results = model.fit(Y)
 
-        assert results.df_total == 1
         assert results.df_residuals == 0
-
-    def test_single_voxel(self, design_matrix, rng):
-        """Model with single voxel/response."""
-        Y = rng.standard_normal(size=(40, 1))
-
-        model = OLSModel(design_matrix)
-        results = model.fit(Y)
-
-        assert results.theta.shape == (10, 1)
-        assert results.residuals.shape == (40, 1)
-
-    def test_very_small_sample(self, rng):
-        """Model with very few observations."""
-        n = 3
-        X = rng.standard_normal(size=(n, 2))
-        Y = rng.standard_normal(size=(n, 5))
-
-        model = OLSModel(X)
-        results = model.fit(Y)
-
-        assert results.df_total == n
-        assert results.df_residuals == n - 2
-
-    def test_zero_variance_voxel(self, design_matrix):
-        """Voxel with zero variance (constant) should fit without error."""
-        Y = np.ones((40, 10))
-        Y[:, 0] = 5.0  # Constant voxel
-
-        model = OLSModel(design_matrix)
-        results = model.fit(Y)
-
-        # Should still fit without error and return proper shapes
-        assert results.theta.shape == (10, 10)
-        assert results.residuals.shape == (40, 10)
+        assert np.all(np.isnan(results.dispersion))

@@ -10,87 +10,6 @@ from confusius.glm import FirstLevelModel, make_first_level_design_matrix
 from confusius.glm._models import OLSModel
 from confusius.glm.first_level import _flatten_spatial
 
-# -----------------------------------------------------------------------------
-# Fixtures
-# -----------------------------------------------------------------------------
-
-
-@pytest.fixture
-def frame_times():
-    """200 uniformly spaced volume times at 2 Hz (dt=0.5 s)."""
-    return np.arange(200) * 0.5
-
-
-@pytest.fixture
-def events():
-    """Simple two-condition event table."""
-    onsets_a = np.arange(5) * 20.0
-    onsets_b = np.arange(5) * 20.0 + 10.0
-    return pd.DataFrame(
-        {
-            "trial_type": ["A"] * 5 + ["B"] * 5,
-            "onset": np.concatenate([onsets_a, onsets_b]),
-            "duration": [2.0] * 10,
-        }
-    )
-
-
-@pytest.fixture
-def fusi_data(rng, frame_times):
-    """Small (time, z, y, x) DataArray for testing."""
-    n_time = len(frame_times)
-    return xr.DataArray(
-        rng.standard_normal((n_time, 2, 3, 4)),
-        dims=["time", "z", "y", "x"],
-        coords={
-            "time": frame_times,
-            "z": np.arange(2) * 0.5,
-            "y": np.arange(3) * 0.1,
-            "x": np.arange(4) * 0.1,
-        },
-    )
-
-
-@pytest.fixture
-def fusi_data_2d(rng, frame_times):
-    """Small (time, y, x) DataArray (no z dimension)."""
-    n_time = len(frame_times)
-    return xr.DataArray(
-        rng.standard_normal((n_time, 5, 6)),
-        dims=["time", "y", "x"],
-        coords={
-            "time": frame_times,
-            "y": np.arange(5) * 0.1,
-            "x": np.arange(6) * 0.1,
-        },
-    )
-
-
-# -----------------------------------------------------------------------------
-# Helper function tests
-# -----------------------------------------------------------------------------
-
-
-class TestFlattenSpatial:
-    """Tests for _flatten_spatial."""
-
-    def test_shape_3d(self, fusi_data):
-        flat, dims, shape = _flatten_spatial(fusi_data)
-        assert flat.shape == (200, 2 * 3 * 4)
-        assert dims == ("z", "y", "x")
-        assert shape == (2, 3, 4)
-
-    def test_shape_2d(self, fusi_data_2d):
-        flat, dims, shape = _flatten_spatial(fusi_data_2d)
-        assert flat.shape == (200, 5 * 6)
-        assert dims == ("y", "x")
-        assert shape == (5, 6)
-
-    def test_handles_transposed_input(self, fusi_data):
-        transposed = fusi_data.transpose("x", "y", "z", "time")
-        flat, dims, shape = _flatten_spatial(transposed)
-        assert flat.shape == (200, 2 * 3 * 4)
-
 
 # -----------------------------------------------------------------------------
 # FirstLevelModel: fitting
@@ -100,43 +19,19 @@ class TestFlattenSpatial:
 class TestFirstLevelModelFit:
     """Tests for FirstLevelModel.fit."""
 
-    def test_basic_fit_ols(self, fusi_data, events):
-        model = FirstLevelModel(noise_model="ols")
-        result = model.fit(fusi_data, events=events)
-        assert result is model
-        assert hasattr(model, "results_")
-        assert hasattr(model, "design_matrices_")
-        assert len(model.design_matrices_) == 1
-        assert len(model.results_) == 1
-
-    def test_basic_fit_ar1(self, fusi_data, events):
-        model = FirstLevelModel(noise_model="ar1")
-        model.fit(fusi_data, events=events)
-        assert len(model.results_) == 1
-
-    def test_fit_with_prebuilt_design_matrix(self, fusi_data, frame_times, events):
+    def test_fit_with_prebuilt_design_matrix_uses_it(
+        self, fusi_data, frame_times, events
+    ):
+        """A pre-built design matrix is used as-is rather than rebuilt."""
         dm = make_first_level_design_matrix(frame_times, events=events)
         model = FirstLevelModel(noise_model="ols")
         model.fit(fusi_data, design_matrices=dm)
-        assert len(model.design_matrices_) == 1
-
-    def test_multi_run(self, rng, frame_times, events):
-        data1 = xr.DataArray(
-            rng.standard_normal((200, 2, 3, 4)),
-            dims=["time", "z", "y", "x"],
-            coords={"time": frame_times},
-        )
-        data2 = xr.DataArray(
-            rng.standard_normal((200, 2, 3, 4)),
-            dims=["time", "z", "y", "x"],
-            coords={"time": frame_times},
-        )
-        model = FirstLevelModel(noise_model="ols")
-        model.fit([data1, data2], events=[events, events])
-        assert len(model.results_) == 2
-        assert len(model.design_matrices_) == 2
+        # Auto-built design must match the user-supplied one column-for-column.
+        pd.testing.assert_frame_equal(model.design_matrices_[0], dm)
 
     def test_fit_2d_spatial(self, fusi_data_2d, events):
+        """Fitting a `(time, y, x)` array yields a contrast map with the same
+        spatial dims and shape."""
         model = FirstLevelModel(noise_model="ols")
         model.fit(fusi_data_2d, events=events)
         z_map = model.compute_contrast("A - B")
@@ -233,46 +128,41 @@ class TestFirstLevelModelContrast:
         self.model = FirstLevelModel(noise_model="ols")
         self.model.fit(fusi_data, events=events)
 
-    def test_string_contrast(self):
-        z_map = self.model.compute_contrast("A - B")
-        assert z_map.dims == ("z", "y", "x")
-        assert z_map.shape == (2, 3, 4)
-        assert np.all(np.isfinite(z_map.values))
-
-    def test_single_condition_contrast(self):
-        z_map = self.model.compute_contrast("A")
-        assert z_map.shape == (2, 3, 4)
-
-    def test_array_contrast(self):
+    def test_string_and_array_contrast_agree(self):
+        """A string contrast resolves to the same numeric vector applied
+        positionally; both must produce identical maps."""
         dm = self.model.design_matrices_[0]
         vec = np.zeros(len(dm.columns))
         vec[list(dm.columns).index("A")] = 1.0
         vec[list(dm.columns).index("B")] = -1.0
-        z_map = self.model.compute_contrast(vec)
-        assert z_map.shape == (2, 3, 4)
 
-    def test_output_type_statistic(self):
-        t_map = self.model.compute_contrast("A", output_type="statistic")
-        assert t_map.attrs["long_name"] == "statistic"
+        z_string = self.model.compute_contrast("A - B")
+        z_array = self.model.compute_contrast(vec)
 
-    def test_output_type_pvalue(self):
+        assert_allclose(z_string.values, z_array.values, rtol=1e-12)
+        assert z_string.dims == ("z", "y", "x")
+
+    def test_output_type_pvalue_in_unit_interval(self):
         p_map = self.model.compute_contrast("A", output_type="pvalue")
-        assert np.all(p_map.values >= 0)
-        assert np.all(p_map.values <= 1)
+        assert np.all((p_map.values >= 0) & (p_map.values <= 1))
 
-    def test_output_type_effect(self):
-        e_map = self.model.compute_contrast("A", output_type="effect")
-        assert e_map.shape == (2, 3, 4)
-
-    def test_output_type_variance(self):
+    def test_output_type_variance_non_negative(self):
         v_map = self.model.compute_contrast("A", output_type="variance")
         assert np.all(v_map.values >= 0)
 
-    def test_short_contrast_vector_is_padded(self):
-        """A contrast vector shorter than the design is zero-padded."""
-        vec = np.array([1.0, -1.0])  # Only covers A and B columns.
-        z_map = self.model.compute_contrast(vec)
-        assert z_map.shape == (2, 3, 4)
+    def test_short_contrast_vector_is_zero_padded(self):
+        """A 1D contrast shorter than the design is zero-padded; the result
+        must equal the manually-padded contrast, not just match in shape."""
+        dm = self.model.design_matrices_[0]
+        # The two condition columns happen to be A then B at indices 0, 1.
+        short = np.array([1.0, -1.0])
+        padded = np.zeros(len(dm.columns))
+        padded[: short.size] = short
+
+        z_short = self.model.compute_contrast(short).values
+        z_padded = self.model.compute_contrast(padded).values
+
+        assert_allclose(z_short, z_padded, rtol=1e-12, atol=1e-12)
 
     def test_invalid_output_type_raises(self):
         with pytest.raises(ValueError, match="output_type"):
@@ -281,23 +171,6 @@ class TestFirstLevelModelContrast:
 
 class TestFirstLevelModelContrastMultiRun:
     """Test fixed-effects contrast combination across runs."""
-
-    def test_multi_run_contrast(self, rng, frame_times, events):
-        data1 = xr.DataArray(
-            rng.standard_normal((200, 2, 3, 4)),
-            dims=["time", "z", "y", "x"],
-            coords={"time": frame_times},
-        )
-        data2 = xr.DataArray(
-            rng.standard_normal((200, 2, 3, 4)),
-            dims=["time", "z", "y", "x"],
-            coords={"time": frame_times},
-        )
-        model = FirstLevelModel(noise_model="ols")
-        model.fit([data1, data2], events=[events, events])
-        z_map = model.compute_contrast("A - B")
-        assert z_map.shape == (2, 3, 4)
-        assert np.all(np.isfinite(z_map.values))
 
     def test_multi_run_effect_is_pooled_average(self, rng, frame_times, events):
         """Multi-run effect_size is the pooled fixed-effects average, not the sum.
@@ -329,8 +202,11 @@ class TestFirstLevelModelContrastMultiRun:
         # scale (mean of two unbiased estimates).
         assert np.median(np.abs(e_multi)) < 1.5 * np.median(np.abs(e_single))
 
-    def test_multi_run_confounds_as_list(self, rng, frame_times, events):
-        """Multi-run fit with per-run confounds as a list."""
+    def test_multi_run_per_run_confounds_pass_through(
+        self, rng, frame_times, events
+    ):
+        """Per-run confounds passed as a list show up with their values in each
+        run's design matrix."""
         data1 = xr.DataArray(
             rng.standard_normal((200, 2, 3, 4)),
             dims=["time", "z", "y", "x"],
@@ -341,10 +217,19 @@ class TestFirstLevelModelContrastMultiRun:
             dims=["time", "z", "y", "x"],
             coords={"time": frame_times},
         )
-        conf = pd.DataFrame({"motion": rng.standard_normal(200)})
+        conf1 = pd.DataFrame({"motion": rng.standard_normal(200)})
+        conf2 = pd.DataFrame({"motion": rng.standard_normal(200)})
         model = FirstLevelModel(noise_model="ols")
-        model.fit([data1, data2], events=[events, events], confounds=[conf, conf])
-        assert "motion" in model.design_matrices_[0].columns
+        model.fit([data1, data2], events=[events, events], confounds=[conf1, conf2])
+
+        assert_allclose(
+            model.design_matrices_[0]["motion"].to_numpy(),
+            conf1["motion"].to_numpy(),
+        )
+        assert_allclose(
+            model.design_matrices_[1]["motion"].to_numpy(),
+            conf2["motion"].to_numpy(),
+        )
 
 
 class TestFirstLevelModelFContrast:
@@ -355,21 +240,10 @@ class TestFirstLevelModelFContrast:
         self.model = FirstLevelModel(noise_model="ols")
         self.model.fit(fusi_data, events=events)
 
-    def test_f_contrast_2d_array(self):
-        """F-contrast with a 2D matrix produces a spatial z-map."""
-        dm = self.model.design_matrices_[0]
-        a_idx = list(dm.columns).index("A")
-        b_idx = list(dm.columns).index("B")
-        # 2x K matrix testing A and B jointly.
-        c = np.zeros((2, len(dm.columns)))
-        c[0, a_idx] = 1.0
-        c[1, b_idx] = 1.0
-        z_map = self.model.compute_contrast(c, stat_type="F")
-        assert z_map.shape == (2, 3, 4)
-        assert np.all(np.isfinite(z_map.values))
-
-    def test_f_contrast_effect_2d_output(self):
-        """F-contrast effect output has a contrast_dim dimension."""
+    def test_f_contrast_effect_has_contrast_dim_axis(self):
+        """F-contrast `output_type="effect"` returns a `(contrast_dim, *spatial)`
+        array, not a scalar effect — the components must remain accessible
+        for downstream inspection."""
         dm = self.model.design_matrices_[0]
         a_idx = list(dm.columns).index("A")
         b_idx = list(dm.columns).index("B")
@@ -377,22 +251,21 @@ class TestFirstLevelModelFContrast:
         c[0, a_idx] = 1.0
         c[1, b_idx] = 1.0
         e_map = self.model.compute_contrast(c, stat_type="F", output_type="effect")
-        assert e_map.dims[0] == "contrast_dim"
+        assert e_map.dims == ("contrast_dim", "z", "y", "x")
         assert e_map.shape == (2, 2, 3, 4)
 
-    def test_explicit_stat_type_t(self):
-        """Passing stat_type='t' explicitly still works for 1D contrasts."""
-        z_map = self.model.compute_contrast("A - B", stat_type="t")
-        assert z_map.shape == (2, 3, 4)
+    def test_2d_contrast_is_zero_padded(self):
+        """A 2D contrast narrower than the design is zero-padded; the result
+        must equal the manually-padded contrast, not just match in shape."""
+        dm = self.model.design_matrices_[0]
+        short = np.array([[1.0, 0.0], [0.0, -1.0]])
+        padded = np.zeros((2, len(dm.columns)))
+        padded[:, : short.shape[1]] = short
 
-    def test_2d_contrast_zero_padding(self):
-        """2D contrast narrower than design is zero-padded."""
-        # A 2xK short contrast, where K < n_design_cols.
-        c = np.zeros((2, 2))
-        c[0, 0] = 1.0
-        c[1, 1] = -1.0
-        z_map = self.model.compute_contrast(c, stat_type="F")
-        assert z_map.shape == (2, 3, 4)
+        z_short = self.model.compute_contrast(short, stat_type="F").values
+        z_padded = self.model.compute_contrast(padded, stat_type="F").values
+
+        assert_allclose(z_short, z_padded, rtol=1e-12, atol=1e-12)
 
     def test_f_contrast_matches_underlying_quadratic_form(self):
         """F-contrast statistic matches the proper quadratic form.
