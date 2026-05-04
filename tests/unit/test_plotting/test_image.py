@@ -503,7 +503,11 @@ class TestPlotContours:
         mask = xr.DataArray(
             np.ones((3, 4, 4), dtype=int),
             dims=["z", "y", "x"],
-            coords={"z": [0.0, 1.0, 2.0], "y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]},
+            coords={
+                "z": [0.0, 1.0, 2.0],
+                "y": [0.0, 0.5, 1.0, 1.5],
+                "x": [0.0, 0.5, 1.0, 1.5],
+            },
         )
         fig, ax = plt.subplots()
 
@@ -596,6 +600,97 @@ class TestVolumePlotterAddContours:
         mask = self._make_mask(sample_3d_volume, [0, 1])
         with pytest.warns(UserWarning, match="Could not find matching axes"):
             plotter.add_contours(mask, colors="red")
+
+
+class TestRoiHover:
+    """Tests for the ROI hover feature wired into add_volume / add_contours."""
+
+    @staticmethod
+    def _fire_motion(ax, xdata, ydata):
+        """Synthesise a `motion_notify_event` at axes-data `(xdata, ydata)`."""
+        from matplotlib.backend_bases import MouseEvent
+
+        fig = ax.figure
+        fig.canvas.draw()
+        x_disp, y_disp = ax.transData.transform((xdata, ydata))
+        ev = MouseEvent("motion_notify_event", fig.canvas, x_disp, y_disp)
+        fig.canvas.callbacks.process("motion_notify_event", ev)
+        return ev
+
+    def test_hover_shows_value_and_roi(self, matplotlib_pyplot):
+        """Cover the three hover paths: label-only, value-only, and overlay.
+
+        Each registered slice contributes its own `<DataArray.name>=<value>`
+        segment, so the overlay path produces both segments without either
+        shadowing the other.
+        """
+        coords = {"z": [0.0], "y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]}
+        labels = xr.DataArray(
+            np.array(
+                [
+                    [[0, 0, 0, 0], [0, 7, 7, 0], [0, 7, 42, 0], [0, 0, 42, 0]],
+                ],
+                dtype=np.int32,
+            ),
+            dims=["z", "y", "x"],
+            coords=coords,
+            name="annotation",
+        )
+        rng = np.random.default_rng(0)
+        volume = xr.DataArray(
+            rng.normal(size=(1, 4, 4)).astype(np.float32),
+            dims=["z", "y", "x"],
+            coords=coords,
+            attrs={"units": "dB"},
+            name="pd",
+        )
+        roi_labels = {7: "somatosensory", 42: "visual"}
+        x, y = 0.5, 0.5
+        sampled_value = float(volume.sel(z=0.0, y=y, x=x).values)
+
+        # Atlas-only: one segment from the labels slice, no value-line.
+        atlas_plotter = plot_volume(
+            labels,
+            slice_mode="z",
+            slice_coords=[0.0],
+            show_colorbar=False,
+            roi_labels=roi_labels,
+        )
+        ax = atlas_plotter.axes.flat[0]
+        self._fire_motion(ax, x, y)
+        assert (
+            ax.format_coord(x, y)
+            == f"x={x:.3g}, y={y:.3g}; annotation=7 (somatosensory)"
+        )
+
+        # Background voxel (label=0) drops the labels segment entirely.
+        bg_x, bg_y = 0.5, 1.5  # mask[3, 1] == 0.
+        self._fire_motion(ax, bg_x, bg_y)
+        bg_info = ax.format_coord(bg_x, bg_y)
+        assert "annotation" not in bg_info
+
+        # Volume-only: one segment using `data.name` and `units`.
+        volume_plotter = plot_volume(
+            volume, slice_mode="z", slice_coords=[0.0], show_colorbar=False
+        )
+        ax = volume_plotter.axes.flat[0]
+        self._fire_motion(ax, x, y)
+        assert (
+            ax.format_coord(x, y) == f"x={x:.3g}, y={y:.3g}; pd={sampled_value:.4g} dB"
+        )
+
+        # Overlay: both segments in registration order, neither shadowing the other.
+        overlay = VolumePlotter(slice_mode="z")
+        overlay.add_volume(
+            volume, slice_coords=[0.0], match_coordinates=False, show_colorbar=False
+        )
+        overlay.add_contours(labels, slice_coords=[0.0], roi_labels=roi_labels)
+        ax = overlay.axes.flat[0]
+        self._fire_motion(ax, x, y)
+        assert (
+            ax.format_coord(x, y) == f"x={x:.3g}, y={y:.3g}; pd={sampled_value:.4g} dB"
+            "; annotation=7 (somatosensory)"
+        )
 
 
 class TestPlotNapari:
@@ -719,9 +814,53 @@ class TestPlotNapari:
         assert np.all(np.diff(layer.metadata["xarray"].coords["x"].values) > 0)
         viewer.close()
 
+    # Image comparison tests with pytest-mpl
+    # These generate baseline images for visual regression testing
 
-# Image comparison tests with pytest-mpl
-# These generate baseline images for visual regression testing
+    def test_napari_labels_hover_shows_roi_name(self, make_napari_viewer) -> None:
+        """`plot_napari(layer_type='labels')` makes napari's status bar show ROI names.
+
+        Sets `attrs["roi_labels"]` on a tiny integer label map; calls
+        `plot_napari(..., layer_type="labels")`; then directly invokes
+        `Labels.get_status` (the function napari calls to populate the status
+        bar) at one labelled and one background voxel.
+        """
+        roi_labels = {7: "somatosensory", 42: "visual"}
+        labels = xr.DataArray(
+            np.array([[0, 0, 0, 0], [0, 7, 7, 0], [0, 7, 42, 0], [0, 0, 42, 0]]),
+            dims=["y", "x"],
+            coords={"y": [0.0, 0.5, 1.0, 1.5], "x": [0.0, 0.5, 1.0, 1.5]},
+            attrs={"roi_labels": roi_labels},
+        )
+
+        viewer = make_napari_viewer()
+        _, layer = plot_napari(
+            labels,
+            viewer=viewer,
+            layer_type="labels",
+            show_scale_bar=False,
+        )
+
+        # `world=True` means positions are in physical coordinates (the same
+        # space the user hovers in the canvas).
+        # Voxel (y=0.5, x=0.5) holds label 7.
+        roi_status = layer.get_status(
+            (0.5, 0.5),
+            view_direction=np.array([1.0, 0.0]),
+            dims_displayed=[0, 1],
+            world=True,
+        )
+        assert "name: somatosensory" in roi_status["coordinates"]
+
+        # Background voxel: NaN row hides the default `[No Properties]` placeholder.
+        bg_status = layer.get_status(
+            (0.0, 0.0),
+            view_direction=np.array([1.0, 0.0]),
+            dims_displayed=[0, 1],
+            world=True,
+        )
+        assert "[No Properties]" not in bg_status["coordinates"]
+        viewer.close()
 
 
 def _create_deterministic_volume():
