@@ -134,7 +134,6 @@ class OLSModel:
         # Estimate parameters: beta = (X^T X)^-1 X^T Y.
         beta = self.pinv_design @ whitened_Y
 
-        # Compute whitened residuals.
         whitened_residuals = whitened_Y - self.whitened_design @ beta
 
         # Estimate dispersion (variance): sigma^2 = RSS / (n - p).
@@ -220,9 +219,8 @@ class ARModel:
     def whiten(self, Y: npt.NDArray[np.floating]) -> npt.NDArray[np.float64]:
         """Apply per-voxel AR(p) whitening to data.
 
-        Unlike `OLSModel.whiten`, this operates on `(n_timepoints, n_voxels)` data
-        only — the design matrix is handled implicitly via cross-product expansion in
-        `fit`.
+        Unlike `OLSModel.whiten`, this operates on `(n_timepoints, n_voxels)` data only:
+        the design matrix is handled implicitly via cross-product expansion in `fit`.
 
         Parameters
         ----------
@@ -272,42 +270,41 @@ class ARModel:
 
         whitened_Y = self.whiten(Y)
 
-        # Avoid materializing whitened_X of shape (V, T, K): for large V and T this can
-        # exhaust memory. Instead precompute cross-products from the design lags.
-        #
-        # Define padded lags L[i] where L[i, t, :] = X[t-(i+1), :] for t >= i+1, else 0.
-        # Then whitened_X[v] = X - sum_i(rho[i,v] * L[i]).
-        #
-        # Normal-equation cross-products follow by expanding:
-        #   XtX[v] = A - rho·(B + Bᵀ) + rhoᵀ C rho
-        #   XtY[v] = P[:,v] - sum_i(rho[i,v] * Q[i,:,v])
-        #
-        # where A=(K,K), B=(p,K,K), C=(p,p,K,K), P=(K,V), Q=(p,K,V) — all small.
+        # Avoid materializing per-voxel whitened designs of shape (V, T, K):
+        # for large V and T that easily exhausts memory. Instead express each
+        # `whitened_X[v] = X - sum_i rho[i,v] * L[i]`, where L[i] is the
+        # i-step lag of X, and accumulate `XtX[v]` and `XtY[v]` from
+        # design-only cross-products (A, B, C) and Y-coupled cross-products
+        # (P, Q) — all small.
 
         X = self.design.astype(np.float64)
 
-        # Padded lags: (order, T, K)
+        # L[i, t, :] = X[t - (i + 1), :] for t >= i + 1, else 0. (order, T, K).
         L = np.zeros((self.order, T, K))
         for i in range(self.order):
             L[i, (i + 1) :, :] = X[: -(i + 1), :]
 
-        # Precompute design cross-products (independent of Y and rho).
-        A = X.T @ X  # (K, K)
-        B = np.einsum("tk,itl->ikl", X, L)  # (order, K, K): X.T @ L[i]
-        C = np.einsum("itk,jtl->ijkl", L, L)  # (order, order, K, K): L[i].T @ L[j]
+        # A = X.T @ X — Gram of the unwhitened design. (K, K).
+        A = X.T @ X
+        # B[i] = X.T @ L[i] — cross of X with the i-th lag. (order, K, K).
+        B = np.einsum("tk,itl->ikl", X, L)
+        # C[i, j] = L[i].T @ L[j] — Gram of the lags. (order, order, K, K).
+        C = np.einsum("itk,jtl->ijkl", L, L)
 
-        B_sym = B + B.transpose(0, 2, 1)  # B[i] + B[i].T for each i
+        B_sym = B + B.transpose(0, 2, 1)  # B[i] + B[i].T for each lag.
 
-        # XtX[v] = A - sum_i rho[i,v]*B_sym[i] + sum_ij rho[i,v]*rho[j,v]*C[i,j]
+        # `XtX[v] = A - sum_i rho[i,v]·B_sym[i] + sum_{ij} rho[i,v]·rho[j,v]·C[i,j]`.
         XtX = (
             A[np.newaxis]
             - np.einsum("iv,ikl->vkl", self.rho, B_sym)
             + np.einsum("iv,jv,ijkl->vkl", self.rho, self.rho, C)
         )  # (V, K, K)
 
-        # XtY[v] = X.T @ wY[:,v] - sum_i rho[i,v] * L[i].T @ wY[:,v]
-        P = X.T @ whitened_Y  # (K, V)
-        Q = np.einsum("itk,tv->ikv", L, whitened_Y)  # (order, K, V)
+        # P = X.T @ whitened_Y — clean cross of X with whitened Y. (K, V).
+        P = X.T @ whitened_Y
+        # Q[i] = L[i].T @ whitened_Y — lagged cross with whitened Y. (order, K, V).
+        Q = np.einsum("itk,tv->ikv", L, whitened_Y)
+        # `XtY[v] = P[:, v] - sum_i rho[i,v] · Q[i, :, v]`.
         XtY = P.T - np.einsum("iv,ikv->vk", self.rho, Q)  # (V, K)
 
         # Per-voxel normalized covariance and beta via pseudoinverse, so a
@@ -324,7 +321,6 @@ class ARModel:
         for i in range(self.order):
             wresid += self.rho[i] * (L[i] @ beta)  # rho[i]: (V,), L[i]@beta: (T,V)
 
-        # Dispersion per voxel.
         rss = np.sum(wresid**2, axis=0)
         if self.df_residuals > 0:
             dispersion: npt.NDArray[np.float64] = rss / self.df_residuals
@@ -401,12 +397,11 @@ class RegressionResults:
         self.dispersion = dispersion
         self.cov = cov
 
-        # Heavy fields. Kept for diagnostics (residuals/predicted/sse/mse) but
-        # dropped by `_strip_heavy_fields` when the parent estimator runs with
-        # `minimize_memory=True`. Once stripped, the diagnostic properties
-        # raise; contrast methods (`t_contrast`, `f_contrast`) keep working
-        # because they only depend on `theta`, `cov`, `dispersion`,
-        # `df_residuals`.
+        # Heavy fields. Kept for diagnostics (residuals/predicted/sse/mse) but dropped
+        # by `_strip_heavy_fields` when the parent estimator runs with
+        # `minimize_memory=True`. Once stripped, the diagnostic properties raise;
+        # contrast methods (`compute_t_contrast`, `compute_f_contrast`) keep working because they only
+        # depend on `theta`, `cov`, `dispersion`, `df_residuals`.
         self.Y: npt.NDArray[np.floating] | None = Y
         self.model: OLSModel | ARModel | None = model
         self.whitened_Y: npt.NDArray[np.floating] | None = whitened_Y
@@ -419,9 +414,9 @@ class RegressionResults:
     def _strip_heavy_fields(self) -> None:
         """Drop arrays only used by diagnostic properties.
 
-        Frees `Y`, `whitened_Y`, `whitened_residuals`, and the `model`
-        reference. After this call, contrast computations still work but
-        `residuals`, `predicted`, `sse`, `mse` raise. Used by
+        Frees `Y`, `whitened_Y`, `whitened_residuals`, and the `model` reference. After
+        this call, contrast computations still work but `residuals`, `predicted`, `sse`,
+        `mse` raise. Used by
         [`FirstLevelModel`][confusius.glm.first_level.FirstLevelModel] when
         `minimize_memory=True`.
         """
@@ -504,7 +499,7 @@ class RegressionResults:
         """
         return self.sse / self.df_residuals
 
-    def t_contrast(
+    def compute_t_contrast(
         self, contrast: npt.NDArray[np.floating]
     ) -> dict[str, npt.NDArray[np.floating]]:
         """Compute *t*-statistic for a contrast.
@@ -551,7 +546,7 @@ class RegressionResults:
             "df_den": self.df_residuals,
         }
 
-    def f_contrast(
+    def compute_f_contrast(
         self, contrast: npt.NDArray[np.floating]
     ) -> dict[str, npt.NDArray[np.floating]]:
         """Compute *F*-statistic for a multi-dimensional contrast.

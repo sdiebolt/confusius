@@ -380,7 +380,7 @@ class SecondLevelModel(BaseEstimator):
             resolved_stat_type = stat_type
 
         if resolved_stat_type == "t":
-            t_res = self.results_.t_contrast(contrast_vec)
+            t_res = self.results_.compute_t_contrast(contrast_vec)
             contrast_obj = Contrast.from_estimate(
                 effect=np.atleast_1d(t_res["effect"]),
                 variance=np.atleast_1d(t_res["sd"]) ** 2,
@@ -389,12 +389,12 @@ class SecondLevelModel(BaseEstimator):
                 baseline=baseline,
             )
         else:
-            f_res = self.results_.f_contrast(contrast_vec)
+            f_res = self.results_.compute_f_contrast(contrast_vec)
             q = int(f_res["df_num"])
             # Whitened-effect + per-voxel residual variance form the F-contrast
             # so that `Contrast` can recover the correct quadratic-form F via
             # `sum(effect²) / dim / variance` — see
-            # [`f_contrast`][confusius.glm._models.RegressionResults.f_contrast].
+            # [`compute_f_contrast`][confusius.glm._models.RegressionResults.compute_f_contrast].
             contrast_obj = Contrast.from_estimate(
                 effect=f_res["whitened_effect"],
                 variance=f_res["dispersion"],

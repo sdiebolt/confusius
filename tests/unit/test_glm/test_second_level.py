@@ -292,7 +292,7 @@ class TestSecondLevelModelReference:
         X = np.ones((10, 1))
         ols = OLSModel(X)
         results = ols.fit(Y)
-        t_res = results.t_contrast(np.array([1.0]))
+        t_res = results.compute_t_contrast(np.array([1.0]))
 
         from confusius.glm._contrasts import Contrast
 

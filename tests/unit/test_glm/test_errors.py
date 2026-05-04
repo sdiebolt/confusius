@@ -377,7 +377,7 @@ class TestModelsErrors:
         contrast = np.eye(5)[:3]  # 3 x 5
 
         with pytest.raises(ValueError, match="single row"):
-            results.t_contrast(contrast)
+            results.compute_t_contrast(contrast)
 
 
 # -----------------------------------------------------------------------------

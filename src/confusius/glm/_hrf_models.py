@@ -85,8 +85,8 @@ def gamma_difference_hrf(
 ) -> npt.NDArray[np.floating]:
     """Return an HRF modeled as the difference of two gamma functions.
 
-    The general parameterization underlying [glover_hrf][confusius.glm.glover_hrf]
-    and [spm_hrf][confusius.glm.spm_hrf]; expose the parameters directly to build
+    The general parameterization underlying [`glover_hrf`][confusius.glm.glover_hrf]
+    and [`spm_hrf`][confusius.glm.spm_hrf]; expose the parameters directly to build
     custom double-gamma HRFs.
 
     Parameters

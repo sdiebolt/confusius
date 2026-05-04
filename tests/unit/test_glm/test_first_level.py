@@ -459,7 +459,7 @@ class TestFirstLevelModelReference:
         from confusius.glm._utils import expression_to_contrast_vector
 
         cvec = expression_to_contrast_vector("A - B", list(dm.columns))
-        t_res = results.t_contrast(cvec)
+        t_res = results.compute_t_contrast(cvec)
         contrast = Contrast.from_estimate(
             effect=np.atleast_1d(t_res["effect"]),
             variance=np.atleast_1d(t_res["sd"]) ** 2,

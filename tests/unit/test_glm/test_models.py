@@ -219,7 +219,7 @@ class TestARModel:
             model.fit(response_matrix)
 
     def test_ar_t_contrast_per_voxel(self, design_matrix, response_matrix):
-        """AR t_contrast uses per-voxel covariance and returns correct shapes."""
+        """AR compute_t_contrast uses per-voxel covariance and returns correct shapes."""
         n_voxels = response_matrix.shape[1]
         rho = np.full((1, n_voxels), 0.4)
         model = ARModel(design_matrix, rho=rho)
@@ -227,7 +227,7 @@ class TestARModel:
 
         contrast = np.zeros(design_matrix.shape[1])
         contrast[0] = 1.0
-        t_result = results.t_contrast(contrast)
+        t_result = results.compute_t_contrast(contrast)
 
         assert t_result["effect"].shape == (n_voxels,)
         assert t_result["sd"].shape == (n_voxels,)
@@ -242,8 +242,8 @@ class TestARModel:
 
         contrast = np.zeros(design_matrix.shape[1])
         contrast[0] = 1.0
-        t_result = results.t_contrast(contrast)
-        f_result = results.f_contrast(contrast[np.newaxis, :])
+        t_result = results.compute_t_contrast(contrast)
+        f_result = results.compute_f_contrast(contrast[np.newaxis, :])
 
         assert_allclose(f_result["F"], t_result["t"] ** 2, rtol=1e-5)
 
@@ -301,7 +301,7 @@ class TestRegressionResults:
         contrast = np.zeros(10)
         contrast[0] = 1.0
 
-        t_result = results.t_contrast(contrast)
+        t_result = results.compute_t_contrast(contrast)
 
         assert "effect" in t_result
         assert "sd" in t_result
@@ -322,11 +322,11 @@ class TestRegressionResults:
         # 1D contrast
         c1 = np.zeros(10)
         c1[0] = 1.0
-        result1 = results.t_contrast(c1)
+        result1 = results.compute_t_contrast(c1)
 
         # 2D contrast (1, n_regressors)
         c2 = c1[np.newaxis, :]
-        result2 = results.t_contrast(c2)
+        result2 = results.compute_t_contrast(c2)
 
         # Should give same results
         assert_allclose(result1["t"], result2["t"])
@@ -340,7 +340,7 @@ class TestRegressionResults:
         contrast = np.eye(10)[:3]  # 3 x 10
 
         with pytest.raises(ValueError, match="single row"):
-            results.t_contrast(contrast)
+            results.compute_t_contrast(contrast)
 
     def test_f_contrast_basic(self, design_matrix, response_matrix):
         """F-contrast returns correct keys and shapes."""
@@ -350,7 +350,7 @@ class TestRegressionResults:
         # F-contrast: test first 3 regressors
         contrast = np.eye(10)[:3]
 
-        f_result = results.f_contrast(contrast)
+        f_result = results.compute_f_contrast(contrast)
 
         for key in (
             "effect",
@@ -389,8 +389,8 @@ class TestRegressionResults:
         contrast = np.zeros(10)
         contrast[0] = 1.0
 
-        t_result = results.t_contrast(contrast)
-        f_result = results.f_contrast(contrast[np.newaxis, :])
+        t_result = results.compute_t_contrast(contrast)
+        f_result = results.compute_f_contrast(contrast[np.newaxis, :])
 
         # F should equal t^2
         assert_allclose(f_result["F"], t_result["t"] ** 2, rtol=1e-5)
@@ -404,7 +404,7 @@ class TestRegressionResults:
         contrast[0] = 1.0
         contrast[1] = -1.0
 
-        t_result = results.t_contrast(contrast)
+        t_result = results.compute_t_contrast(contrast)
 
         # Manual computation
         expected_effect = contrast @ results.theta

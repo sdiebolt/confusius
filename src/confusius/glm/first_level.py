@@ -1,10 +1,10 @@
 """First-level GLM for single-subject fUSI analysis.
 
-This module implements a sklearn-style estimator for fitting voxel-wise
-General Linear Models to fUSI time-series data stored as xarray DataArrays.
+This module implements a sklearn-style estimator for fitting voxel-wise General Linear
+Models to fUSI time-series data stored as xarray DataArrays.
 
-Portions of this file are derived from Nilearn, which is licensed under the
-BSD-3-Clause License. See `NOTICE` file for details.
+Portions of this file are derived from Nilearn, which is licensed under the BSD-3-Clause
+License. See `NOTICE` file for details.
 """
 
 from __future__ import annotations
@@ -544,7 +544,7 @@ class FirstLevelModel(BaseEstimator):
                 run_stat_type = stat_type
 
             if run_stat_type == "t":
-                t_res = results.t_contrast(contrast_vec)
+                t_res = results.compute_t_contrast(contrast_vec)
                 run_contrast = Contrast.from_estimate(
                     effect=np.atleast_1d(t_res["effect"]),
                     variance=np.atleast_1d(t_res["sd"]) ** 2,
@@ -553,13 +553,13 @@ class FirstLevelModel(BaseEstimator):
                     baseline=baseline,
                 )
             else:
-                f_res = results.f_contrast(contrast_vec)
+                f_res = results.compute_f_contrast(contrast_vec)
                 q = int(f_res["df_num"])
                 # The F-contrast is fed to Contrast as a "whitened effect +
                 # per-voxel residual variance" pair so that
                 # sum(effect²) / dim / variance recovers the proper quadratic
                 # form ctheta' · invcov · ctheta / (q · dispersion). See
-                # [`f_contrast`][confusius.glm._models.RegressionResults.f_contrast]
+                # [`compute_f_contrast`][confusius.glm._models.RegressionResults.compute_f_contrast]
                 # for the whitening derivation.
                 run_contrast = Contrast.from_estimate(
                     effect=f_res["whitened_effect"],
