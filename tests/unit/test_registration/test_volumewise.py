@@ -32,7 +32,7 @@ class TestRegisterVolumewise:
         """Dask-backed (non-h5py) DataArray with n_jobs != 1 does not raise TypeError."""
         import dask.array as da
 
-        # Build a dask-backed DataArray that is NOT backed by h5py; _is_h5py_backed
+        # Build a dask-backed DataArray that is NOT backed by h5py; is_h5py_backed
         # should return False and registration should proceed normally.
         dask_data = xr.DataArray(
             da.from_array(sample_2d_dataarray.values),

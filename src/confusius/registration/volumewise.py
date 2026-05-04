@@ -3,30 +3,13 @@
 from collections.abc import Sequence
 from typing import Literal, cast
 
-import dask.array as da
-import h5py
 import numpy as np
 import numpy.typing as npt
 import xarray as xr
 
+from confusius.registration._utils import is_h5py_backed
 from confusius.registration.motion import create_motion_dataframe
 from confusius.registration.volume import register_volume
-
-
-def _is_h5py_backed(data: xr.DataArray) -> bool:
-    """Return True if data is backed by an h5py dataset.
-
-    h5py datasets cannot be pickled, so DataArrays backed by them cannot be
-    serialized for parallel processing with joblib.
-    """
-    if not isinstance(data.data, da.Array):
-        return False
-    graph = data.data.__dask_graph__()
-    for layer in graph.layers.values():
-        for v in layer.values():
-            if isinstance(v, h5py.Dataset):
-                return True
-    return False
 
 
 def register_volumewise(
@@ -129,11 +112,7 @@ def register_volumewise(
     Raises
     ------
     TypeError
-        If `n_jobs != 1` and `data` is backed by an h5py dataset (e.g., loaded from a
-        `.scan` file without calling `.compute()` first). h5py datasets cannot be
-        serialized for parallel processing with joblib. Call `.compute()` to materialize
-        the data into memory before calling this function, or use `n_jobs=1` for serial
-        processing.
+        If `n_jobs != 1` and `data` is backed by an h5py dataset. See Notes.
 
     Notes
     -----
@@ -157,7 +136,7 @@ def register_volumewise(
     if "time" not in data.dims:
         raise ValueError("Time dimension 'time' not found in data")
 
-    if n_jobs != 1 and _is_h5py_backed(data):
+    if n_jobs != 1 and is_h5py_backed(data):
         raise TypeError(
             "Data is backed by an h5py dataset, which cannot be serialized for "
             "parallel processing with joblib. Call .compute() to materialize the "
