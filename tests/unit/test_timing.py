@@ -63,6 +63,26 @@ def test_get_representative_time_step_converts_to_seconds() -> None:
     assert not approximate
 
 
+def test_get_representative_time_step_converts_to_non_second_units() -> None:
+    """Representative time-step estimation supports non-second target units."""
+    data = xr.DataArray(
+        np.arange(4),
+        dims=("time",),
+        coords={
+            "time": xr.DataArray(
+                [0.0, 0.1, 0.2, 0.3],
+                dims=("time",),
+                attrs={"units": "s"},
+            )
+        },
+    )
+
+    step, approximate = get_representative_time_step(data, unit="ms")
+
+    assert step == pytest.approx(100.0)
+    assert not approximate
+
+
 def test_convert_time_reference_rejects_invalid_reference() -> None:
     """Reference conversion raises a consistent ValueError for invalid names."""
     with pytest.raises(ValueError, match="from_reference"):
