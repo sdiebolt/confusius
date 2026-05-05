@@ -54,9 +54,19 @@ def interpolate_timeseries(
     numpy.ndarray
         Interpolated signal at `target_times`.
     """
+    interp_fill_value: float | tuple[float, float] | Literal["extrapolate"]
+    if fill_value == "nan":
+        interp_fill_value = np.nan
+    else:
+        interp_fill_value = fill_value
+
     try:
         return interp1d(
-            acq_times, ts, kind=method, bounds_error=False, fill_value=fill_value
+            acq_times,
+            ts,
+            kind=method,
+            bounds_error=False,
+            fill_value=interp_fill_value,
         )(target_times)
     except ValueError as e:
         if "derivatives at boundaries" in str(e):
@@ -65,7 +75,11 @@ def interpolate_timeseries(
                 stacklevel=2,
             )
             return interp1d(
-                acq_times, ts, kind="linear", bounds_error=False, fill_value=fill_value
+                acq_times,
+                ts,
+                kind="linear",
+                bounds_error=False,
+                fill_value=interp_fill_value,
             )(target_times)
         raise
 

@@ -190,8 +190,7 @@ def get_representative_time_step(
         units of the time coordinate.
     uniformity_tolerance : float, default: 1e-2
         Maximum allowed per-interval relative deviation from the median consecutive
-        difference for the time coordinate to be considered uniform (see
-        [`get_representative_step`][confusius._utils.get_representative_step]).
+        difference for the time coordinate to be considered uniform.
 
     Returns
     -------
@@ -330,6 +329,7 @@ def resample_time(
 
     time_coord = data.coords[TIME_DIM].values
     new_time_arr = np.asarray(new_time)
+    output_dtype = np.result_type(data.dtype, np.float64)
 
     result = xr.apply_ufunc(
         interpolate_timeseries,
@@ -339,6 +339,8 @@ def resample_time(
         output_core_dims=[[TIME_DIM]],
         exclude_dims={TIME_DIM},
         dask="parallelized",
+        dask_gufunc_kwargs={"output_sizes": {TIME_DIM: new_time_arr.size}},
+        output_dtypes=[output_dtype],
         keep_attrs=True,
         kwargs={
             "target_times": new_time_arr,
@@ -347,7 +349,14 @@ def resample_time(
         },
     )
 
-    result = result.assign_coords({TIME_DIM: new_time_arr})
+    time_coord_attrs = dict(data.coords[TIME_DIM].attrs)
+    new_time_coord = xr.DataArray(
+        new_time_arr,
+        dims=(TIME_DIM,),
+        attrs=time_coord_attrs,
+    )
+    result = result.assign_coords({TIME_DIM: new_time_coord})
+    result = result.transpose(*data.dims)
     result.attrs.update(data.attrs)
 
     return result
@@ -385,7 +394,11 @@ def resample_to_uniform_time(
     stop : float or None, default: None
         Stop of the new time grid. If not provided, use the last time point.
     step : float or None, default: None
-        Time step for the uniform grid. If not provided, compute from existing time points.
+        Time step for the uniform grid. If not provided, derive it from the input
+        coordinate by estimating a representative interval from consecutive time
+        differences. For non-uniform input, the median interval is used and a warning is
+        emitted. The generated grid always starts at `start` and includes `stop` only
+        when it falls on the `start + n * step` lattice.
     method : {"linear", "nearest", "nearest-up", "zero", "slinear", "quadratic", "cubic", "previous", "next"}, default: "linear"
         Interpolation method passed to `scipy.interpolate.interp1d`:
 
@@ -398,6 +411,7 @@ def resample_to_uniform_time(
         - `"cubic"`: third-order spline.
         - `"previous"`: use previous point's value.
         - `"next"`: use next point's value.
+
     fill_value : float or tuple[float, float] or {"extrapolate", "nan"}, default: "extrapolate"
         How to handle target times that fall outside the range of the input time
         coordinates. `"extrapolate"` allows linear extrapolation. Use a float for
@@ -413,6 +427,15 @@ def resample_to_uniform_time(
     ------
     ValueError
         If `data` does not have a `time` dimension or has only 1 timepoint.
+    ValueError
+        If `start` is greater than or equal to `stop`, if `step` is not positive,
+        or if no valid representative step can be derived.
+
+    Warns
+    -----
+    UserWarning
+        If the original time coordinate is not uniform and `step` is not provided.
+        In that case the median step is used.
     """
     validate_time_series(data, "uniform time resampling")
 
@@ -428,21 +451,30 @@ def resample_to_uniform_time(
     else:
         new_stop = stop
 
-    if step is not None:
-        step_float = float(step)
-        new_time_values = np.arange(new_start, new_stop, step_float)
-        if len(new_time_values) == 0 or new_time_values[-1] > new_stop:
-            new_time_values = np.linspace(new_start, new_stop, len(time_values))
-    else:
-        step, _ = get_representative_step(time_values)
-        if step is None:
+    if new_start >= new_stop:
+        raise ValueError(f"start ({new_start}) must be less than stop ({new_stop}).")
+
+    if step is None:
+        step, approximate = get_representative_step(time_values)
+        if step is None or not np.isfinite(step) or step <= 0.0:
             raise ValueError(
                 "Cannot compute representative time step from data. "
                 "Provide `step` explicitly."
             )
-        new_time_values = np.linspace(new_start, new_stop, len(time_values))
+        if approximate:
+            warnings.warn(
+                "Time coordinate is non-uniform; using the median step to build "
+                "a uniform target grid.",
+                stacklevel=find_stack_level(),
+            )
+    else:
+        step = float(step)
+        if not np.isfinite(step) or step <= 0.0:
+            raise ValueError(f"step must be a finite positive value, got {step!r}.")
 
-    new_time_values = np.asarray(new_time_values)
+    span = float(new_stop - new_start)
+    n_steps = int(np.floor(span / step + 1e-12)) + 1
+    new_time_values = new_start + float(step) * np.arange(n_steps)
 
     result = resample_time(data, new_time_values, method=method, fill_value=fill_value)
 

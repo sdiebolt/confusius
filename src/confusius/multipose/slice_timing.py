@@ -65,11 +65,11 @@ def correct_slice_timings(
         - `"previous"`: use previous point's value.
         - `"next"`: use next point's value.
 
-    fill_value : float or tuple[float, float] or {"extrapolate"}, default: "extrapolate"
+    fill_value : float or tuple[float, float] or {"extrapolate", "nan"}, default: "extrapolate"
         How to handle target times that fall outside the range of a position's
-        acquisition times. `"extrapolate"` allows linear extrapolation. Use a float for
-        a constant fill value, or a tuple `(left, right)` for different values on each
-        side.
+        acquisition times. `"extrapolate"` allows linear extrapolation. `"nan"`
+        inserts NaNs out of bounds. Use a float for a constant fill value, or a tuple
+        `(left, right)` for different values on each side.
 
     Returns
     -------
