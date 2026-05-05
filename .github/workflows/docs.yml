@@ -75,7 +75,7 @@ jobs:
           xvfb-run -a uv run docs/images/visualization/generate.py
 
       - name: Build documentation
-        run: uv run zensical build --clean
+        run: uv run zensical build --clean --strict
 
       - uses: actions/upload-pages-artifact@v5
         with:

@@ -87,6 +87,9 @@ name = "Functional Ultrasound Imaging on Discord"
 provider = "google"
 property = "G-6ES5WY0S10"
 
+[project.validation]
+unresolved_references = false
+
 [project.theme]
 variant = "modern"
 language = "en"

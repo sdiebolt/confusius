@@ -61,7 +61,7 @@ itself, click **Take a Tour** in the upper-right corner of the sidebar header.
 
 ### Recommended: Data Panel and CLI
 
-The recommended way to open files is through the [Data Panel](plugin.md#data-panel) or
+The recommended way to open files is through the [Data Panel](plugin.md#data-io-panel) or
 by passing a path to the `confusius` command on launch:
 
 ```bash

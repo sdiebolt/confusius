@@ -81,7 +81,7 @@ Or with [`uv`](https://docs.astral.sh/uv/):
 uv add confusius
 ```
 
-See the [Installation Guide](installation.md) for detailed instructions.
+See the [Installation Guide](user-guide/installation.md) for detailed instructions.
 
 ## Quick Start
 

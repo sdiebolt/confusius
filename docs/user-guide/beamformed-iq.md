@@ -99,8 +99,8 @@ Additionally, ConfUSIus expects certain metadata attributes to be present:
 !!! note "Loading IQ data from unsupported formats"
     If you've loaded IQ data from an unsupported format (i.e., not using ConfUSIus
     converters), use [`validate_iq`][confusius.validation.validate_iq] to check that your
-    data has the required structure and attributes. See [Loading IQ Data from Unsupported
-    Formats](io.md#loading-iq-data-from-unsupported-formats) for details.
+    data has the required structure and attributes. See [Other Systems](io.md#other-systems)
+    for details.
 
 ```python
 import xarray as xr

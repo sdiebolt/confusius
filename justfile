@@ -7,7 +7,7 @@ set windows-shell := ["pwsh.exe", "-c"]
 
 # Build documentation.
 docs:
-    uv run zensical build
+    uv run zensical build --strict
 
 # Serve documentation locally for development.
 serve-docs:
