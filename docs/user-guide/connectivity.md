@@ -18,5 +18,4 @@ icon: lucide/brain-circuit
     - [`ConnectivityMatrix`][confusius.connectivity.ConnectivityMatrix]: Compute
       functional connectivity matrices from fUSI time series.
 
-    Please refer to the [API Reference](../api/connectivity.md) and
-    [Roadmap](../roadmap.md) for more information.
+    Please refer to the [API Reference](../api/connectivity.md) for more information.

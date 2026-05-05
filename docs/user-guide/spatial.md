@@ -10,4 +10,4 @@ icon: lucide/cuboid
     - [`smooth_volume`][confusius.spatial.smooth_volume]: Smooth a DataArray spatially
       using a Gaussian kernel, with FWHM specified in physical units.
 
-    Please refer to the [API Reference](../api/spatial.md) and [Roadmap](../roadmap.md) for more information.
+    Please refer to the [API Reference](../api/spatial.md) for more information.

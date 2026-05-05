@@ -38,5 +38,5 @@ icon: lucide/brain
       the grid of a fUSI volume using a pull affine returned by
       [`register_volume`][confusius.registration.register_volume].
 
-    Please refer to the [API Reference](../api/atlas.md) and [Roadmap](../roadmap.md) for
+    Please refer to the [API Reference](../api/atlas.md) for
     more information.

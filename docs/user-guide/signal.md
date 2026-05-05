@@ -23,4 +23,4 @@ icon: lucide/brush-cleaning
     - [`detrend`][confusius.signal.detrend]: Remove linear or polynomial trends from time series.
     - [`clean`][confusius.signal.clean]: Apply full preprocessing pipeline in one step.
 
-    Please refer to the [API Reference](../api/signal.md) and [Roadmap](../roadmap.md) for more information.
+    Please refer to the [API Reference](../api/signal.md) for more information.

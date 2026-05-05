@@ -8,6 +8,15 @@ license.
 
 from confusius.glm._contrasts import Contrast
 from confusius.glm._design import make_first_level_design_matrix
+from confusius.glm._hrf_models import (
+    claron2021_hrf,
+    gamma_difference_hrf,
+    gamma_hrf,
+    glover_hrf,
+    inverse_gamma_hrf,
+    spm_hrf,
+    verhoef2025_hrf,
+)
 from confusius.glm._models import (
     RegressionResults,
 )  # exported for user type annotations
@@ -21,4 +30,11 @@ __all__ = [
     "make_second_level_design_matrix",
     "RegressionResults",
     "Contrast",
+    "gamma_difference_hrf",
+    "glover_hrf",
+    "spm_hrf",
+    "gamma_hrf",
+    "inverse_gamma_hrf",
+    "verhoef2025_hrf",
+    "claron2021_hrf",
 ]

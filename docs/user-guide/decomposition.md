@@ -12,5 +12,4 @@ icon: lucide/layers
       `(time, ...)` `xarray.DataArray` inputs while preserving metadata through
       `transform` and `inverse_transform`.
 
-    Please refer to the [API Reference](../api/decomposition.md) and
-    [Roadmap](../roadmap.md) for more information.
+    Please refer to the [API Reference](../api/decomposition.md) for more information.

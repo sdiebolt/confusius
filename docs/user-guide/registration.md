@@ -26,5 +26,5 @@ icon: lucide/images
     - [`compose_affine`][confusius.registration.compose_affine]: Compose multiple affine transformations into one.
     - [`decompose_affine`][confusius.registration.decompose_affine]: Decompose an affine matrix into translation, rotation, and scaling components.
 
-    Please refer to the [API Reference](../api/registration.md) and [Roadmap](../roadmap.md)
+    Please refer to the [API Reference](../api/registration.md)
     for more information.
