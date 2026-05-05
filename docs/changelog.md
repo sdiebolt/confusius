@@ -6,9 +6,11 @@ icon: lucide/history
 
 # Changelog
 
-## 0.2.0.dev0
+## 0.2.0
 
-Current development version for the first official public beta release of ConfUSIus.
+Released 2026-05-05.
+
+First official public beta release of ConfUSIus.
 
 ### :sparkles: Highlights
 
@@ -22,5 +24,4 @@ Current development version for the first official public beta release of ConfUS
 
 - `0.1.0` was used only to reserve the `confusius` project name on PyPI and is not a
   supported public release. `0.2.0` is therefore the first official public release
-  series for ConfUSIus. This `0.2.0.dev0` entry tracks changes that will ship in
-  `0.2.0`.
+  series for ConfUSIus.
