@@ -344,12 +344,14 @@
   margin-right: auto;
 }
 
-/* Use .md-typeset specificity to override browser default p margins. */
+/* Use .md-typeset specificity to override browser default p margins.
+   line-height:1 eliminates the half-leading that inflates space at large sizes. */
 .md-typeset .hero-title {
   font-size: 5.1rem;
+  line-height: 1;
   /* Prevent line-break on narrow screens (phones). */
   white-space: nowrap;
-  margin: 0 auto 0.2rem;
+  margin: 0.15rem auto 0.3rem;
 }
 
 /* Light mode: logo navy for non-accent letters. */
