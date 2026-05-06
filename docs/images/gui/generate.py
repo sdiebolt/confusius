@@ -578,14 +578,14 @@ try:
     translate_3d4 = layer4.translate[1:]
 
     # Place points at the centroids of the two atlas-derived cortical ROIs.
-    pt_yellow = GUI_POINT_LEFT
-    pt_cyan = GUI_POINT_RIGHT
+    pt_red = GUI_POINT_LEFT
+    pt_teal = GUI_POINT_RIGHT
     pts_layer4 = viewer4.add_points(
-        np.array([pt_yellow, pt_cyan]),
+        np.array([pt_red, pt_teal]),
         name="ROI Points",
         scale=scale_3d4,
         translate=translate_3d4,
-        face_color=["#ffd33d", "#00b4d8"],
+        face_color=["#e94b5f", "#3ad9a4"],
         size=2.0,
         out_of_slice_display=True,
     )

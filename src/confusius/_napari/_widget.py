@@ -6,9 +6,8 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QRectF, QSize, Qt, QTimer
-from qtpy.QtGui import QFont, QImage, QPainter, QPixmap
-from qtpy.QtSvg import QSvgRenderer as _QSvgRenderer
+from qtpy.QtCore import QSize, Qt, QTimer
+from qtpy.QtGui import QFont, QPixmap
 from qtpy.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -36,10 +35,10 @@ def _build_stylesheet(is_dark: bool, napari_bg: str | None = None) -> str:  # no
     group_title_bg = napari_bg or ("#1c1c27" if is_dark else "#f0f0e8")
     if is_dark:
         header_bg = napari_bg or "#1c1c27"
-        header_border = "#ffd33d"
-        accent = "#ffd33d"
-        accent_hover = "#ffe680"
-        accent_fg = "#1c1c27"
+        header_border = "#e94b5f"
+        accent = "#e94b5f"
+        accent_hover = "#f5728a"
+        accent_fg = "#ffffff"
         tab_bg = "#2d2d3a"
         tab_selected_bg = "#38384a"
         tab_hover_bg = "#34344a"
@@ -56,9 +55,9 @@ def _build_stylesheet(is_dark: bool, napari_bg: str | None = None) -> str:  # no
         status_err = "#e05555"
     else:
         header_bg = napari_bg or "#f0f0e8"
-        header_border = "#c49a0a"
-        accent = "#c49a0a"
-        accent_hover = "#d4aa1a"
+        header_border = "#d93a54"
+        accent = "#d93a54"
+        accent_hover = "#c02845"
         accent_fg = "#ffffff"
         tab_bg = "#e0e0e8"
         tab_selected_bg = "#d4d4e0"
@@ -289,7 +288,7 @@ class ConfUSIusWidget(QWidget):
 
     def _on_theme_changed(self) -> None:
         self._apply_theme()
-        accent = "#ffd33d" if self._is_dark() else "#c49a0a"
+        accent = "#e94b5f" if self._is_dark() else "#d93a54"
         for btn, icon_name in getattr(self, "_accordion_btns", []):
             btn.setIcon(make_lucide_icon(icon_name, accent))
 
@@ -382,35 +381,30 @@ class ConfUSIusWidget(QWidget):
         return header
 
     def _load_logo(self) -> QWidget | None:
-        """Return an SVG logo widget, or None if unavailable.
+        """Return a PNG logo widget, or None if unavailable.
 
-        Rendered at device pixel ratio for crisp display on HiDPI screens.
+        Scaled to device pixel ratio for crisp display on HiDPI screens.
         """
-        svg_path = _ASSETS_DIR / "confusius-logo.svg"
-        if not svg_path.exists():
+        png_path = _ASSETS_DIR / "confusius-logo.png"
+        if not png_path.exists():
             return None
 
         target_height = 80
-        renderer = _QSvgRenderer(str(svg_path))
-        default_size: QSize = renderer.defaultSize()
-        aspect = default_size.width() / max(default_size.height(), 1)
-        target_width = round(target_height * aspect)
-
         dpr = QApplication.instance().devicePixelRatio()  # type: ignore[union-attr]
-        px_w = round(target_width * dpr)
-        px_h = round(target_height * dpr)
 
-        image = QImage(px_w, px_h, QImage.Format.Format_ARGB32_Premultiplied)
-        image.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(image)
-        renderer.render(painter, QRectF(0, 0, px_w, px_h))
-        painter.end()
+        source = QPixmap(str(png_path))
+        if source.isNull():
+            return None
 
-        pixmap = QPixmap.fromImage(image)
-        pixmap.setDevicePixelRatio(dpr)
+        scaled = source.scaledToHeight(
+            round(target_height * dpr),
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        scaled.setDevicePixelRatio(dpr)
+        target_width = round(scaled.width() / dpr)
 
         label = QLabel()
-        label.setPixmap(pixmap)
+        label.setPixmap(scaled)
         label.setFixedSize(target_width, target_height)
         label.setStyleSheet("background: transparent;")
         return label
@@ -440,7 +434,7 @@ class ConfUSIusWidget(QWidget):
         # Video panel (own section).
         video_panel = VideoPanel(self.viewer)
 
-        accent = "#ffd33d" if self._is_dark() else "#c49a0a"
+        accent = "#e94b5f" if self._is_dark() else "#d93a54"
         tab_entries = [
             ("Data I/O", "file-input"),
             ("Video", "video"),

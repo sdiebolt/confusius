@@ -147,8 +147,8 @@ class _TourTooltip(QWidget):
 
     def apply_theme(self, *, is_dark: bool) -> None:
         """Apply theme colours."""
-        accent = "#ffd33d" if is_dark else "#c49a0a"
-        accent_fg = "#1c1c27" if is_dark else "#ffffff"
+        accent = "#e94b5f" if is_dark else "#d93a54"
+        accent_fg = "#ffffff"
         bg = "#2d2d3a" if is_dark else "#ffffff"
         fg = "#c8c8d4" if is_dark else "#2c2c3a"
         border = "#3d3d4a" if is_dark else "#d0d0d8"
