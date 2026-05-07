@@ -6,8 +6,9 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QSize, Qt, QTimer
-from qtpy.QtGui import QFont, QPixmap
+from qtpy.QtCore import QByteArray, QRectF, QSize, Qt, QTimer
+from qtpy.QtGui import QFont, QImage, QPainter, QPixmap
+from qtpy.QtSvg import QSvgRenderer as _QSvgRenderer
 from qtpy.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -381,30 +382,60 @@ class ConfUSIusWidget(QWidget):
         return header
 
     def _load_logo(self) -> QWidget | None:
-        """Return a PNG logo widget, or None if unavailable.
+        """Return an SVG logo widget, or None if unavailable.
 
-        Scaled to device pixel ratio for crisp display on HiDPI screens.
+        Uses viewBoxF() (not defaultSize()) for the aspect ratio so that mm-unit
+        SVG dimensions are handled correctly by Qt's renderer. An explicit clip
+        rect on the painter prevents Qt from rendering strokes outside the image
+        bounds when the SVG viewBox sits flush with the content edges.
         """
-        png_path = _ASSETS_DIR / "confusius-logo.png"
-        if not png_path.exists():
+        import re
+
+        svg_path = _ASSETS_DIR / "confusius-logo.svg"
+        if not svg_path.exists():
+            return None
+
+        svg_bytes = svg_path.read_bytes()
+
+        # Qt may render SVG content outside the viewBox when overflow is not
+        # explicitly set to hidden. Expanding the viewBox by a small margin
+        # (one stroke-width unit) prevents strokes at the boundary from being
+        # clipped by the image edge.
+        def _expand_viewbox(m: re.Match) -> bytes:
+            x, y, w, h = (float(v) for v in m.group(1).split())
+            pad = 2.0  # one stroke-width in SVG user units
+            return (
+                f'viewBox="{x - pad:.4f} {y - pad:.4f} '
+                f'{w + 2 * pad:.4f} {h + 2 * pad:.4f}"'
+            ).encode()
+
+        svg_bytes = re.sub(rb'viewBox="([^"]+)"', _expand_viewbox, svg_bytes, count=1)
+
+        renderer = _QSvgRenderer()
+        renderer.load(QByteArray(svg_bytes))
+        if not renderer.isValid():
             return None
 
         target_height = 80
+        vb = renderer.viewBoxF()
+        aspect = vb.width() / vb.height() if vb.height() > 0 else 1.0
+        target_width = round(target_height * aspect)
+
         dpr = QApplication.instance().devicePixelRatio()  # type: ignore[union-attr]
+        px_w, px_h = round(target_width * dpr), round(target_height * dpr)
 
-        source = QPixmap(str(png_path))
-        if source.isNull():
-            return None
+        image = QImage(px_w, px_h, QImage.Format.Format_ARGB32_Premultiplied)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        painter.setClipRect(0, 0, px_w, px_h)
+        renderer.render(painter, QRectF(0, 0, px_w, px_h))
+        painter.end()
 
-        scaled = source.scaledToHeight(
-            round(target_height * dpr),
-            Qt.TransformationMode.SmoothTransformation,
-        )
-        scaled.setDevicePixelRatio(dpr)
-        target_width = round(scaled.width() / dpr)
+        pixmap = QPixmap.fromImage(image)
+        pixmap.setDevicePixelRatio(dpr)
 
         label = QLabel()
-        label.setPixmap(scaled)
+        label.setPixmap(pixmap)
         label.setFixedSize(target_width, target_height)
         label.setStyleSheet("background: transparent;")
         return label

@@ -321,6 +321,21 @@
   color: #0099e5;
 }
 
+/* ── Accessibility ────────────────────────────────────────────────────────── */
+
+/* Visually hides content while keeping it in the accessibility tree. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ── Home page ────────────────────────────────────────────────────────────── */
 
 /* Zensical inserts an auto h1 when the page content has none; the hidden h1
@@ -391,7 +406,7 @@
   grid-template-columns: 1fr 1fr;
   gap: 1.5rem;
   align-items: start;
-  margin: 1.5rem 0;
+  margin: 0.5rem 0 1.5rem;
 }
 
 @media (max-width: 60em) {

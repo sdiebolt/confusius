@@ -4,8 +4,9 @@ hide:
     - toc
 ---
 
-<!-- Suppress the auto-injected page-title h1 from Zensical's content template. -->
-<h1 style="display:none">ConfUSIus</h1>
+<!-- Suppress the auto-injected page-title h1 from Zensical's content template.
+     Visually hidden (not display:none) so screen readers still see the h1. -->
+<h1 class="sr-only">ConfUSIus</h1>
 
 <div class="hero-banner" markdown>
 
@@ -16,16 +17,16 @@ hide:
 <p class="hero-tagline">Python package for analysis and visualization of functional ultrasound imaging data.</p>
 
 <div class="hero-badges">
-  <a href="https://pypi.org/project/confusius/" target="_blank">
+  <a href="https://pypi.org/project/confusius/" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/pypi/v/confusius?style=flat-square&color=d93a54&label=PyPI" alt="PyPI version">
   </a>
-  <a href="https://pypi.org/project/confusius/" target="_blank">
+  <a href="https://pypi.org/project/confusius/" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/pypi/pyversions/confusius?style=flat-square&color=0099e5&logo=python&logoColor=white" alt="Python versions">
   </a>
-  <a href="https://github.com/confusius-tools/confusius/blob/main/LICENSE" target="_blank">
+  <a href="https://github.com/confusius-tools/confusius/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/github/license/confusius-tools/confusius?style=flat-square&color=3ad9a4" alt="License">
   </a>
-  <a href="https://discord.gg/mZd87tgmy2" target="_blank">
+  <a href="https://discord.gg/mZd87tgmy2" target="_blank" rel="noopener noreferrer">
     <img src="https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord">
   </a>
 </div>
@@ -144,6 +145,3 @@ mean_db.fusi.plot.volume(
 
 </div>
 </div>
-
-See the [Installation Guide](user-guide/installation.md) and
-[Getting Started](user-guide/getting-started.md) for detailed instructions.
