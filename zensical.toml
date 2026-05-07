@@ -11,6 +11,7 @@ repo_name = "confusius-tools/confusius"
 edit_uri = "edit/main/docs/"
 extra_css = ["stylesheets/extra.css"]
 extra_javascript = [
+    "javascripts/theme.js",
     "javascripts/mathjax.js",
     "https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js",
     "javascripts/mermaid.mjs",
@@ -109,8 +110,6 @@ features = [
     "search.highlight",
     "content.code.copy",
     "content.code.annotate",
-    "content.action.edit",
-    "content.action.view",
     "content.tooltips",
     "content.footnote.tooltips"
 ]
@@ -178,6 +177,12 @@ inherited_members = true
 parameter_headings = true
 heading_level = 2
 summary = true
+
+[project.markdown_extensions.zensical.extensions.glightbox]
+auto = true
+auto_themed = true
+auto_caption = true
+skip_classes = ["hero-logo", "md-logo"]
 
 [project.markdown_extensions.admonition]
 

@@ -1,7 +1,9 @@
-[![PyPI version](https://img.shields.io/pypi/v/confusius)](https://pypi.org/project/confusius/)
-[![Python versions](https://img.shields.io/pypi/pyversions/confusius)](https://pypi.org/project/confusius/)
-[![DOI](https://zenodo.org/badge/1155356116.svg)](https://doi.org/10.5281/zenodo.18611124)
-[![codecov](https://codecov.io/gh/confusius-tools/confusius/graph/badge.svg?token=TL5AIRNSHS)](https://codecov.io/gh/confusius-tools/confusius)
+[![PyPI version](https://img.shields.io/pypi/v/confusius?style=flat-square&color=d93a54&label=PyPI)](https://pypi.org/project/confusius/)
+[![Python versions](https://img.shields.io/pypi/pyversions/confusius?style=flat-square&color=0099e5&logo=python&logoColor=white)](https://pypi.org/project/confusius/)
+[![License](https://img.shields.io/github/license/confusius-tools/confusius?style=flat-square&color=3ad9a4)](https://github.com/confusius-tools/confusius/blob/main/LICENSE)
+[![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.18611124-8b7ff7?style=flat-square)](https://doi.org/10.5281/zenodo.18611124)
+[![codecov](https://img.shields.io/codecov/c/github/confusius-tools/confusius?style=flat-square)](https://codecov.io/gh/confusius-tools/confusius)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white)](https://discord.gg/mZd87tgmy2)
 
 # ConfUSIus <img src="docs/images/confusius-logo.svg" width="200" title="ConfUSIus" alt="ConfUSIus" align="right">
 

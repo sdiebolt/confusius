@@ -61,7 +61,7 @@ def get_napari_colors(theme_name: str) -> dict:
     return {
         "bg": bg,
         "fg": fg,
-        "accent": "#ffd33d" if is_dark else "#c49a0a",
+        "accent": "#e94b5f" if is_dark else "#d93a54",
         "cursor": "#ff6b6b" if is_dark else "#cc2200",
         "is_dark": is_dark,
     }

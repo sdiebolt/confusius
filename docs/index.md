@@ -4,96 +4,144 @@ hide:
     - toc
 ---
 
-# Welcome to ConfUSIus
+<!-- Suppress the auto-injected page-title h1 from Zensical's content template.
+     Visually hidden (not display:none) so screen readers still see the h1. -->
+<h1 class="sr-only">ConfUSIus</h1>
 
-ConfUSIus is a Python package and napari plugin for handling, visualization,
-preprocessing, and statistical analysis of functional ultrasound imaging (fUSI) data.
+<div class="hero-banner" markdown>
 
-!!! info "Beta Status"
-    ConfUSIus is now in **beta** and under active development. Core functionality is in
-    place, but APIs may still evolve between releases as we improve stability and user
-    experience. We are happy to help you get started: join our
-    [weekly drop-in hours](user-guide/getting-started.md#getting-help) on Discord or open an issue on
-    [GitHub](https://github.com/confusius-tools/confusius/issues) for questions and feature
-    requests.
+<img src="images/confusius-logo.svg" alt="ConfUSIus" class="hero-logo">
 
-## Quick Links
+<p class="hero-title">Con<span class="fusi-accent">fUSI</span>us</p>
 
-<div class="grid cards" markdown>
+<p class="hero-tagline">Python package for analysis and visualization of functional ultrasound imaging data.</p>
 
--   [:lucide-book-open-text:{ .lg .middle } **User Guide**](user-guide/getting-started.md)
-
-    ---
-
-    Learn how to use ConfUSIus for fUSI data analysis.
-
--   [:lucide-app-window:{ .lg .middle } **Graphical Interface**](gui/overview.md)
-
-    ---
-
-    Explore, inspect, and run QC on your data interactively in napari.
-
--   [:lucide-users:{ .lg .middle } **Community**](user-guide/getting-started.md#getting-help)
-
-    ---
-
-    Join our weekly drop-in hours on Discord (Thursdays 3-4pm UTC).
+<div class="hero-badges">
+  <a href="https://pypi.org/project/confusius/" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.shields.io/pypi/v/confusius?style=flat-square&color=d93a54&label=PyPI" alt="PyPI version">
+  </a>
+  <a href="https://pypi.org/project/confusius/" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.shields.io/pypi/pyversions/confusius?style=flat-square&color=0099e5&logo=python&logoColor=white" alt="Python versions">
+  </a>
+  <a href="https://github.com/confusius-tools/confusius/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.shields.io/github/license/confusius-tools/confusius?style=flat-square&color=3ad9a4" alt="License">
+  </a>
+  <a href="https://discord.gg/mZd87tgmy2" target="_blank" rel="noopener noreferrer">
+    <img src="https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord">
+  </a>
+</div>
 
 </div>
 
-## Features
+!!! info "Beta Status"
+    ConfUSIus is in **beta** and under active development. Core functionality is in place,
+    but APIs may still evolve. Join our
+    [weekly drop-in hours](user-guide/getting-started.md#getting-help) on Discord
+    or open an [issue on GitHub](https://github.com/confusius-tools/confusius/issues)
+    for questions and feature requests.
 
-!!! info "Design Philosophy"
-    ConfUSIus is not designed as an out-of-the-box, end-to-end fUSI analysis pipeline.
-    Because the fUSI field has not yet converged on standard processing workflows,
-    ConfUSIus instead aims to provide the fundamental building blocks needed to implement
-    any processing workflow described in the fUSI literature, or to design entirely new
-    ones. Researchers can combine these blocks to build analysis pipelines suited to
-    their experimental needs.
+## :lucide-rocket: Features
 
-- **I/O Operations**: Load and save fUSI data in various formats (AUTC, EchoFrame,
-  Iconeus, NIfTI, Zarr), with automatic fUSI-BIDS sidecars for NIfTI.
-- **Beamformed IQ Processing**: Process raw beamformed IQ signals into power Doppler,
-  velocity, and other derived metrics.
-- **Quality Control**: Compute quality metrics (DVARS, tSNR, CV) to assess data quality.
-- **Registration**: Motion correction and spatial alignment tools.
-- **Brain Atlas Integration**: Map fUSI data to standard brain atlases for region-based
-  analysis.
-- **Signal Extraction**: Extract and reconstruct signals from regions of interest using
-  spatial masks.
-- **Signal Processing**: Denoising, filtering, detrending, and confound regression for
-  hemodynamic signals.
-- **Visualization**: Rich plotting utilities for fUSI data exploration.
-- **Napari Plugin**: Interactive data loading, live signals inspection, and quality
-  control directly in the napari viewer—no scripting required.
-- **Xarray Integration**: Seamless integration with Xarray for labeled multi-dimensional
-  arrays.
+ConfUSIus provides the fundamental building blocks for fUSI data analysis: not a fixed
+pipeline, but composable tools you can assemble into any workflow the literature
+describes or you invent.
 
-## Installation
+<div class="grid cards" markdown>
 
-```bash
-pip install confusius
-```
+-   [:lucide-hard-drive:{ .lg .middle } **I/O & BIDS**](user-guide/io.md)
 
-Or with [`uv`](https://docs.astral.sh/uv/):
+    ---
 
-```bash
-uv add confusius
-```
+    Load and save AUTC, EchoFrame, Iconeus, NIfTI, and Zarr formats with automatic
+    fUSI-BIDS sidecar support.
 
-See the [Installation Guide](user-guide/installation.md) for detailed instructions.
+-   [:lucide-radio:{ .lg .middle } **Beamformed IQ**](user-guide/beamformed-iq.md)
 
-## Quick Start
+    ---
+
+    Process raw IQ signals into power Doppler, velocity, and other derived metrics.
+
+-   [:lucide-activity:{ .lg .middle } **Quality Control**](user-guide/quality-control.md)
+
+    ---
+
+    Compute DVARS, tSNR, and CV to assess data quality across sessions and subjects.
+
+-   [:lucide-move-3d:{ .lg .middle } **Registration**](user-guide/registration.md)
+
+    ---
+
+    Motion correction and spatial alignment, including support for multi-pose imaging.
+
+-   [:lucide-brain:{ .lg .middle } **Brain Atlases**](user-guide/atlas.md)
+
+    ---
+
+    Map fUSI data to standard brain atlases for region-of-interest and group analysis.
+
+-   [:lucide-filter:{ .lg .middle } **Signal Processing**](user-guide/signal.md)
+
+    ---
+
+    Denoising, filtering, detrending, and confound regression for hemodynamic signals.
+
+-   [:lucide-network:{ .lg .middle } **Functional Connectivity**](user-guide/connectivity.md)
+
+    ---
+
+    Seed-based and matrix-based connectivity measures for resting-state fUSI.
+
+-   [:lucide-bar-chart-2:{ .lg .middle } **General Linear Model**](user-guide/glm.md)
+
+    ---
+
+    Task-based fUSI analysis with HRF convolution and contrast estimation.
+
+-   [:lucide-app-window:{ .lg .middle } **Napari Plugin**](gui/overview.md)
+
+    ---
+
+    Interactive data loading, live signal inspection, and QC — no scripting required.
+
+</div>
+
+## :lucide-zap: Quick Start
+
+<div class="quickstart-grid">
+<div markdown>
 
 ```python
 import confusius as cf
+from confusius.datasets import fetch_nunez_elizalde_2022
 
-# Load fUSI data.
-data = cf.load("path/to/data.nii.gz")
+# Download dataset (cached after the first run, ~30 MB).
+bids_root = fetch_nunez_elizalde_2022(
+    subjects="CR022", sessions="20201011",
+    tasks="spontaneous", acqs="slice03",
+)
 
-# Perform motion correction.
-corrected_data = data.fusi.register.volumewise()
+# Load power Doppler time series.
+data = cf.load(
+    bids_root
+    / "sub-CR022/ses-20201011/fusi"
+    / "sub-CR022_ses-20201011_task-spontaneous"
+      "_acq-slice03_pwd.nii.gz"
+)
 
-# Visualize with napari.
-corrected_data.fusi.plot()
+# Average over time and convert to dB scale.
+mean_db = data.mean("time").fusi.scale.db()
+
+# Plot all z-slices.
+mean_db.fusi.plot.volume(
+    cmap="gray", cbar_label="Power Doppler (dB)"
+)
 ```
+
+</div>
+<div>
+
+<img src="images/home/quickstart-dark.png#only-dark" alt="Mean power Doppler in dB">
+<img src="images/home/quickstart-light.png#only-light" alt="Mean power Doppler in dB">
+
+</div>
+</div>

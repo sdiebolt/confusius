@@ -75,6 +75,7 @@ _TOOLTIP_WIDTH = 300
 _SPOTLIGHT_PADDING = 6
 _SPOTLIGHT_RADIUS = 8
 _SPOTLIGHT_BORDER_WIDTH = 2
+_SPOTLIGHT_BORDER_COLOR = QColor(233, 75, 95, 230)  # #e94b5f, logo red
 
 
 # ---------------------------------------------------------------------------
@@ -147,8 +148,8 @@ class _TourTooltip(QWidget):
 
     def apply_theme(self, *, is_dark: bool) -> None:
         """Apply theme colours."""
-        accent = "#ffd33d" if is_dark else "#c49a0a"
-        accent_fg = "#1c1c27" if is_dark else "#ffffff"
+        accent = "#e94b5f" if is_dark else "#d93a54"
+        accent_fg = "#ffffff"
         bg = "#2d2d3a" if is_dark else "#ffffff"
         fg = "#c8c8d4" if is_dark else "#2c2c3a"
         border = "#3d3d4a" if is_dark else "#d0d0d8"
@@ -290,7 +291,7 @@ class _TourOverlay(QWidget):
                     rect.height(),
                     overlay_color,
                 )
-                painter.setPen(QPen(QColor(255, 211, 61, 230), _SPOTLIGHT_BORDER_WIDTH))
+                painter.setPen(QPen(_SPOTLIGHT_BORDER_COLOR, _SPOTLIGHT_BORDER_WIDTH))
                 painter.drawRoundedRect(rect, _SPOTLIGHT_RADIUS, _SPOTLIGHT_RADIUS)
             else:
                 painter.fillRect(self.rect(), overlay_color)

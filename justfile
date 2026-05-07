@@ -20,6 +20,7 @@ clean-docs:
 
 # Generate documentation images.
 generate-doc-images:
+    uv run docs/images/home/generate.py
     uv run docs/images/gui/generate.py
     uv run docs/images/qc/generate.py
     uv run docs/images/visualization/generate.py

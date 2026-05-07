@@ -6,7 +6,7 @@ from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from qtpy.QtCore import QRectF, QSize, Qt, QTimer
+from qtpy.QtCore import QByteArray, QRectF, QSize, Qt, QTimer
 from qtpy.QtGui import QFont, QImage, QPainter, QPixmap
 from qtpy.QtSvg import QSvgRenderer as _QSvgRenderer
 from qtpy.QtWidgets import (
@@ -36,10 +36,10 @@ def _build_stylesheet(is_dark: bool, napari_bg: str | None = None) -> str:  # no
     group_title_bg = napari_bg or ("#1c1c27" if is_dark else "#f0f0e8")
     if is_dark:
         header_bg = napari_bg or "#1c1c27"
-        header_border = "#ffd33d"
-        accent = "#ffd33d"
-        accent_hover = "#ffe680"
-        accent_fg = "#1c1c27"
+        header_border = "#e94b5f"
+        accent = "#e94b5f"
+        accent_hover = "#f5728a"
+        accent_fg = "#ffffff"
         tab_bg = "#2d2d3a"
         tab_selected_bg = "#38384a"
         tab_hover_bg = "#34344a"
@@ -56,9 +56,9 @@ def _build_stylesheet(is_dark: bool, napari_bg: str | None = None) -> str:  # no
         status_err = "#e05555"
     else:
         header_bg = napari_bg or "#f0f0e8"
-        header_border = "#c49a0a"
-        accent = "#c49a0a"
-        accent_hover = "#d4aa1a"
+        header_border = "#d93a54"
+        accent = "#d93a54"
+        accent_hover = "#c02845"
         accent_fg = "#ffffff"
         tab_bg = "#e0e0e8"
         tab_selected_bg = "#d4d4e0"
@@ -289,7 +289,7 @@ class ConfUSIusWidget(QWidget):
 
     def _on_theme_changed(self) -> None:
         self._apply_theme()
-        accent = "#ffd33d" if self._is_dark() else "#c49a0a"
+        accent = "#e94b5f" if self._is_dark() else "#d93a54"
         for btn, icon_name in getattr(self, "_accordion_btns", []):
             btn.setIcon(make_lucide_icon(icon_name, accent))
 
@@ -384,25 +384,50 @@ class ConfUSIusWidget(QWidget):
     def _load_logo(self) -> QWidget | None:
         """Return an SVG logo widget, or None if unavailable.
 
-        Rendered at device pixel ratio for crisp display on HiDPI screens.
+        Uses viewBoxF() (not defaultSize()) for the aspect ratio so that mm-unit
+        SVG dimensions are handled correctly by Qt's renderer. An explicit clip
+        rect on the painter prevents Qt from rendering strokes outside the image
+        bounds when the SVG viewBox sits flush with the content edges.
         """
+        import re
+
         svg_path = _ASSETS_DIR / "confusius-logo.svg"
         if not svg_path.exists():
             return None
 
+        svg_bytes = svg_path.read_bytes()
+
+        # The logo circle extends ~3.5 SVG units beyond the viewBox right edge
+        # (content overhang) plus 1 unit for the half-stroke, so the viewBox
+        # must be expanded by at least 5 units on that side. Using a symmetric
+        # pad of 6 ensures all edges are covered without being too conservative.
+        def _expand_viewbox(m: re.Match) -> bytes:
+            x, y, w, h = (float(v) for v in m.group(1).split())
+            pad = 6.0  # SVG user units (mm)
+            return (
+                f'viewBox="{x - pad:.4f} {y - pad:.4f} '
+                f'{w + 2 * pad:.4f} {h + 2 * pad:.4f}"'
+            ).encode()
+
+        svg_bytes = re.sub(rb'viewBox="([^"]+)"', _expand_viewbox, svg_bytes, count=1)
+
+        renderer = _QSvgRenderer()
+        renderer.load(QByteArray(svg_bytes))
+        if not renderer.isValid():
+            return None
+
         target_height = 80
-        renderer = _QSvgRenderer(str(svg_path))
-        default_size: QSize = renderer.defaultSize()
-        aspect = default_size.width() / max(default_size.height(), 1)
+        vb = renderer.viewBoxF()
+        aspect = vb.width() / vb.height() if vb.height() > 0 else 1.0
         target_width = round(target_height * aspect)
 
         dpr = QApplication.instance().devicePixelRatio()  # type: ignore[union-attr]
-        px_w = round(target_width * dpr)
-        px_h = round(target_height * dpr)
+        px_w, px_h = round(target_width * dpr), round(target_height * dpr)
 
         image = QImage(px_w, px_h, QImage.Format.Format_ARGB32_Premultiplied)
         image.fill(Qt.GlobalColor.transparent)
         painter = QPainter(image)
+        painter.setClipRect(0, 0, px_w, px_h)
         renderer.render(painter, QRectF(0, 0, px_w, px_h))
         painter.end()
 
@@ -440,7 +465,7 @@ class ConfUSIusWidget(QWidget):
         # Video panel (own section).
         video_panel = VideoPanel(self.viewer)
 
-        accent = "#ffd33d" if self._is_dark() else "#c49a0a"
+        accent = "#e94b5f" if self._is_dark() else "#d93a54"
         tab_entries = [
             ("Data I/O", "file-input"),
             ("Video", "video"),
