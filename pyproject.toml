@@ -119,6 +119,7 @@ addopts = [
     "--strict-markers",       # Raise error on unknown markers.
     "--strict-config",        # Raise error on config issues.
     "--showlocals",           # Show local variables in tracebacks.
+    "--import-mode=importlib", # Avoid sys.path collisions between same-named test packages.
     "--cov=confusius",        # Enable coverage for confusius module.
     "--cov-report=term-missing",  # Show missing lines in terminal.
     "--cov-report=html",      # Generate HTML coverage report.
