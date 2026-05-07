@@ -397,13 +397,13 @@ class ConfUSIusWidget(QWidget):
 
         svg_bytes = svg_path.read_bytes()
 
-        # Qt may render SVG content outside the viewBox when overflow is not
-        # explicitly set to hidden. Expanding the viewBox by a small margin
-        # (one stroke-width unit) prevents strokes at the boundary from being
-        # clipped by the image edge.
+        # The logo circle extends ~3.5 SVG units beyond the viewBox right edge
+        # (content overhang) plus 1 unit for the half-stroke, so the viewBox
+        # must be expanded by at least 5 units on that side. Using a symmetric
+        # pad of 6 ensures all edges are covered without being too conservative.
         def _expand_viewbox(m: re.Match) -> bytes:
             x, y, w, h = (float(v) for v in m.group(1).split())
-            pad = 2.0  # one stroke-width in SVG user units
+            pad = 6.0  # SVG user units (mm)
             return (
                 f'viewBox="{x - pad:.4f} {y - pad:.4f} '
                 f'{w + 2 * pad:.4f} {h + 2 * pad:.4f}"'
