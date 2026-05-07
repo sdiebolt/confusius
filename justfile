@@ -10,7 +10,7 @@ docs: gallery
     uv run zensical build --strict
 
 # Serve documentation locally for development.
-serve-docs:
+serve-docs: gallery
     uv run zensical serve
 
 # Clean documentation build artifacts.

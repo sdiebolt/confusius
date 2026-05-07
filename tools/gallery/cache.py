@@ -26,7 +26,7 @@ def cache_key(
         The example to hash.
     deps_fingerprint : str
         A textual representation of the relevant locked dependencies (typically
-        a ``\n``-separated list of ``name==version`` lines).
+        a newline-separated list of ``name==version`` entries).
     python_version : str
         ``sys.version`` or equivalent string identifying the interpreter.
 

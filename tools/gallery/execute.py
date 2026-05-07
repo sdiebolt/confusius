@@ -48,7 +48,8 @@ def execute_example(
     nb = jupytext.read(source)
 
     km = KernelManager()
-    km.kernel_cmd = [
+    # ``kernel_cmd`` is a runtime traitlet on ``KernelManager`` not visible to ty.
+    km.kernel_cmd = [  # type: ignore[unresolved-attribute]
         sys.executable,
         "-m",
         "ipykernel_launcher",
