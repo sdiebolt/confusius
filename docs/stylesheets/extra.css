@@ -360,11 +360,12 @@
 }
 
 /* Use .md-typeset specificity to override browser default p margins.
-   line-height:1 eliminates the half-leading that inflates space at large sizes. */
+   clamp() scales the font with the viewport so the title never overflows
+   on narrow screens — which would break text-align:center relative to the
+   logo. line-height:1 eliminates half-leading at large sizes. */
 .md-typeset .hero-title {
-  font-size: 5.1rem;
+  font-size: clamp(2rem, 10.5vw, 5.1rem);
   line-height: 1;
-  /* Prevent line-break on narrow screens (phones). */
   white-space: nowrap;
   margin: 0.15rem auto 0.3rem;
 }
