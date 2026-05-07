@@ -80,7 +80,8 @@
 /* ── Navbar title ─────────────────────────────────────────────────────────── */
 
 /* Increase the site name font size to match the 2rem logo visually. */
-.md-header__title {
+.md-header__title,
+.md-header__title .md-header__topic {
   font-family: "Space Grotesk", sans-serif;
   font-size: 1.35rem;
   font-weight: 500;
