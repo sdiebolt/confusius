@@ -75,6 +75,7 @@ _TOOLTIP_WIDTH = 300
 _SPOTLIGHT_PADDING = 6
 _SPOTLIGHT_RADIUS = 8
 _SPOTLIGHT_BORDER_WIDTH = 2
+_SPOTLIGHT_BORDER_COLOR = QColor(233, 75, 95, 230)  # #e94b5f, logo red
 
 
 # ---------------------------------------------------------------------------
@@ -290,7 +291,7 @@ class _TourOverlay(QWidget):
                     rect.height(),
                     overlay_color,
                 )
-                painter.setPen(QPen(QColor(255, 211, 61, 230), _SPOTLIGHT_BORDER_WIDTH))
+                painter.setPen(QPen(_SPOTLIGHT_BORDER_COLOR, _SPOTLIGHT_BORDER_WIDTH))
                 painter.drawRoundedRect(rect, _SPOTLIGHT_RADIUS, _SPOTLIGHT_RADIUS)
             else:
                 painter.fillRect(self.rect(), overlay_color)
