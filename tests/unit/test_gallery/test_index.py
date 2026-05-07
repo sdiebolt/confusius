@@ -80,3 +80,28 @@ def test_build_index_uses_grid_cards_block(tmp_path: Path) -> None:
     index_md = build_index(rendered, root=tmp_path)
     assert '<div class="grid cards" markdown>' in index_md
     assert "</div>" in index_md
+
+
+def test_build_index_demotes_h1_section_intros(tmp_path: Path) -> None:
+    """Section intros starting with H1 are demoted to H2 so there's a single page title."""
+    src = tmp_path / "io" / "ex.py"
+    src.parent.mkdir(parents=True, exist_ok=True)
+    src.touch()
+    spec = ExampleSpec(
+        source=src,
+        section="io",
+        section_intro="# Input/Output\n\nIntro paragraph.\n",
+    )
+    rendered = [
+        RenderedExample(
+            spec=spec,
+            title="Ex",
+            summary="",
+            md_path=src.with_suffix(".md"),
+            thumbnail=None,
+        ),
+    ]
+    md = build_index(rendered, root=tmp_path)
+    # Exactly one H1 (the page title); the section uses H2.
+    assert md.count("\n# ") + (1 if md.startswith("# ") else 0) == 1
+    assert "## Input/Output" in md

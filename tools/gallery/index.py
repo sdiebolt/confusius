@@ -38,6 +38,19 @@ class RenderedExample:
 _DEFAULT_THUMB = "_assets/default_thumb.png"
 
 
+def _demote_h1(text: str) -> str:
+    """Demote a leading H1 heading to H2 so the index has a single page title.
+
+    The page already has its own ``# Examples`` heading; section intros that
+    start with ``# Section title`` are bumped to ``## Section title``.
+    """
+    lines = text.split("\n", 1)
+    first = lines[0]
+    if first.startswith("# ") and not first.startswith("## "):
+        first = "#" + first  # turn "# X" into "## X".
+    return first + ("\n" + lines[1] if len(lines) > 1 else "")
+
+
 def build_index(rendered: list[RenderedExample], *, root: Path) -> str:
     """Return the Markdown text of the gallery index page.
 
@@ -64,7 +77,7 @@ def build_index(rendered: list[RenderedExample], *, root: Path) -> str:
 
     for section in sorted(by_section):
         items = by_section[section]
-        intro = items[0].spec.section_intro.strip()
+        intro = _demote_h1(items[0].spec.section_intro.strip())
         parts.append(intro + "\n" if intro else f"## {section}\n")
         parts.append('<div class="grid cards" markdown>\n')
         for rex in sorted(items, key=lambda r: r.spec.source.name):

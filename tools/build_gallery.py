@@ -10,7 +10,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from tools.gallery._pipeline import build_gallery
+# Ensure the repo root is importable when this script is invoked directly.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from tools.gallery._pipeline import build_gallery  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES_ROOT = REPO_ROOT / "docs" / "examples"
