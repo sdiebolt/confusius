@@ -111,6 +111,9 @@ pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "slow: tests that are slow (start kernels, do disk I/O, etc.).",
+]
 addopts = [
     "-ra",                    # Show summary of all test outcomes.
     "--strict-markers",       # Raise error on unknown markers.
