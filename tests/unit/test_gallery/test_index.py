@@ -30,38 +30,41 @@ def test_build_index_groups_cards_by_section(tmp_path: Path) -> None:
             title="Load AUTC",
             summary="Quick AUTC demo.",
             md_path=src1.with_suffix(".md"),
-            thumbnail=src1.parent / "load_autc_thumb.png",
+            thumbnail_light=src1.parent / "load_autc_thumb_light.png",
+            thumbnail_dark=src1.parent / "load_autc_thumb_dark.png",
         ),
         RenderedExample(
             spec=_spec(src2, "io"),
             title="Load NIfTI",
             summary="",
             md_path=src2.with_suffix(".md"),
-            thumbnail=None,
+            thumbnail_light=None,
+            thumbnail_dark=None,
         ),
         RenderedExample(
             spec=_spec(src3, "glm"),
             title="First-level GLM",
             summary="Subject-level GLM.",
             md_path=src3.with_suffix(".md"),
-            thumbnail=src3.parent / "first_level_thumb.png",
+            thumbnail_light=src3.parent / "first_level_thumb_light.png",
+            thumbnail_dark=src3.parent / "first_level_thumb_dark.png",
         ),
     ]
 
     index_md = build_index(rendered, root=tmp_path)
 
     # Section headers in document order.
-    assert index_md.find("# GLM") < index_md.find("# IO") or index_md.find(
-        "# IO"
-    ) < index_md.find("# GLM")
+    assert "## GLM" in index_md
+    assert "## IO" in index_md
     assert "Load AUTC" in index_md
     assert "Load NIfTI" in index_md
     assert "First-level GLM" in index_md
     # Cards include thumbnail and summary where present.
-    assert "load_autc_thumb.png" in index_md
+    assert "load_autc_thumb_light.png#only-light" in index_md
+    assert "load_autc_thumb_dark.png#only-dark" in index_md
     assert "Quick AUTC demo." in index_md
     # Falls back to default thumb for examples without one.
-    assert "_assets/default_thumb.png" in index_md
+    assert "_assets/default_thumb.svg" in index_md
 
 
 def test_build_index_uses_grid_cards_block(tmp_path: Path) -> None:
@@ -74,11 +77,12 @@ def test_build_index_uses_grid_cards_block(tmp_path: Path) -> None:
             title="Ex",
             summary="",
             md_path=src.with_suffix(".md"),
-            thumbnail=None,
+            thumbnail_light=None,
+            thumbnail_dark=None,
         ),
     ]
     index_md = build_index(rendered, root=tmp_path)
-    assert '<div class="grid cards" markdown>' in index_md
+    assert '<div class="grid cards examples-cards" markdown>' in index_md
     assert "</div>" in index_md
 
 
@@ -98,7 +102,8 @@ def test_build_index_demotes_h1_section_intros(tmp_path: Path) -> None:
             title="Ex",
             summary="",
             md_path=src.with_suffix(".md"),
-            thumbnail=None,
+            thumbnail_light=None,
+            thumbnail_dark=None,
         ),
     ]
     md = build_index(rendered, root=tmp_path)

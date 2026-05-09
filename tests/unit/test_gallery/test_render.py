@@ -9,7 +9,7 @@ import nbformat
 from tools.gallery.render import render_notebook
 
 
-def _make_nb() -> nbformat.NotebookNode:
+def _make_nb(*, thumbnail: bool = False) -> nbformat.NotebookNode:
     nb = nbformat.v4.new_notebook()
     nb.cells.append(nbformat.v4.new_markdown_cell("# Hello\n\nIntro text."))
     code = nbformat.v4.new_code_cell("print('hi')")
@@ -28,6 +28,9 @@ def _make_nb() -> nbformat.NotebookNode:
         "AAAASUVORK5CYII="
     )
     plot_cell = nbformat.v4.new_code_cell("plt.plot([1, 2, 3])")
+    if thumbnail:
+        plot_cell.metadata["tags"] = ["thumbnail"]
+
     plot_cell.outputs = [
         nbformat.v4.new_output(
             output_type="display_data",
@@ -43,6 +46,8 @@ def test_render_writes_markdown_with_code_and_output(tmp_path: Path) -> None:
     nb = _make_nb()
     md_path, _ = render_notebook(
         nb,
+        nb,
+        nb,
         out_dir=tmp_path,
         base_name="ex",
         runtime_seconds=4.3,
@@ -52,7 +57,8 @@ def test_render_writes_markdown_with_code_and_output(tmp_path: Path) -> None:
     assert md.startswith("# Hello")
     assert "```python\nprint('hi')\n```" in md
     assert "```\nhi\n```" in md
-    assert "ex_output/cell_03_0.png" in md
+    assert "ex_output_light/cell_03_0_light.png#only-light" in md
+    assert "ex_output_dark/cell_03_0_dark.png#only-dark" in md
     assert "**Total running time:** 4.3 s" in md
     assert "[Download .py](ex.py)" in md
     assert "[Download .ipynb](ex.ipynb)" in md
@@ -60,20 +66,39 @@ def test_render_writes_markdown_with_code_and_output(tmp_path: Path) -> None:
 
 def test_render_writes_image_files_into_output_folder(tmp_path: Path) -> None:
     nb = _make_nb()
-    render_notebook(nb, out_dir=tmp_path, base_name="ex", runtime_seconds=1.0)
-
-    img = tmp_path / "ex_output" / "cell_03_0.png"
-    assert img.is_file()
-    assert img.stat().st_size > 0
-
-
-def test_render_returns_thumbnail_path_pointing_at_last_image(tmp_path: Path) -> None:
-    nb = _make_nb()
-    _, thumbnail = render_notebook(
-        nb, out_dir=tmp_path, base_name="ex", runtime_seconds=1.0
+    render_notebook(
+        nb,
+        nb,
+        nb,
+        out_dir=tmp_path,
+        base_name="ex",
+        runtime_seconds=1.0,
     )
-    assert thumbnail == tmp_path / "ex_thumb.png"
-    assert thumbnail.is_file()
+
+    light_img = tmp_path / "ex_output_light" / "cell_03_0_light.png"
+    dark_img = tmp_path / "ex_output_dark" / "cell_03_0_dark.png"
+    assert light_img.is_file()
+    assert light_img.stat().st_size > 0
+    assert dark_img.is_file()
+    assert dark_img.stat().st_size > 0
+
+
+def test_render_returns_thumbnail_paths_for_tagged_output(tmp_path: Path) -> None:
+    nb = _make_nb(thumbnail=True)
+    _, thumbnail = render_notebook(
+        nb,
+        nb,
+        nb,
+        out_dir=tmp_path,
+        base_name="ex",
+        runtime_seconds=1.0,
+    )
+    assert thumbnail == (
+        tmp_path / "ex_thumb_light.png",
+        tmp_path / "ex_thumb_dark.png",
+    )
+    assert (tmp_path / "ex_thumb_light.png").is_file()
+    assert (tmp_path / "ex_thumb_dark.png").is_file()
 
 
 def test_render_handles_notebook_without_images(tmp_path: Path) -> None:
@@ -81,6 +106,11 @@ def test_render_handles_notebook_without_images(tmp_path: Path) -> None:
     nb.cells.append(nbformat.v4.new_code_cell("x = 1"))
 
     _, thumbnail = render_notebook(
-        nb, out_dir=tmp_path, base_name="ex", runtime_seconds=0.1
+        nb,
+        nb,
+        nb,
+        out_dir=tmp_path,
+        base_name="ex",
+        runtime_seconds=0.1,
     )
     assert thumbnail is None
