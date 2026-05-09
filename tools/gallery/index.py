@@ -21,7 +21,8 @@ class RenderedExample:
     thumbnail_dark: Path | None
 
 
-_DEFAULT_THUMB = "_assets/default_thumb.svg"
+_DEFAULT_THUMB_LIGHT = "_assets/default_thumb.svg"
+_DEFAULT_THUMB_DARK = "_assets/default_thumb_dark.svg"
 
 
 def _demote_h1(text: str) -> str:
@@ -36,7 +37,10 @@ def _demote_h1(text: str) -> str:
 def _card_image_markdown(rex: RenderedExample, *, root: Path, href: str) -> str:
     """Return theme-aware thumbnail markup for one example card."""
     if rex.thumbnail_light is None or rex.thumbnail_dark is None:
-        return f"[![]({_DEFAULT_THUMB})]({href})"
+        return (
+            f'[<img class="skip-lightbox" src="{_DEFAULT_THUMB_LIGHT}#only-light" alt="Example thumbnail">'
+            f'<img class="skip-lightbox" src="{_DEFAULT_THUMB_DARK}#only-dark" alt="Example thumbnail">]({href})'
+        )
 
     light = rex.thumbnail_light.relative_to(root).as_posix()
     dark = rex.thumbnail_dark.relative_to(root).as_posix()

@@ -64,7 +64,8 @@ def test_build_index_groups_cards_by_section(tmp_path: Path) -> None:
     assert "load_autc_thumb_dark.png#only-dark" in index_md
     assert "Quick AUTC demo." in index_md
     # Falls back to default thumb for examples without one.
-    assert "_assets/default_thumb.svg" in index_md
+    assert "_assets/default_thumb.svg#only-light" in index_md
+    assert "_assets/default_thumb_dark.svg#only-dark" in index_md
 
 
 def test_build_index_uses_grid_cards_block(tmp_path: Path) -> None:
