@@ -2,7 +2,7 @@
 
 Run as::
 
-    uv run python tools/build_gallery.py
+    uv run --group docs python tools/build_gallery.py
 """
 
 from __future__ import annotations
@@ -22,25 +22,29 @@ CACHE_ROOT = REPO_ROOT / ".cache" / "gallery"
 
 
 def _deps_fingerprint() -> str:
-    """Return a string identifying the locked dependency set.
+    """Return a string identifying gallery build inputs.
 
-    Uses ``uv.lock`` content directly. Any change to a locked dependency
-    forces a cache miss.
+    Uses ``uv.lock`` plus the gallery-builder source files directly. Any change to the
+    locked dependencies or to the gallery pipeline forces a cache miss.
     """
+    parts: list[str] = []
     lockfile = REPO_ROOT / "uv.lock"
-    if not lockfile.is_file():
-        return ""
-    return lockfile.read_text()
+    if lockfile.is_file():
+        parts.append(lockfile.read_text())
+
+    gallery_root = REPO_ROOT / "tools" / "gallery"
+    if gallery_root.is_dir():
+        for path in sorted(gallery_root.glob("*.py")):
+            parts.append(f"\n# {path.relative_to(REPO_ROOT)}\n")
+            parts.append(path.read_text())
+
+    parts.append("\n# tools/build_gallery.py\n")
+    parts.append(Path(__file__).read_text())
+    return "".join(parts)
 
 
 def main() -> int:
-    """Run the gallery builder end-to-end.
-
-    Returns
-    -------
-    code : int
-        ``0`` on success, ``1`` if ``docs/examples/`` does not exist.
-    """
+    """Run the gallery builder end-to-end."""
     if not EXAMPLES_ROOT.is_dir():
         print(f"No examples directory at {EXAMPLES_ROOT}", file=sys.stderr)
         return 1

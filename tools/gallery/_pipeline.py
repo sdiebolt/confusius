@@ -14,38 +14,48 @@ from .index import RenderedExample
 
 
 def _python_version() -> str:
+    """Return the current Python version string."""
     return sys.version.split()[0]
 
 
 def _extract_title_and_summary(source: Path) -> tuple[str, str]:
-    """Pull the first ``# Title`` and the next non-empty markdown line."""
+    """Pull the first ``# Title`` and the next markdown paragraph."""
     title = source.stem
     summary = ""
-    text = source.read_text()
-    in_md = False
+    text = source.read_text(encoding="utf-8")
+    in_markdown = False
+    summary_lines: list[str] = []
     for line in text.splitlines():
         stripped = line.strip()
         if stripped == "# %% [markdown]":
-            in_md = True
+            in_markdown = True
             continue
         if stripped.startswith("# %%"):
-            in_md = False
+            if summary_lines:
+                break
+            in_markdown = False
             continue
-        if not in_md:
+        if not in_markdown:
             continue
         body = stripped.lstrip("#").strip()
         if body.startswith("# "):
             title = body[2:].strip()
-        elif body and not summary:
-            summary = body
-        if title != source.stem and summary:
-            break
+            continue
+        if not body:
+            if summary_lines:
+                break
+            continue
+        if title != source.stem:
+            summary_lines.append(body)
+
+    if summary_lines:
+        summary = " ".join(summary_lines)
     return title, summary
 
 
 def _write_cached_artifacts(
     cache_dir: Path, dest_dir: Path, base_name: str
-) -> Path | None:
+) -> tuple[Path, Path] | None:
     """Copy cached files for one example into ``dest_dir``."""
     dest_dir.mkdir(parents=True, exist_ok=True)
     for item in cache_dir.iterdir():
@@ -53,8 +63,12 @@ def _write_cached_artifacts(
             shutil.copytree(item, dest_dir / item.name, dirs_exist_ok=True)
         else:
             shutil.copyfile(item, dest_dir / item.name)
-    thumb = dest_dir / f"{base_name}_thumb.png"
-    return thumb if thumb.is_file() else None
+
+    thumb_light = dest_dir / f"{base_name}_thumb_light.png"
+    thumb_dark = dest_dir / f"{base_name}_thumb_dark.png"
+    if thumb_light.is_file() and thumb_dark.is_file():
+        return thumb_light, thumb_dark
+    return None
 
 
 def _build_one(
@@ -64,12 +78,15 @@ def _build_one(
     cache_root: Path,
     deps_fingerprint: str,
 ) -> RenderedExample:
+    """Build one example and return its rendered metadata."""
     base_name = spec.source.stem
     out_dir = built_dir / spec.section
     out_dir.mkdir(parents=True, exist_ok=True)
 
     key = cache.cache_key(
-        spec, deps_fingerprint=deps_fingerprint, python_version=_python_version()
+        spec,
+        deps_fingerprint=deps_fingerprint,
+        python_version=_python_version(),
     )
     cache_entry = cache.cache_dir(cache_root, key) / spec.section / base_name
 
@@ -77,34 +94,36 @@ def _build_one(
 
     if cache_entry.is_dir():
         thumb = _write_cached_artifacts(cache_entry, out_dir, base_name)
-        md_path = out_dir / f"{base_name}.md"
         return RenderedExample(
             spec=spec,
             title=title,
             summary=summary,
-            md_path=md_path,
-            thumbnail=thumb,
+            md_path=out_dir / f"{base_name}.md",
+            thumbnail_light=thumb[0] if thumb is not None else None,
+            thumbnail_dark=thumb[1] if thumb is not None else None,
         )
 
-    nb, seconds = execute.execute_example(spec.source)
+    source_notebook = execute.read_example(spec.source)
+    light_notebook, light_seconds = execute.execute_example(spec.source, theme="light")
+    dark_notebook, dark_seconds = execute.execute_example(spec.source, theme="dark")
 
-    # Per-example artifacts get written into a temp scratch first, then copied
-    # both to the built dir and into the cache, so the two copies are
-    # bit-identical.
     scratch = cache_root / "_scratch" / spec.section / base_name
     if scratch.exists():
         shutil.rmtree(scratch)
     scratch.mkdir(parents=True)
 
-    md_path, thumbnail = render.render_notebook(
-        nb, out_dir=scratch, base_name=base_name, runtime_seconds=seconds
+    _, thumbnail = render.render_notebook(
+        source_notebook,
+        light_notebook,
+        dark_notebook,
+        out_dir=scratch,
+        base_name=base_name,
+        runtime_seconds=light_seconds + dark_seconds,
     )
 
-    # Downloadable .py / .ipynb live next to the .md.
     shutil.copyfile(spec.source, scratch / f"{base_name}.py")
-    nbformat.write(nb, scratch / f"{base_name}.ipynb")
+    nbformat.write(source_notebook, scratch / f"{base_name}.ipynb")
 
-    # Mirror scratch to built_dir/<section>/.
     for item in scratch.iterdir():
         target = out_dir / item.name
         if item.is_dir():
@@ -112,19 +131,18 @@ def _build_one(
         else:
             shutil.copyfile(item, target)
 
-    # Mirror scratch to cache.
     cache_entry.parent.mkdir(parents=True, exist_ok=True)
     if cache_entry.exists():
         shutil.rmtree(cache_entry)
     shutil.copytree(scratch, cache_entry)
 
-    final_thumb = out_dir / f"{base_name}_thumb.png" if thumbnail is not None else None
     return RenderedExample(
         spec=spec,
         title=title,
         summary=summary,
         md_path=out_dir / f"{base_name}.md",
-        thumbnail=final_thumb,
+        thumbnail_light=(out_dir / f"{base_name}_thumb_light.png") if thumbnail is not None else None,
+        thumbnail_dark=(out_dir / f"{base_name}_thumb_dark.png") if thumbnail is not None else None,
     )
 
 
@@ -135,20 +153,7 @@ def build_gallery(
     cache_root: Path,
     deps_fingerprint: str,
 ) -> None:
-    """Run the full pipeline and write the gallery to disk.
-
-    Parameters
-    ----------
-    examples_root : pathlib.Path
-        ``docs/examples/`` (the source-of-truth tree).
-    built_dir : pathlib.Path
-        Where rendered Markdown + downloads go (typically
-        ``docs/examples/_built/``).
-    cache_root : pathlib.Path
-        Cache directory (typically ``.cache/gallery/``).
-    deps_fingerprint : str
-        Locked-dependency fingerprint used in the cache key.
-    """
+    """Run the full pipeline and write the gallery to disk."""
     specs = discover.discover(examples_root)
     cache_root.mkdir(parents=True, exist_ok=True)
 
@@ -163,5 +168,5 @@ def build_gallery(
             )
         )
 
-    index_md = index.build_index(rendered, root=examples_root)
-    (examples_root / "index.md").write_text(index_md)
+    index_markdown = index.build_index(rendered, root=examples_root)
+    (examples_root / "index.md").write_text(index_markdown, encoding="utf-8")

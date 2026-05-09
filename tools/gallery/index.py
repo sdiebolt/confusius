@@ -11,84 +11,68 @@ from ._types import ExampleSpec
 
 @dataclass(frozen=True)
 class RenderedExample:
-    """An example after the renderer has produced its artifacts.
-
-    Attributes
-    ----------
-    spec : tools.gallery._types.ExampleSpec
-        The original spec from discovery.
-    title : str
-        First markdown heading found in the example.
-    summary : str
-        Second markdown line, used as the card description. May be empty.
-    md_path : pathlib.Path
-        Path to the rendered Markdown file (under ``docs/examples/_built/``).
-    thumbnail : pathlib.Path or None
-        Path to the thumbnail PNG, or ``None`` if the example produced no
-        images.
-    """
+    """An example after the renderer has produced its artifacts."""
 
     spec: ExampleSpec
     title: str
     summary: str
     md_path: Path
-    thumbnail: Path | None
+    thumbnail_light: Path | None
+    thumbnail_dark: Path | None
 
 
-_DEFAULT_THUMB = "_assets/default_thumb.png"
+_DEFAULT_THUMB = "_assets/default_thumb.svg"
 
 
 def _demote_h1(text: str) -> str:
-    """Demote a leading H1 heading to H2 so the index has a single page title.
-
-    The page already has its own ``# Examples`` heading; section intros that
-    start with ``# Section title`` are bumped to ``## Section title``.
-    """
+    """Demote a leading H1 heading to H2 so the index has a single page title."""
     lines = text.split("\n", 1)
     first = lines[0]
     if first.startswith("# ") and not first.startswith("## "):
-        first = "#" + first  # turn "# X" into "## X".
+        first = "#" + first
     return first + ("\n" + lines[1] if len(lines) > 1 else "")
 
 
+def _card_image_markdown(rex: RenderedExample, *, root: Path, href: str) -> str:
+    """Return theme-aware thumbnail markup for one example card."""
+    if rex.thumbnail_light is None or rex.thumbnail_dark is None:
+        return f"[![]({_DEFAULT_THUMB})]({href})"
+
+    light = rex.thumbnail_light.relative_to(root).as_posix()
+    dark = rex.thumbnail_dark.relative_to(root).as_posix()
+    alt = rex.title.replace('"', '&quot;')
+    return (
+        f'[<img class="skip-lightbox" src="{light}#only-light" alt="{alt}">'
+        f'<img class="skip-lightbox" src="{dark}#only-dark" alt="{alt}">]({href})'
+    )
+
+
 def build_index(rendered: list[RenderedExample], *, root: Path) -> str:
-    """Return the Markdown text of the gallery index page.
-
-    The index groups cards by section (folder name), shows the section intro
-    above the cards, and uses Material's ``grid cards`` block.
-
-    Parameters
-    ----------
-    rendered : list[tools.gallery.index.RenderedExample]
-        All rendered examples.
-    root : pathlib.Path
-        ``docs/examples/`` — used to compute relative links.
-
-    Returns
-    -------
-    text : str
-        The full Markdown document.
-    """
+    """Return the Markdown text of the gallery index page."""
     by_section: dict[str, list[RenderedExample]] = defaultdict(list)
-    for rex in rendered:
-        by_section[rex.spec.section].append(rex)
+    for rendered_example in rendered:
+        by_section[rendered_example.spec.section].append(rendered_example)
 
-    parts: list[str] = ["# Examples\n"]
+    parts: list[str] = [
+        "# Examples\n\n"
+        "This section collects runnable example workflows for ConfUSIus, organized by analysis\n"
+        "task and learning level.\n\n"
+        "Examples are authored as plain Python files, executed during docs generation, and\n"
+        "rendered as notebook-style pages with outputs included.\n\n"
+    ]
 
     for section in sorted(by_section):
         items = by_section[section]
         intro = _demote_h1(items[0].spec.section_intro.strip())
-        parts.append(intro + "\n" if intro else f"## {section}\n")
-        parts.append('<div class="grid cards" markdown>\n')
-        for rex in sorted(items, key=lambda r: r.spec.source.name):
-            href = rex.md_path.relative_to(root).as_posix()
-            thumb = (
-                rex.thumbnail.relative_to(root).as_posix()
-                if rex.thumbnail is not None
-                else _DEFAULT_THUMB
-            )
-            summary = f"\n  {rex.summary}" if rex.summary else ""
-            parts.append(f"- ![]({thumb})\n\n  **[{rex.title}]({href})**{summary}\n")
-        parts.append("</div>\n")
+        parts.append((intro if intro else f"## {section}") + "\n\n")
+        parts.append('<div class="grid cards examples-cards" markdown>\n\n')
+        for rendered_example in sorted(items, key=lambda item: item.spec.source.name):
+            href = rendered_example.md_path.relative_to(root).as_posix()
+            image = _card_image_markdown(rendered_example, root=root, href=href)
+            card = f"-   {image}\n\n    ---\n\n    **[{rendered_example.title}]({href})**"
+            if rendered_example.summary:
+                card += f"\n\n    {rendered_example.summary}"
+            parts.append(card + "\n\n")
+        parts.append("</div>\n\n")
 
-    return "\n".join(parts)
+    return "".join(parts)

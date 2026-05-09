@@ -14,49 +14,16 @@ def cache_key(
     deps_fingerprint: str,
     python_version: str,
 ) -> str:
-    """Compute a deterministic cache key for one example.
-
-    The key is the sha256 of the source bytes, the locked-dependency
-    fingerprint, and the Python version. Any change in these inputs produces a
-    fresh key, forcing a re-execution.
-
-    Parameters
-    ----------
-    spec : tools.gallery._types.ExampleSpec
-        The example to hash.
-    deps_fingerprint : str
-        A textual representation of the relevant locked dependencies (typically
-        a newline-separated list of ``name==version`` entries).
-    python_version : str
-        ``sys.version`` or equivalent string identifying the interpreter.
-
-    Returns
-    -------
-    digest : str
-        Hex sha256 digest (64 characters).
-    """
-    h = hashlib.sha256()
-    h.update(spec.source.read_bytes())
-    h.update(b"\x00")
-    h.update(deps_fingerprint.encode("utf-8"))
-    h.update(b"\x00")
-    h.update(python_version.encode("utf-8"))
-    return h.hexdigest()
+    """Compute a deterministic cache key for one example."""
+    digest = hashlib.sha256()
+    digest.update(spec.source.read_bytes())
+    digest.update(b"\x00")
+    digest.update(deps_fingerprint.encode("utf-8"))
+    digest.update(b"\x00")
+    digest.update(python_version.encode("utf-8"))
+    return digest.hexdigest()
 
 
 def cache_dir(root: Path, key: str) -> Path:
-    """Return the cache directory for ``key`` rooted at ``root``.
-
-    Parameters
-    ----------
-    root : pathlib.Path
-        Root cache directory.
-    key : str
-        Cache key (a hex digest).
-
-    Returns
-    -------
-    path : pathlib.Path
-        ``root / key``.
-    """
+    """Return the cache directory for ``key`` rooted at ``root``."""
     return root / key

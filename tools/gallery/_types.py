@@ -10,7 +10,7 @@ from pathlib import Path
 class ExampleSpec:
     """A single discovered example file.
 
-    Attributes
+    Parameters
     ----------
     source : pathlib.Path
         Absolute path to the percent-format ``.py`` file.

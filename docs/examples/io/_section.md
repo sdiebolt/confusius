@@ -1,3 +1,3 @@
 # Input/Output
 
-Loading and saving fUS data with ConfUSIus.
+Loading and visualizing small fUS dataset snippets with ConfUSIus.
