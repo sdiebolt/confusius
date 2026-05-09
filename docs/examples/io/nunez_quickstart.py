@@ -4,6 +4,9 @@
 # Fetch a small subset of the Nunez-Elizalde 2022 dataset, load a power Doppler time
 # series, and visualize the mean volume in dB.
 
+# %% [markdown]
+# ## Fetch and load one recording
+
 # %%
 from pathlib import Path
 
@@ -30,6 +33,8 @@ data = cf.load(pwd_path)
 data
 
 # %% [markdown]
+# ## Compute and plot the mean power Doppler volume
+#
 # Average over time and convert to dB scale for a quick static preview.
 
 # %% tags=["thumbnail"]
