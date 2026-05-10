@@ -66,16 +66,26 @@ def _normalize_html_output(html: str) -> str:
         html = html.replace('<div class="xr-wrap" style="display:none">', '<div class="xr-wrap">')
         html += (
             "\n<style>"
-            ".xr-text-repr-fallback{display:none!important;}"
             ".xr-array-preview,.xr-array-preview span,.xr-preview,.xr-var-preview,.xr-var-dtype,.xr-var-dims,.xr-var-name,.xr-obj-type,.xr-obj-name{color:var(--xr-font-color0)!important;}"
             ".gallery-rich-output{overflow-x:auto;}"
             ".gallery-rich-output .xr-var-list,.gallery-rich-output .xr-dim-list,.gallery-rich-output .xr-attrs{padding-left:0!important;margin:0!important;list-style:none!important;}"
+            # MkDocs Material's `.md-typeset ul:not([hidden])` has higher specificity
+            # than xarray's `.xr-sections` and forces `display:flow-root`, collapsing
+            # the grid. Force it back so each coordinate row stays on one line.
+            ".gallery-rich-output .xr-sections{display:grid!important;}"
+            # Same Material rule also clobbers `.xr-var-list` (another <ul>).
             ".gallery-rich-output .xr-var-list,.gallery-rich-output .xr-var-item{display:contents!important;}"
-            ".gallery-rich-output .xr-section-summary-in~.xr-section-details{display:none!important;}"
-            ".gallery-rich-output .xr-section-summary-in:checked~.xr-section-details{display:contents!important;}"
             ".gallery-rich-output .xr-var-name,.gallery-rich-output .xr-var-dims,.gallery-rich-output .xr-var-dtype,.gallery-rich-output .xr-var-preview{margin:0!important;}"
+            # Dask's chunk SVG labels can sit near element boundaries; forcing
+            # overflow visible prevents edge labels (e.g., diagonal chunk labels)
+            # from being clipped in docs layout containers.
+            ".gallery-rich-output .xr-array-data table,.gallery-rich-output .xr-array-data td,.gallery-rich-output .xr-array-data svg{overflow:visible!important;}"
             ".gallery-rich-output .xr-array-data svg text,.gallery-rich-output .xr-array-data svg tspan,.gallery-rich-output .xr-array-preview svg text,.gallery-rich-output .xr-array-preview svg tspan,.gallery-rich-output .xr-preview svg text,.gallery-rich-output .xr-preview svg tspan{fill:var(--xr-font-color0)!important;}"
             ".gallery-rich-output .xr-array-data svg{color:var(--xr-font-color0)!important;}"
+            # Dask injects inline `stroke: rgb(0,0,0)` on the root SVG; in dark
+            # mode we override stroke/text color explicitly to keep labels legible.
+            "[data-md-color-scheme='slate'] .gallery-rich-output .xr-array-data svg{stroke:rgba(255,255,255,0.5)!important;}"
+            "[data-md-color-scheme='slate'] .gallery-rich-output .xr-array-data svg text,[data-md-color-scheme='slate'] .gallery-rich-output .xr-array-data svg tspan{fill:rgba(255,255,255,0.92)!important;stroke:none!important;}"
             "[data-md-color-scheme='default'] .xr-wrap{"
             "--xr-font-color0: rgba(0,0,0,1);"
             "--xr-font-color2: rgba(0,0,0,0.62);"
