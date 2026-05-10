@@ -41,11 +41,9 @@ def _image_tag(*, src: str, alt: str) -> str:
 def _html_block(html: str) -> str:
     """Return a raw HTML block for Markdown output."""
     return (
-        '<div class="gallery-rich-output jupyter_cell jupyter_container docutils container">'
-        '<div class="cell_output docutils container">'
-        '<div class="output text_html">'
+        '<div class="gallery-rich-output">'
         + html.rstrip()
-        + "</div></div></div>\n"
+        + "</div>\n"
     )
 
 
@@ -165,7 +163,7 @@ def render_notebook(
         parts.append("```python\n" + cell.source.rstrip() + "\n```\n")
 
         for output_index, (light_output, dark_output) in enumerate(
-            zip(light_cell.get("outputs", []), dark_cell.get("outputs", []), strict=False)
+            zip(light_cell.get("outputs", []), dark_cell.get("outputs", []), strict=True)
         ):
             output_type = light_output.get("output_type")
             if output_type == "stream":

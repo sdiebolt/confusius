@@ -78,7 +78,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: .cache/gallery
-          key: ${{ runner.os }}-gallery-${{ hashFiles('uv.lock', 'docs/examples/**/*.py') }}
+          key: ${{ runner.os }}-gallery-${{ hashFiles('uv.lock', 'docs/examples/**/*.py', 'tools/gallery/**/*.py', 'tools/build_gallery.py') }}
           restore-keys: |
             ${{ runner.os }}-gallery-
 

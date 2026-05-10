@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html as html_lib
 from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,7 +45,7 @@ def _card_image_markdown(rex: RenderedExample, *, root: Path, href: str) -> str:
 
     light = rex.thumbnail_light.relative_to(root).as_posix()
     dark = rex.thumbnail_dark.relative_to(root).as_posix()
-    alt = rex.title.replace('"', '&quot;')
+    alt = html_lib.escape(rex.title, quote=True)
     return (
         f'[<img class="skip-lightbox" src="{light}#only-light" alt="{alt}">'
         f'<img class="skip-lightbox" src="{dark}#only-dark" alt="{alt}">]({href})'
