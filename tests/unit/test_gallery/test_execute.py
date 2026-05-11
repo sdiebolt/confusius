@@ -20,11 +20,11 @@ def test_execute_runs_jupytext_py_and_returns_executed_nb(tmp_path: Path) -> Non
     code_cells = [c for c in nb.cells if c.cell_type == "code"]
     assert len(code_cells) == 1
     streams = [
-        o
-        for o in code_cells[0].outputs
-        if o.get("output_type") == "stream" and o.get("name") == "stdout"
+        out
+        for out in code_cells[0].outputs
+        if out.get("output_type") == "stream" and out.get("name") == "stdout"
     ]
-    assert any("42" in o.get("text", "") for o in streams)
+    assert any("42" in out.get("text", "") for out in streams)
 
 
 def test_execute_uses_current_python_interpreter(tmp_path: Path) -> None:

@@ -27,13 +27,8 @@ def test_discover_attaches_section_metadata(gallery_tree: Path) -> None:
     assert specs["first_level.py"].section == "glm"
 
 
-def test_discover_section_without_section_md_uses_empty_intro(tmp_path: Path) -> None:
-    root = tmp_path / "examples"
-    (root / "misc").mkdir(parents=True)
-    (root / "misc" / "ex.py").write_text("# %%\n")
+def test_discover_no_section_md_uses_empty_intro(gallery_tree: Path) -> None:
+    specs = {spec.source.name: spec for spec in discover(gallery_tree)}
 
-    specs = discover(root)
-
-    assert len(specs) == 1
-    assert specs[0].section == "misc"
-    assert specs[0].section_intro == ""
+    assert specs["first_level.py"].section == "glm"
+    assert specs["first_level.py"].section_intro == ""

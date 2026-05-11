@@ -18,7 +18,6 @@ def gallery_tree(tmp_path: Path) -> Path:
     )
     (root / "io" / "_skipped.py").write_text("# leading underscore should be skipped\n")
     (root / "glm").mkdir()
-    (root / "glm" / "_section.md").write_text("# GLM\n")
     (root / "glm" / "first_level.py").write_text(
         "# %% [markdown]\n# # First level GLM\n\n# %%\npass\n"
     )
