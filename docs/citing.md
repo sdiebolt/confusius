@@ -148,7 +148,7 @@ this template in your research, please also cite the corresponding article:
 Or in BibTeX format:
 
 ```bibtex
-@article{Pepe2026.02.05.704055,
+@article{pepe2026fusi,
   author    = {Pepe, Chiara and Mariani, Jean-Charles and Urosevic, Mila and Gini, Silvia and
                Stuefer, Alexia and Ricci, Fabio and Galbusera, Alberto and Iurilli, Giuliano and
                Gozzi, Alessandro},
