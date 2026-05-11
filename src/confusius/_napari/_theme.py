@@ -62,7 +62,7 @@ def get_napari_colors(theme_name: str) -> dict:
         "bg": bg,
         "fg": fg,
         "accent": "#e94b5f" if is_dark else "#d93a54",
-        "cursor": "#ff6b6b" if is_dark else "#cc2200",
+        "cursor": "#e94b5f" if is_dark else "#d93a54",
         "is_dark": is_dark,
     }
 
