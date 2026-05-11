@@ -9,7 +9,7 @@ import pytest
 
 from tools.gallery._pipeline import build_gallery
 
-from .conftest import GalleryPaths
+GalleryPaths = tuple[Path, Path, Path]
 
 
 def _seed_example(root: Path, section: str, name: str, body: str) -> Path:
