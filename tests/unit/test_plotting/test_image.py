@@ -9,7 +9,13 @@ import numpy.testing as npt
 import pytest
 import xarray as xr
 
-from confusius.plotting import VolumePlotter, plot_contours, plot_napari, plot_volume
+from confusius.plotting import (
+    VolumePlotter,
+    plot_carpet,
+    plot_contours,
+    plot_napari,
+    plot_volume,
+)
 
 
 class TestPlotVolume:
@@ -996,6 +1002,30 @@ class TestPlotVolumeVisualRegression:
         plotter = plot_volume(volume, slice_mode="z", show_colorbar=False)
         return plotter.figure
 
+    @pytest.mark.mpl_image_compare(
+        baseline_dir="baseline",
+        tolerance=0,
+        savefig_kwargs={"facecolor": "auto"},
+    )
+    def test_plot_volume_custom_bg_color(self, matplotlib_pyplot):
+        """Baseline test for custom bg_color — WCAG auto-derives white fg."""
+        volume = _create_deterministic_volume()
+        plotter = plot_volume(volume, slice_mode="z", bg_color="#1a1a2e")
+        return plotter.figure
+
+    @pytest.mark.mpl_image_compare(
+        baseline_dir="baseline",
+        tolerance=0,
+        savefig_kwargs={"facecolor": "auto"},
+    )
+    def test_plot_volume_explicit_fg_color(self, matplotlib_pyplot):
+        """Baseline test for explicit fg_color override."""
+        volume = _create_deterministic_volume()
+        plotter = plot_volume(
+            volume, slice_mode="z", bg_color="black", fg_color="#aaaaaa"
+        )
+        return plotter.figure
+
 
 class TestPlotContoursVisualRegression:
     """Visual regression tests for plot_contours using pytest-mpl."""
@@ -1061,3 +1091,61 @@ class TestPlotContoursVisualRegression:
         plotter = plot_volume(volume, slice_mode="z", show_colorbar=False)
         plotter.add_contours(mask, colors={1: "red", 2: "blue"})
         return plotter.figure
+
+
+def _create_deterministic_time_series() -> xr.DataArray:
+    """Create deterministic 4D time-series for visual regression tests."""
+    rng = np.random.default_rng(42)
+    data = rng.standard_normal((20, 3, 4))
+    return xr.DataArray(
+        data,
+        dims=["time", "y", "x"],
+        coords={
+            "time": xr.DataArray(
+                np.arange(20) * 0.1,
+                dims=["time"],
+                attrs={"units": "s"},
+            ),
+            "y": [0.0, 0.5, 1.0],
+            "x": [0.0, 0.5, 1.0, 1.5],
+        },
+    )
+
+
+class TestPlotCarpetVisualRegression:
+    """Visual regression tests for plot_carpet using pytest-mpl."""
+
+    @pytest.mark.mpl_image_compare(
+        baseline_dir="baseline",
+        tolerance=0,
+        savefig_kwargs={"facecolor": "auto"},
+    )
+    def test_plot_carpet_default(self, matplotlib_pyplot):
+        """Baseline test for default plot_carpet appearance (white background)."""
+        data = _create_deterministic_time_series()
+        fig, _ = plot_carpet(data, standardize=False)
+        return fig
+
+    @pytest.mark.mpl_image_compare(
+        baseline_dir="baseline",
+        tolerance=0,
+        savefig_kwargs={"facecolor": "auto"},
+    )
+    def test_plot_carpet_dark_bg(self, matplotlib_pyplot):
+        """Baseline test for plot_carpet with dark background."""
+        data = _create_deterministic_time_series()
+        fig, _ = plot_carpet(data, standardize=False, bg_color="black")
+        return fig
+
+    @pytest.mark.mpl_image_compare(
+        baseline_dir="baseline",
+        tolerance=0,
+        savefig_kwargs={"facecolor": "auto"},
+    )
+    def test_plot_carpet_explicit_fg_color(self, matplotlib_pyplot):
+        """Baseline test for plot_carpet with explicit fg_color."""
+        data = _create_deterministic_time_series()
+        fig, _ = plot_carpet(
+            data, standardize=False, bg_color="black", fg_color="#aaaaaa"
+        )
+        return fig
