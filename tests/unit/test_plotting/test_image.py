@@ -930,17 +930,6 @@ class TestPlotVolumeVisualRegression:
         tolerance=0,
         savefig_kwargs={"facecolor": "auto"},
     )
-    def test_plot_volume_white_bg(self, matplotlib_pyplot):
-        """Baseline test for white background."""
-        volume = _create_deterministic_volume()
-        plotter = plot_volume(volume, slice_mode="z", bg_color="white")
-        return plotter.figure
-
-    @pytest.mark.mpl_image_compare(
-        baseline_dir="baseline",
-        tolerance=0,
-        savefig_kwargs={"facecolor": "auto"},
-    )
     def test_plot_volume_single_slice(self, matplotlib_pyplot):
         """Baseline test for single slice."""
         volume = _create_deterministic_volume()
@@ -1005,8 +994,8 @@ class TestPlotVolumeVisualRegression:
     @pytest.mark.parametrize(
         "bg_color",
         [
-            pytest.param("#1a1a2e", id="dark"),   # WCAG luminance < 0.179 → white fg
-            pytest.param("#e8dcc8", id="light"),  # WCAG luminance > 0.179 → black fg
+            pytest.param("#1a1a2e", id="dark"),  # WCAG luminance < 0.179 → white fg
+            pytest.param("white", id="light"),   # WCAG luminance = 1.0 → black fg
         ],
     )
     @pytest.mark.mpl_image_compare(
@@ -1060,6 +1049,32 @@ class TestPlotContoursVisualRegression:
             },
         )
         plotter = plot_contours(mask, slice_mode="z", colors={1: "red", 2: "blue"})
+        return plotter.figure
+
+    @pytest.mark.mpl_image_compare(
+        baseline_dir="baseline",
+        tolerance=0,
+        savefig_kwargs={"facecolor": "auto"},
+    )
+    def test_plot_contours_white_bg(self, matplotlib_pyplot):
+        """Baseline test for plot_contours on a white background."""
+        mask = xr.DataArray(
+            np.array(
+                [
+                    [[0, 0, 0, 0], [0, 1, 1, 0], [0, 1, 1, 0], [0, 0, 0, 0]],
+                    [[0, 0, 0, 0], [0, 2, 2, 0], [0, 2, 2, 0], [0, 0, 0, 0]],
+                ]
+            ),
+            dims=["z", "y", "x"],
+            coords={
+                "z": [0.0, 1.0],
+                "y": [0.0, 0.5, 1.0, 1.5],
+                "x": [0.0, 0.5, 1.0, 1.5],
+            },
+        )
+        plotter = plot_contours(
+            mask, slice_mode="z", colors={1: "red", 2: "blue"}, bg_color="white"
+        )
         return plotter.figure
 
     @pytest.mark.mpl_image_compare(
