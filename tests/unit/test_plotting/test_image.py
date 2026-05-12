@@ -927,7 +927,7 @@ class TestPlotVolumeVisualRegression:
     def test_plot_volume_white_bg(self, matplotlib_pyplot):
         """Baseline test for white background."""
         volume = _create_deterministic_volume()
-        plotter = plot_volume(volume, slice_mode="z", black_bg=False)
+        plotter = plot_volume(volume, slice_mode="z", bg_color="white")
         return plotter.figure
 
     @pytest.mark.mpl_image_compare(
