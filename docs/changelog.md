@@ -10,6 +10,17 @@ icon: lucide/history
 
 Current development version for the next ConfUSIus release.
 
+### :sparkles: Enhancements
+
+- Added example gallery helper utilities to streamline writing and maintaining docs
+  examples ([#102](https://github.com/confusius-tools/confusius/pull/102)).
+
+### :bug: Fixes
+
+- Fixed napari x-axis extent computation to ignore the interactive cursor guide line,
+  preventing incorrect plot bounds
+  ([#111](https://github.com/confusius-tools/confusius/pull/111)).
+
 ## 0.2.0
 
 Released 2026-05-05.
