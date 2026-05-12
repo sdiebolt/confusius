@@ -6,6 +6,10 @@ icon: lucide/history
 
 # Changelog
 
+## 0.3.0.dev0
+
+Current development version for the next ConfUSIus release.
+
 ## 0.2.0
 
 Released 2026-05-05.
