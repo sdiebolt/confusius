@@ -33,6 +33,7 @@ _ATTR_TO_MODULE = {
 }
 
 
+# SPEC-0001 recommends PEP 562-based lazy loading for public namespaces.
 def __getattr__(name: str) -> Any:
     module_name = _ATTR_TO_MODULE.get(name)
     if module_name is None:
