@@ -18,9 +18,6 @@ def test_confusius_lazy_submodule_and_function_exports():
     assert module.atlas.__name__ == "confusius.atlas"
     assert callable(module.load)
 
-    assert "atlas" in module.__dict__
-    assert "load" in module.__dict__
-
 
 def test_confusius_dir_and_missing_attribute():
     """Top-level package exposes lazy names in `dir` and errors cleanly."""
@@ -41,7 +38,6 @@ def test_confusius_xarray_lazy_exports():
 
     assert "db_scale" not in module.__dict__
     assert callable(module.db_scale)
-    assert "db_scale" in module.__dict__
 
 
 def test_confusius_xarray_dir_and_missing_attribute():

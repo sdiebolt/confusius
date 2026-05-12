@@ -39,10 +39,7 @@ def __getattr__(name: str) -> Any:
     if module_name is None:
         raise AttributeError(f"module 'confusius.xarray' has no attribute {name!r}")
 
-    module = import_module(module_name)
-    value = getattr(module, name)
-    globals()[name] = value
-    return value
+    return getattr(import_module(module_name), name)
 
 
 def __dir__() -> list[str]:

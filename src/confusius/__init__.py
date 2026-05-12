@@ -54,20 +54,20 @@ _ATTR_TO_MODULE = {
     "save": "confusius.io.loadsave",
 }
 
+# Purge submodules cached by Python's import machinery so reload() resets lazy state.
+for _name in _SUBMODULES:
+    globals().pop(_name, None)
+del _name
+
 
 # SPEC-0001 recommends PEP 562-based lazy loading for top-level namespaces.
 def __getattr__(name: str) -> Any:
     if name in _SUBMODULES:
-        module = import_module(f"confusius.{name}")
-        globals()[name] = module
-        return module
+        return import_module(f"confusius.{name}")
 
     module_name = _ATTR_TO_MODULE.get(name)
     if module_name is not None:
-        module = import_module(module_name)
-        value = getattr(module, name)
-        globals()[name] = value
-        return value
+        return getattr(import_module(module_name), name)
 
     raise AttributeError(f"module 'confusius' has no attribute {name!r}")
 
@@ -80,8 +80,8 @@ if TYPE_CHECKING:
     from confusius import (
         atlas,
         connectivity,
-        decomposition,
         datasets,
+        decomposition,
         extract,
         io,
         iq,
