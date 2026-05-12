@@ -61,3 +61,33 @@ def test_build_gallery_produces_expected_artifacts(gallery_paths: GalleryPaths) 
     assert first == second  # Exact same artifact, including timestamp content.
     assert (built_dir / "io" / "hello.py").is_file()
     assert (built_dir / "io" / "hello.ipynb").is_file()
+
+
+@pytest.mark.slow
+def test_build_gallery_embeds_binder_launch_url(gallery_paths: GalleryPaths) -> None:
+    examples_root, built_dir, cache_root = gallery_paths
+    repo_root = examples_root.parent.parent
+
+    _seed_example(
+        examples_root,
+        "io",
+        "hello",
+        "# %% [markdown]\n# # Hello\n\n# %%\nprint('hi')\n",
+    )
+
+    build_gallery(
+        examples_root=examples_root,
+        built_dir=built_dir,
+        cache_root=cache_root,
+        deps_fingerprint="testdeps==1.0",
+        repo_root=repo_root,
+        binder_repo="confusius-tools/confusius",
+        binder_ref="v9.9.9",
+    )
+
+    md = (built_dir / "io" / "hello.md").read_text()
+    expected = (
+        "https://mybinder.org/v2/gh/confusius-tools/confusius/v9.9.9"
+        "?urlpath=lab/tree/docs/examples/io/hello.py"
+    )
+    assert f"[Launch in Binder]({expected})" in md

@@ -116,6 +116,40 @@ def test_render_handles_notebook_without_images(tmp_path: Path) -> None:
     assert thumbnail is None
 
 
+def test_render_adds_binder_button_when_url_given(tmp_path: Path) -> None:
+    nb = _make_nb()
+    url = "https://mybinder.org/v2/gh/owner/repo/main?urlpath=lab/tree/foo/ex.py"
+    md_path, _ = render_notebook(
+        nb,
+        nb,
+        nb,
+        out_dir=tmp_path,
+        base_name="ex",
+        runtime_seconds=1.0,
+        binder_url=url,
+    )
+
+    md = md_path.read_text()
+    assert f"[Launch in Binder]({url})" in md
+    assert ".md-button--primary" in md
+
+
+def test_render_omits_binder_button_when_url_missing(tmp_path: Path) -> None:
+    nb = _make_nb()
+    md_path, _ = render_notebook(
+        nb,
+        nb,
+        nb,
+        out_dir=tmp_path,
+        base_name="ex",
+        runtime_seconds=1.0,
+    )
+
+    md = md_path.read_text()
+    assert "Launch in Binder" not in md
+    assert ".md-button--primary" not in md
+
+
 def test_render_uses_outputs_from_light_and_dark_notebooks(tmp_path: Path) -> None:
     """Image bytes come from light_notebook / dark_notebook, not the un-executed source."""
     import base64

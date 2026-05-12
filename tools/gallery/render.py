@@ -133,6 +133,7 @@ def render_notebook(
     out_dir: Path,
     base_name: str,
     runtime_seconds: float,
+    binder_url: str | None = None,
 ) -> tuple[Path, tuple[Path, Path] | None]:
     """Render an executed notebook pair to Markdown."""
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -229,10 +230,14 @@ def render_notebook(
 
     parts.append("\n---\n")
     parts.append(f"**Total running time:** {runtime_seconds:.1f} s\n\n")
-    parts.append(
-        f"[Download .py]({base_name}.py){{ .md-button }} "
-        f"[Download .ipynb]({base_name}.ipynb){{ .md-button }}\n"
-    )
+    buttons: list[str] = []
+    if binder_url is not None:
+        buttons.append(
+            f"[Launch in Binder]({binder_url}){{ .md-button .md-button--primary }}"
+        )
+    buttons.append(f"[Download .py]({base_name}.py){{ .md-button }}")
+    buttons.append(f"[Download .ipynb]({base_name}.ipynb){{ .md-button }}")
+    parts.append(" ".join(buttons) + "\n")
 
     markdown_path = out_dir / f"{base_name}.md"
     markdown_path.write_text("\n".join(parts), encoding="utf-8")

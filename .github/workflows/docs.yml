@@ -87,6 +87,7 @@ jobs:
           QT_QPA_PLATFORM: "xcb"
           PYOPENGL_PLATFORM: "glx"
           LIBGL_ALWAYS_SOFTWARE: "1"
+          CONFUSIUS_BINDER_REF: ${{ github.head_ref || github.ref_name }}
         run: xvfb-run -a uv run python tools/build_gallery.py
 
       - name: Build documentation

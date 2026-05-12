@@ -74,6 +74,7 @@ def _build_one(
     built_dir: Path,
     cache_root: Path,
     deps_fingerprint: str,
+    binder_url: str | None = None,
 ) -> RenderedExample:
     """Build one example and return its rendered metadata."""
     base_name = spec.source.stem
@@ -118,6 +119,7 @@ def _build_one(
         out_dir=scratch,
         base_name=base_name,
         runtime_seconds=light_seconds,
+        binder_url=binder_url,
     )
 
     shutil.copyfile(spec.source, scratch / f"{base_name}.py")
@@ -139,12 +141,25 @@ def _build_one(
     )
 
 
+def _binder_url(
+    source: Path, *, repo_root: Path, binder_repo: str, binder_ref: str
+) -> str:
+    """Return the mybinder.org URL that opens ``source`` as a notebook."""
+    rel = source.relative_to(repo_root).as_posix()
+    return (
+        f"https://mybinder.org/v2/gh/{binder_repo}/{binder_ref}?urlpath=lab/tree/{rel}"
+    )
+
+
 def build_gallery(
     *,
     examples_root: Path,
     built_dir: Path,
     cache_root: Path,
     deps_fingerprint: str,
+    repo_root: Path | None = None,
+    binder_repo: str | None = None,
+    binder_ref: str = "main",
 ) -> None:
     """Run the full pipeline and write the gallery to disk."""
     specs = discover.discover(examples_root)
@@ -152,12 +167,23 @@ def build_gallery(
 
     rendered: list[RenderedExample] = []
     for spec in specs:
+        binder_url = (
+            _binder_url(
+                spec.source,
+                repo_root=repo_root,
+                binder_repo=binder_repo,
+                binder_ref=binder_ref,
+            )
+            if binder_repo is not None and repo_root is not None
+            else None
+        )
         rendered.append(
             _build_one(
                 spec,
                 built_dir=built_dir,
                 cache_root=cache_root,
                 deps_fingerprint=deps_fingerprint,
+                binder_url=binder_url,
             )
         )
 
