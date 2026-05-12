@@ -158,22 +158,24 @@ denoised = pca.inverse_transform(denoised_signals)
 # %%
 frame_idx = 100
 
-for title, vol, cmap in [
-    ("Original", data_std, "viridis"),
-    (f"Denoised ({k} components)", denoised, "viridis"),
-    ("Residual", data_std - denoised, "coolwarm"),
-]:
-    plotter = cf.plotting.plot_volume(
+fig, axes = plt.subplots(1, 3, figsize=(13, 4), constrained_layout=True)
+
+for ax, (title, vol, cmap) in zip(
+    axes,
+    [
+        ("Original", data_std, "viridis"),
+        (f"Denoised\n({k} components, {cumvar[k - 1] * 100:.1f} % variance)", denoised, "viridis"),
+        ("Residual", data_std - denoised, "coolwarm"),
+    ],
+):
+    cf.plotting.plot_volume(
         vol.isel(time=[frame_idx]),
         slice_mode="time",
         cmap=cmap,
         bg_color=bg_color,
         fg_color=fg_color,
         show_titles=False,
+        show_colorbar=False,
+        axes=ax,
     )
-    plotter.figure.suptitle(
-        title
-        + (f"  ({cumvar[k - 1] * 100:.1f} % variance explained)" if "Denoised" in title else ""),
-        fontsize=11,
-    )
-    plotter.figure.patch.set_alpha(0)
+    ax.set_title(title, fontsize=9)
