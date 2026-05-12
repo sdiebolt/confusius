@@ -1002,15 +1002,22 @@ class TestPlotVolumeVisualRegression:
         plotter = plot_volume(volume, slice_mode="z", show_colorbar=False)
         return plotter.figure
 
+    @pytest.mark.parametrize(
+        "bg_color",
+        [
+            pytest.param("#1a1a2e", id="dark"),   # WCAG luminance < 0.179 → white fg
+            pytest.param("#e8dcc8", id="light"),  # WCAG luminance > 0.179 → black fg
+        ],
+    )
     @pytest.mark.mpl_image_compare(
         baseline_dir="baseline",
         tolerance=0,
         savefig_kwargs={"facecolor": "auto"},
     )
-    def test_plot_volume_custom_bg_color(self, matplotlib_pyplot):
-        """Baseline test for custom bg_color — WCAG auto-derives white fg."""
+    def test_plot_volume_custom_bg_color(self, matplotlib_pyplot, bg_color):
+        """Baseline test for custom bg_color — WCAG auto-derives white or black fg."""
         volume = _create_deterministic_volume()
-        plotter = plot_volume(volume, slice_mode="z", bg_color="#1a1a2e")
+        plotter = plot_volume(volume, slice_mode="z", bg_color=bg_color)
         return plotter.figure
 
     @pytest.mark.mpl_image_compare(
