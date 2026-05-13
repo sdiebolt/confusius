@@ -20,7 +20,7 @@ class _BaseFUSIDecomposer(BaseEstimator, TransformerMixin):
 
     - Define `_signals_long_name` as a class attribute.
     - Assign `self._estimator` to the fitted sklearn estimator in `fit`.
-    - Assign `self.components_` and `self.n_components_` in `fit`.
+    - Assign `self.maps_` and `self.n_components_` in `fit`.
 
     All shared xarray bookkeeping (data preparation, spatial reshaping, `fit_transform`,
     `transform`, and `inverse_transform`) is handled here.
@@ -30,7 +30,7 @@ class _BaseFUSIDecomposer(BaseEstimator, TransformerMixin):
 
     # Fitted attributes, set by subclasses in fit.
     _estimator: Any
-    components_: xr.DataArray
+    maps_: xr.DataArray
     n_components_: int
 
     # Set by _store_fit_metadata.
@@ -121,7 +121,7 @@ class _BaseFUSIDecomposer(BaseEstimator, TransformerMixin):
             dims=["time", "component"],
             coords={
                 "time": self._get_time_coord(X),
-                "component": self.components_.coords["component"],
+                "component": self.maps_.coords["component"],
             },
         )
         transformed.attrs.update({"long_name": self._signals_long_name})
@@ -380,4 +380,4 @@ class _BaseFUSIDecomposer(BaseEstimator, TransformerMixin):
         bool
             `True` if the estimator has been fitted, `False` otherwise.
         """
-        return hasattr(self, "components_") and hasattr(self, "n_components_")
+        return hasattr(self, "maps_") and hasattr(self, "n_components_")

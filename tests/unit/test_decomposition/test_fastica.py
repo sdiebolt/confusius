@@ -29,12 +29,13 @@ def test_fit_transform_returns_dataarray(sample_4d_volume):
     np.testing.assert_allclose(signals.coords["time"], sample_4d_volume.coords["time"])
     np.testing.assert_array_equal(signals.coords["component"], np.arange(2))
 
-    assert model.components_.dims == ("component", "z", "y", "x")
-    assert model.components_.shape == (2, 4, 6, 8)
+    assert model.maps_.dims == ("component", "z", "y", "x")
+    assert model.maps_.shape == (2, 4, 6, 8)
     assert model.mixing_.dims == ("z", "y", "x", "component")
     assert model.mixing_.shape == (4, 6, 8, 2)
     assert model.mean_.dims == ("z", "y", "x")
-    assert model.whitening_.dims == ("component", "z", "y", "x")
+    # whitening_ is only set in temporal mode; absent in default spatial mode.
+    assert not hasattr(model, "whitening_")
     assert model.n_iter_ > 0
     assert model.n_features_in_ == (
         sample_4d_volume.sizes["z"]
@@ -77,8 +78,9 @@ def test_fit_transform_matches_fit_then_transform(sample_4d_volume):
 
 
 def test_inverse_transform_matches_sklearn(sample_4d_volume):
-    """inverse_transform matches sklearn FastICA reconstruction."""
-    model = FastICA(**FASTICA_TEST_KWARGS)
+    """inverse_transform matches sklearn FastICA reconstruction in temporal mode."""
+    temporal_kwargs = {**FASTICA_TEST_KWARGS, "mode": "temporal"}
+    model = FastICA(**temporal_kwargs)
     signals = model.fit_transform(sample_4d_volume)
     reconstructed = model.inverse_transform(signals)
 
@@ -101,13 +103,14 @@ def test_inverse_transform_matches_sklearn(sample_4d_volume):
 
 
 def test_wrapper_matches_sklearn_attributes(sample_4d_volume):
-    """Wrapper exposes the same learned matrices as sklearn FastICA."""
+    """Wrapper exposes the same learned matrices as sklearn FastICA in temporal mode."""
     stacked = sample_4d_volume.transpose("time", "z", "y", "x").stack(
         feature=["z", "y", "x"]
     )
     X = np.asarray(stacked.values, dtype=np.float64)
 
-    model = FastICA(**FASTICA_TEST_KWARGS).fit(sample_4d_volume)
+    temporal_kwargs = {**FASTICA_TEST_KWARGS, "mode": "temporal"}
+    model = FastICA(**temporal_kwargs).fit(sample_4d_volume)
     sklearn_model = SklearnFastICA(**FASTICA_TEST_KWARGS).fit(X)
 
     np.testing.assert_allclose(
@@ -115,7 +118,7 @@ def test_wrapper_matches_sklearn_attributes(sample_4d_volume):
         sklearn_model.transform(X),
     )
     np.testing.assert_allclose(
-        model.components_.stack(feature=["z", "y", "x"]).values,
+        model.maps_.stack(feature=["z", "y", "x"]).values,
         sklearn_model.components_,
     )
     np.testing.assert_allclose(
@@ -184,6 +187,12 @@ def test_inverse_transform_raises_for_invalid_input_type(sample_4d_volume):
 
     with pytest.raises(TypeError, match="DataArray or ndarray"):
         model.inverse_transform([1, 2, 3])
+
+
+def test_fit_rejects_invalid_mode(sample_4d_volume):
+    """fit raises ValueError for unknown mode values."""
+    with pytest.raises(ValueError, match="mode must be"):
+        FastICA(mode="invalid").fit(sample_4d_volume)  # type: ignore[arg-type]
 
 
 def test_fit_requires_time_dimension(sample_4d_volume):
@@ -311,6 +320,7 @@ def test_get_params_includes_constructor_arguments():
     w_init = np.eye(3)
     model = FastICA(
         n_components=3,
+        mode="temporal",
         algorithm="deflation",
         whiten="arbitrary-variance",
         fun="cube",
@@ -324,6 +334,7 @@ def test_get_params_includes_constructor_arguments():
     params = model.get_params()
 
     assert params["n_components"] == 3
+    assert params["mode"] == "temporal"
     assert params["algorithm"] == "deflation"
     assert params["whiten"] == "arbitrary-variance"
     assert params["fun"] == "cube"
@@ -368,4 +379,4 @@ def test_reproducible_with_random_state():
     signals_2 = model_2.fit_transform(data)
 
     np.testing.assert_allclose(signals_1.values, signals_2.values)
-    np.testing.assert_allclose(model_1.components_.values, model_2.components_.values)
+    np.testing.assert_allclose(model_1.maps_.values, model_2.maps_.values)

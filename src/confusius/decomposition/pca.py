@@ -46,9 +46,9 @@ class PCA(_BaseFUSIDecomposer):
           than the minimum of `n_features` and `n_samples`. Hence, the `None` case
           results in: `n_components == min(n_samples, n_features) - 1`.
     whiten : bool, default: False
-        Whether to multiply the `components_` vectors by the square root of `n_samples`
-        and then divide them by the singular values to ensure uncorrelated outputs with
-        unit component-wise variances.
+        Whether to multiply the loading vectors by the square root of `n_samples` and
+        then divide them by the singular values to ensure uncorrelated outputs with unit
+        component-wise variances.
 
         Whitening will remove some information from the transformed signal (the relative
         variance scales of the components) but can sometimes improve the predictive
@@ -100,11 +100,11 @@ class PCA(_BaseFUSIDecomposer):
 
     Attributes
     ----------
-    components_ : (n_components, ...) xarray.DataArray
-        Principal axes in feature space, representing the directions of maximum variance
-        in the data. Equivalently, the right singular vectors of the centered input
-        data, parallel to its eigenvectors. The components are sorted by decreasing
-        `explained_variance_` and reshaped to the original spatial geometry.
+    maps_ : (n_components, ...) xarray.DataArray
+        Principal directions in feature space (loadings), representing the axes of
+        maximum variance. Equivalently, the right singular vectors of the centered input
+        data, parallel to its eigenvectors. Sorted by decreasing `explained_variance_`
+        and reshaped to the original spatial geometry.
     explained_variance_ : (n_components,) xarray.DataArray
         The amount of variance explained by each of the selected components. The
         variance estimation uses `n_samples - 1` degrees of freedom. Equal to
@@ -237,10 +237,10 @@ class PCA(_BaseFUSIDecomposer):
         self._store_fit_metadata(X, X_proc, X_stacked, spatial_dims)
 
         component_coord = np.arange(pca.components_.shape[0], dtype=np.intp)
-        self.components_: xr.DataArray = self._reshape_component_matrix(
+        self.maps_: xr.DataArray = self._reshape_component_matrix(
             pca.components_,
             component_coord,
-            long_name="Principal components",
+            long_name="Principal component maps",
         )
         self.mean_: xr.DataArray = self._reshape_mean(pca.mean_)
 

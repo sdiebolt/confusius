@@ -121,13 +121,13 @@ axes[1].legend()
 # %% [markdown]
 # ## Component maps
 #
-# `components_` is a `(component, y, x)` DataArray. Each map shows the spatial
+# `maps_` is a `(component, y, x)` DataArray. Each map shows the spatial
 # distribution of one principal component — the regions that vary most together along
 # that direction in data space.
 
 # %% tags=["thumbnail"]
 plotter = cf.plotting.plot_volume(
-    pca.components_.isel(component=slice(0, 12)),
+    pca.maps_.isel(component=slice(0, 12)),
     slice_mode="component",
     cmap="coolwarm",
     ncols=4,

@@ -11,6 +11,36 @@ from sklearn.decomposition import FastICA as _SklearnFastICA
 from confusius.decomposition._base import _BaseFUSIDecomposer
 
 
+class _SpatialFastICAProxy:
+    """Minimal estimator shim that makes spatial ICA results look like temporal ICA.
+
+    After fitting sklearn FastICA on the transposed data `(n_voxels, n_time)`, the
+    independent sources are spatial maps `(n_ica, n_voxels)`.  This proxy exposes
+    `transform` and `inverse_transform` so that `_BaseFUSIDecomposer` can call them
+    with the original `(n_time, n_voxels)` layout and get back `(n_time, n_ica)` time
+    courses or `(n_time, n_voxels)` reconstructions respectively.
+    """
+
+    def __init__(
+        self,
+        spatial_components: npt.NDArray[np.floating],
+        voxel_mean: npt.NDArray[np.floating],
+    ) -> None:
+        # spatial_components: (n_ica, n_voxels)
+        self._spatial_components = spatial_components
+        self.mean_ = voxel_mean
+
+    def transform(self, X: npt.NDArray[np.floating]) -> npt.NDArray[np.floating]:
+        # X: (n_time, n_voxels) → (n_time, n_ica)
+        return (X - self.mean_) @ self._spatial_components.T
+
+    def inverse_transform(
+        self, X: npt.NDArray[np.floating]
+    ) -> npt.NDArray[np.floating]:
+        # X: (n_time, n_ica) → (n_time, n_voxels)
+        return X @ self._spatial_components + self.mean_
+
+
 class FastICA(_BaseFUSIDecomposer):
     """Fast independent component analysis (ICA) for fUSI data.
 
@@ -22,14 +52,35 @@ class FastICA(_BaseFUSIDecomposer):
     [`inverse_transform`][confusius.decomposition.FastICA.inverse_transform]:
 
     - Input data are expected as `(time, ...)` where `...` are spatial dimensions.
-    - `transform` returns a `(time, component)` DataArray.
+    - `transform` returns a `(time, component)` DataArray of IC time courses.
     - `inverse_transform` reconstructs to `(time, ...)` using the fitted spatial
       coordinates.
+
+    Two ICA modes are supported, selected via the `mode` parameter.
+
+    **Spatial ICA** (`mode="spatial"`, default, matches FSL MELODIC):
+    Maximises independence across the *spatial* dimension.  The independent components
+    are spatial maps; time courses are derived by projecting the data onto those maps.
+    This is the appropriate choice when different brain regions are assumed to have
+    independently fluctuating activity, which is the standard prior for network
+    discovery.  It is also better conditioned for fUSI data where the number of voxels
+    greatly exceeds the number of time points.
+
+    **Temporal ICA** (`mode="temporal"`):
+    Maximises independence across the *time* dimension.  The independent components
+    are temporal signals; the spatial maps are the corresponding mixing weights.
+    Suitable when temporal independence is the relevant prior.
 
     Parameters
     ----------
     n_components : int, optional
-        Number of components to use. If `None`, all are used.
+        Number of components to use. If not provided, all are used.
+    mode : {"spatial", "temporal"}, default: "spatial"
+        Whether to find spatially or temporally independent components.
+
+        - `"spatial"` (default): fits on `(voxels, time)`, finds independent spatial
+          maps. Matches FSL MELODIC's default for single-subject data.
+        - `"temporal"`: fits on `(time, voxels)`, finds independent time courses.
     algorithm : {"parallel", "deflation"}, default: "parallel"
         Specify which algorithm to use for FastICA.
     whiten : {"unit-variance", "arbitrary-variance"} or bool, default: "unit-variance"
@@ -72,24 +123,27 @@ class FastICA(_BaseFUSIDecomposer):
 
     Attributes
     ----------
-    components_ : (n_components, ...) xarray.DataArray
-        Linear operator to apply to the data to recover the independent sources,
-        reshaped to the original spatial geometry.
+    maps_ : (n_components, ...) xarray.DataArray
+        Spatial maps reshaped to the original spatial geometry.
 
-        This is equal to the un-mixing matrix when `whiten` is `False`, and equal to
-        `np.dot(unmixing_matrix, whitening_)` otherwise.
+        - In `"spatial"` mode: the independent component sources themselves — the
+          spatially independent patterns that FastICA found. These are the ICs in the
+          strict sense.
+        - In `"temporal"` mode: the unmixing directions in voxel space — the spatial
+          weights applied to each time frame to extract IC time courses. The actual
+          temporal ICs are returned by `transform`.
     mixing_ : (..., n_components) xarray.DataArray
-        Pseudo-inverse of `components_`, reshaped to the fitted spatial geometry.
+        Reshaped to the fitted spatial geometry.
 
-        It is the linear operator that maps independent sources back to the data.
+        - In `"spatial"` mode: same spatial information as `maps_`, transposed to
+          `(*spatial_dims, component)` order.
+        - In `"temporal"` mode: pseudo-inverse of `maps_`; columns map independent
+          time courses back to the data.
     mean_ : (...) xarray.DataArray
-        Per-feature empirical mean from the training set. Defined only when `whiten` is
-        not `False`.
+        Per-voxel empirical mean from the training set.
     whitening_ : (n_components, ...) xarray.DataArray
-        Pre-whitening matrix reshaped to the original spatial geometry. Defined only
-        when `whiten` is not `False`.
-
-        This projects data onto the first `n_components` principal components.
+        Pre-whitening matrix reshaped to the original spatial geometry. Only present in
+        `"temporal"` mode when `whiten` is not `False`.
     n_components_ : int
         Number of components estimated during fit.
     n_iter_ : int
@@ -103,6 +157,8 @@ class FastICA(_BaseFUSIDecomposer):
 
     Examples
     --------
+    Spatial ICA (default, matches FSL MELODIC):
+
     >>> import numpy as np
     >>> import xarray as xr
     >>> from confusius.decomposition import FastICA
@@ -134,6 +190,7 @@ class FastICA(_BaseFUSIDecomposer):
         self,
         *,
         n_components: int | None = None,
+        mode: Literal["spatial", "temporal"] = "spatial",
         algorithm: Literal["parallel", "deflation"] = "parallel",
         whiten: Literal["arbitrary-variance", "unit-variance"] | bool = "unit-variance",
         fun: Literal["logcosh", "exp", "cube"] | Callable[..., Any] = "logcosh",
@@ -145,6 +202,7 @@ class FastICA(_BaseFUSIDecomposer):
         random_state: int | None = None,
     ) -> None:
         self.n_components = n_components
+        self.mode = mode
         self.algorithm = algorithm
         self.whiten = whiten
         self.fun = fun
@@ -175,8 +233,15 @@ class FastICA(_BaseFUSIDecomposer):
         ValueError
             If input has no `time` dimension, fewer than 2 timepoints, or no spatial
             dimensions.
+        ValueError
+            If `mode` is not `"spatial"` or `"temporal"`.
         """
         del y
+
+        if self.mode not in {"spatial", "temporal"}:
+            raise ValueError(
+                f"mode must be 'spatial' or 'temporal', got '{self.mode}'."
+            )
 
         X_proc, X_stacked, spatial_dims = self._prepare_data(
             X,
@@ -196,15 +261,78 @@ class FastICA(_BaseFUSIDecomposer):
             whiten_solver=self.whiten_solver,
             random_state=self.random_state,
         )
-        fastica.fit(X_proc)
 
         self._store_fit_metadata(X, X_proc, X_stacked, spatial_dims)
 
+        if self.mode == "spatial":
+            self._fit_spatial(fastica, X_proc)
+        else:
+            self._fit_temporal(fastica, X_proc)
+
+        self._store_feature_names(X)
+        return self
+
+    def _fit_spatial(
+        self,
+        fastica: _SklearnFastICA,
+        X_proc: npt.NDArray[np.floating],
+    ) -> None:
+        """Fit spatial ICA: find spatially independent maps.
+
+        Parameters
+        ----------
+        fastica : sklearn.decomposition.FastICA
+            Configured but unfitted sklearn estimator.
+        X_proc : (n_time, n_voxels) numpy.ndarray
+            Stacked data matrix.
+        """
+        # Fit on transposed data: (n_voxels, n_time). Sklearn treats voxels as
+        # samples and time points as features, so the resulting independent
+        # components are spatial maps.
+        fastica.fit(X_proc.T)
+
+        # Spatial maps: (n_ica, n_voxels) — rows are independent spatial patterns.
+        spatial_maps_flat: npt.NDArray[np.floating] = fastica.transform(X_proc.T).T
+
+        voxel_mean: npt.NDArray[np.floating] = X_proc.mean(axis=0)
+
+        component_coord = np.arange(spatial_maps_flat.shape[0], dtype=np.intp)
+        self.maps_ = self._reshape_component_matrix(
+            spatial_maps_flat,
+            component_coord,
+            long_name="IC spatial maps",
+        )
+        self.mixing_ = self._reshape_feature_component_matrix(
+            spatial_maps_flat.T,
+            component_coord,
+        )
+        self.mean_ = self._reshape_mean(voxel_mean)
+
+        self.n_components_ = int(spatial_maps_flat.shape[0])
+        self.n_iter_ = int(fastica.n_iter_)
+        self._estimator = _SpatialFastICAProxy(spatial_maps_flat, voxel_mean)
+
+    def _fit_temporal(
+        self,
+        fastica: _SklearnFastICA,
+        X_proc: npt.NDArray[np.floating],
+    ) -> None:
+        """Fit temporal ICA: find temporally independent time courses.
+
+        Parameters
+        ----------
+        fastica : sklearn.decomposition.FastICA
+            Configured but unfitted sklearn estimator.
+        X_proc : (n_time, n_voxels) numpy.ndarray
+            Stacked data matrix.
+        """
+        fastica.fit(X_proc)
+
         component_coord = np.arange(fastica.components_.shape[0], dtype=np.intp)
-        self.components_ = self._reshape_component_matrix(
+        self.maps_ = self._reshape_component_matrix(
             fastica.components_,
             component_coord,
-            long_name="Independent components",
+            long_name="IC unmixing maps",
         )
         self.mixing_ = self._reshape_feature_component_matrix(
             fastica.mixing_,
@@ -223,11 +351,7 @@ class FastICA(_BaseFUSIDecomposer):
 
         self.n_components_ = int(fastica.components_.shape[0])
         self.n_iter_ = int(fastica.n_iter_)
-
-        self._store_feature_names(X)
         self._estimator = fastica
-
-        return self
 
     def _reshape_feature_component_matrix(
         self,

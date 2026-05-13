@@ -21,8 +21,8 @@ def test_fit_transform_returns_dataarray(sample_4d_volume):
     np.testing.assert_allclose(signals.coords["time"], sample_4d_volume.coords["time"])
     np.testing.assert_array_equal(signals.coords["component"], np.arange(6))
 
-    assert model.components_.dims == ("component", "z", "y", "x")
-    assert model.components_.shape == (6, 4, 6, 8)
+    assert model.maps_.dims == ("component", "z", "y", "x")
+    assert model.maps_.shape == (6, 4, 6, 8)
     assert model.mean_.dims == ("z", "y", "x")
     assert model.n_samples_ == sample_4d_volume.sizes["time"]
     assert model.n_features_in_ == (
@@ -71,7 +71,7 @@ def test_wrapper_matches_sklearn_attributes(sample_4d_volume):
         sklearn_model.transform(X),
     )
     np.testing.assert_allclose(
-        model.components_.stack(feature=["z", "y", "x"]).values,
+        model.maps_.stack(feature=["z", "y", "x"]).values,
         sklearn_model.components_,
     )
     np.testing.assert_allclose(
@@ -325,4 +325,4 @@ def test_randomized_solver_reproducible_with_random_state(sample_4d_volume):
     signals_2 = model_2.fit_transform(sample_4d_volume)
 
     np.testing.assert_allclose(signals_1.values, signals_2.values)
-    np.testing.assert_allclose(model_1.components_.values, model_2.components_.values)
+    np.testing.assert_allclose(model_1.maps_.values, model_2.maps_.values)
