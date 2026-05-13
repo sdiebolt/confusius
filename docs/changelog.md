@@ -12,6 +12,11 @@ Current development version for the next ConfUSIus release.
 
 ### :sparkles: Enhancements
 
+- Added `show_progress` to volumewise registration so joblib progress output can be
+  disabled in scripted or quiet workflows
+  ([#126](https://github.com/confusius-tools/confusius/pull/126)).
+- Replaced plotting `black_bg` with explicit `bg_color` and `fg_color` controls for
+  clearer visual customization ([#124](https://github.com/confusius-tools/confusius/pull/124)).
 - Added example gallery helper utilities to streamline writing and maintaining docs
   examples ([#102](https://github.com/confusius-tools/confusius/pull/102)).
 
