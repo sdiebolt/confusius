@@ -14,7 +14,7 @@
 # [Nunez-Elizalde 2022 dataset](https://doi.org/10.1016/j.neuron.2022.02.012).
 
 # %% [markdown]
-# ## Load and standardize the recording
+# ## Load the recording
 
 # %%
 from pathlib import Path
@@ -54,6 +54,24 @@ data = cf.load(pwd_path).compute()
 data
 
 # %% [markdown]
+# ## Correcting for brain motion
+# This recording contains some brain motion, which we can mitigate by performing a rigid
+# translation correction with
+# [`register_volumewise`][confusius.registration.register_volumewise]. This is a common
+# preprocessing step for fUSI data, and it can help avoid spurious components driven by
+# motion artefacts.
+#
+# You may set `show_progress=True` to display a progress bar during registration, which
+# can be helpful for long recordings.
+
+# %%
+# The `learning_rate` controls the step size of the optimization. A value of 1e-2 is
+# a common default that balances convergence speed and stability for typical fUSI data.
+data = cf.registration.register_volumewise(
+    data, learning_rate=1e-2, show_progress=False
+)
+
+# %% [markdown]
 # Before fitting PCA, we standardize the recording to z-scores with
 # [`standardize`][confusius.signal.standardize]. This removes the DC offset and
 # normalizes the scale across voxels so the decomposition is driven by temporal dynamics
@@ -66,13 +84,12 @@ data_std
 # %% [markdown]
 # ## Fit PCA
 #
-# [PCA][confusius.decomposition.PCA] expects a `(time, ...)` DataArray. Here we retain
-# 30 components, which is enough to capture most of the structured variance in a typical
-# 2D fUSI recording while keeping the decomposition compact. The `random_state` argument
-# fixes the SVD solver initialisation for reproducibility.
+# [PCA][confusius.decomposition.PCA] expects a `(time, ...)` DataArray. Here we keep
+# enough components to explain at least 90 % of the variance. The `random_state`
+# argument fixes the SVD solver initialisation for reproducibility.
 
 # %%
-pca = PCA(n_components=30, random_state=0)
+pca = PCA(n_components=0.90, random_state=0)
 signals = pca.fit_transform(data_std)
 signals
 
@@ -80,23 +97,21 @@ signals
 # ## Scree plot
 #
 # The `explained_variance_ratio_` attribute tells us what fraction of total variance each
-# component accounts for. Plotting this as a cumulative curve (scree plot) helps choose
-# how many components to keep.
+# component accounts for. Plotting this as a cumulative curve helps confirm how many
+# components were needed to reach the 90 % target.
 
 # %%
 cumvar = np.cumsum(pca.explained_variance_ratio_.values)
+component_ids = pca.explained_variance_ratio_.component.values + 1
 
 fig, axes = plt.subplots(1, 2, figsize=(10, 4), constrained_layout=True)
 
-axes[0].bar(
-    pca.explained_variance_ratio_.component.values,
-    pca.explained_variance_ratio_.values * 100,
-)
+axes[0].bar(component_ids, pca.explained_variance_ratio_.values * 100)
 axes[0].set_xlabel("Component")
 axes[0].set_ylabel("Explained variance (%)")
 axes[0].set_title("Per-component variance")
 
-axes[1].plot(pca.explained_variance_ratio_.component.values, cumvar * 100, marker="o", ms=4)
+axes[1].plot(component_ids, cumvar * 100, marker="o", ms=4)
 axes[1].axhline(90, color="tab:red", lw=1, ls="--", label="90 %")
 axes[1].set_xlabel("Number of components")
 axes[1].set_ylabel("Cumulative explained variance (%)")
@@ -122,6 +137,7 @@ plotter = cf.plotting.plot_volume(
     cbar_label="Component weight",
 )
 plotter.figure.suptitle("Principal component maps (first 12)", fontsize=11)
+
 # %% [markdown]
 # ## Component time courses
 #
@@ -134,51 +150,7 @@ fig, axes = plt.subplots(6, 1, figsize=(12, 9), sharex=True, constrained_layout=
 for ax, comp in zip(axes, range(6)):
     signals.sel(component=comp).plot(ax=ax, lw=0.8)
     var = float(pca.explained_variance_ratio_.sel(component=comp)) * 100
-    ax.set_title(f"PC {comp}  ({var:.1f} %)", fontsize=8)
+    ax.set_title(f"PC {comp + 1}  ({var:.1f} %)", fontsize=8)
     ax.set_xlabel("")
 axes[-1].set_xlabel("Time (s)")
 plt.suptitle("PCA time courses (first 6 components)", fontsize=11)
-
-# %% [markdown]
-# ## Denoised reconstruction
-#
-# `inverse_transform` maps component-space signals back to the original spatial geometry.
-# By passing only the leading $k$ components and zeroing the rest, we project the data
-# onto a lower-dimensional subspace — effectively suppressing variance that the first $k$
-# components do not explain.
-#
-# Here we keep the components that together account for at least 90 % of the total
-# variance and compare the result to the original data on a single frame.
-
-# %%
-k = min(int(np.searchsorted(cumvar, 0.90)) + 1, pca.n_components_)
-
-denoised_signals = signals.copy()
-denoised_signals.loc[dict(component=slice(k, None))] = 0.0
-
-denoised = pca.inverse_transform(denoised_signals)
-
-# %%
-frame_idx = 100
-
-fig, axes = plt.subplots(1, 3, figsize=(13, 4), constrained_layout=True, facecolor="none")
-
-for ax, (title, vol, cmap) in zip(
-    axes,
-    [
-        ("Original", data_std, "viridis"),
-        (f"Denoised\n({k} components, {cumvar[k - 1] * 100:.1f} % variance)", denoised, "viridis"),
-        ("Residual", data_std - denoised, "coolwarm"),
-    ],
-):
-    cf.plotting.plot_volume(
-        vol.isel(time=[frame_idx]),
-        slice_mode="time",
-        cmap=cmap,
-        bg_color=bg_color,
-        fg_color=fg_color,
-        show_titles=False,
-        show_colorbar=False,
-        axes=ax,
-    )
-    ax.set_title(title, fontsize=9)
