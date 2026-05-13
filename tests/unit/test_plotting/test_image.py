@@ -570,9 +570,9 @@ class TestPlotContours:
         ax = plotter.axes[0, 0]
 
         assert ax.title.get_fontsize() == pytest.approx(16)
-        assert ax.xaxis.label.get_fontsize() == pytest.approx(14)
-        assert ax.yaxis.label.get_fontsize() == pytest.approx(14)
-        assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(14)
+        assert ax.xaxis.label.get_fontsize() == pytest.approx(14.4)
+        assert ax.yaxis.label.get_fontsize() == pytest.approx(14.4)
+        assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(13.6)
 
 
 class TestVolumePlotterAddContours:
@@ -1194,13 +1194,13 @@ class TestPlotCarpet:
         )
 
         assert ax.title.get_fontsize() == pytest.approx(18)
-        assert ax.xaxis.label.get_fontsize() == pytest.approx(16)
-        assert ax.yaxis.label.get_fontsize() == pytest.approx(16)
-        assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(15)
+        assert ax.xaxis.label.get_fontsize() == pytest.approx(16.2)
+        assert ax.yaxis.label.get_fontsize() == pytest.approx(16.2)
+        assert ax.get_xticklabels()[0].get_fontsize() == pytest.approx(15.3)
 
         cbar_axes = [axis for axis in fig.axes if axis is not ax]
         assert len(cbar_axes) == 1
-        assert cbar_axes[0].get_yticklabels()[0].get_fontsize() == pytest.approx(15)
+        assert cbar_axes[0].get_yticklabels()[0].get_fontsize() == pytest.approx(15.3)
 
 
 class TestPlotCarpetVisualRegression:

@@ -283,7 +283,7 @@ def _resolve_font_sizes(
     """
     if fontsize is None:
         return None, None, None
-    return fontsize, round(fontsize * 0.9), round(fontsize * 0.85)
+    return fontsize, fontsize * 0.9, fontsize * 0.85
 
 
 def _coerce_complex_to_magnitude(data: xr.DataArray, caller: str) -> xr.DataArray:
@@ -2164,7 +2164,7 @@ def _prepare_carpet_data(
     Returns
     -------
     dict
-        Keys: `signals` (DataArray, voxels * time), `vmin` (float),
+        Keys: `signals` (DataArray with shape `(time, voxels)`), `vmin` (float),
         `vmax` (float), `xlabel` (str), `time_coord` (DataArray | None).
     """
     if np.iscomplexobj(data):
