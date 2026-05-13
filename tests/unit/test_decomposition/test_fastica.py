@@ -31,8 +31,6 @@ def test_fit_transform_returns_dataarray(sample_4d_volume):
 
     assert model.maps_.dims == ("component", "z", "y", "x")
     assert model.maps_.shape == (2, 4, 6, 8)
-    assert model.mixing_.dims == ("z", "y", "x", "component")
-    assert model.mixing_.shape == (4, 6, 8, 2)
     assert model.mean_.dims == ("z", "y", "x")
     # whitening_ is only set in temporal mode; absent in default spatial mode.
     assert not hasattr(model, "whitening_")
@@ -120,12 +118,6 @@ def test_wrapper_matches_sklearn_attributes(sample_4d_volume):
     np.testing.assert_allclose(
         model.maps_.stack(feature=["z", "y", "x"]).values,
         sklearn_model.components_,
-    )
-    np.testing.assert_allclose(
-        model.mixing_.stack(feature=["z", "y", "x"])
-        .transpose("feature", "component")
-        .values,
-        sklearn_model.mixing_,
     )
     np.testing.assert_allclose(
         model.mean_.stack(feature=["z", "y", "x"]).values, sklearn_model.mean_

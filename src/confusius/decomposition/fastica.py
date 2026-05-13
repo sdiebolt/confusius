@@ -126,19 +126,12 @@ class FastICA(_BaseFUSIDecomposer):
     maps_ : (n_components, ...) xarray.DataArray
         Spatial maps reshaped to the original spatial geometry.
 
-        - In `"spatial"` mode: the independent component sources themselves — the
-          spatially independent patterns that FastICA found. These are the ICs in the
-          strict sense.
-        - In `"temporal"` mode: the unmixing directions in voxel space — the spatial
-          weights applied to each time frame to extract IC time courses. The actual
+        - In `"spatial"` mode: the independent component sources themselves, that is,
+          the spatially independent patterns that FastICA found. These are the ICs in
+          the strict sense.
+        - In `"temporal"` mode: the unmixing directions in voxel space, that is, the
+          spatial weights applied to each volume to extract IC time courses. The actual
           temporal ICs are returned by `transform`.
-    mixing_ : (..., n_components) xarray.DataArray
-        Reshaped to the fitted spatial geometry.
-
-        - In `"spatial"` mode: same spatial information as `maps_`, transposed to
-          `(*spatial_dims, component)` order.
-        - In `"temporal"` mode: pseudo-inverse of `maps_`; columns map independent
-          time courses back to the data.
     mean_ : (...) xarray.DataArray
         Per-voxel empirical mean from the training set.
     whitening_ : (n_components, ...) xarray.DataArray
@@ -302,10 +295,6 @@ class FastICA(_BaseFUSIDecomposer):
             component_coord,
             long_name="IC spatial maps",
         )
-        self.mixing_ = self._reshape_feature_component_matrix(
-            spatial_maps_flat.T,
-            component_coord,
-        )
         self.mean_ = self._reshape_mean(voxel_mean)
 
         self.n_components_ = int(spatial_maps_flat.shape[0])
@@ -334,11 +323,6 @@ class FastICA(_BaseFUSIDecomposer):
             component_coord,
             long_name="IC unmixing maps",
         )
-        self.mixing_ = self._reshape_feature_component_matrix(
-            fastica.mixing_,
-            component_coord,
-        )
-
         if hasattr(fastica, "mean_"):
             self.mean_ = self._reshape_mean(fastica.mean_)
 
@@ -352,35 +336,3 @@ class FastICA(_BaseFUSIDecomposer):
         self.n_components_ = int(fastica.components_.shape[0])
         self.n_iter_ = int(fastica.n_iter_)
         self._estimator = fastica
-
-    def _reshape_feature_component_matrix(
-        self,
-        matrix: npt.NDArray[np.floating],
-        component_coord: npt.NDArray[np.intp],
-    ) -> xr.DataArray:
-        """Reshape a `(feature, component)` matrix to the fitted spatial geometry.
-
-        Parameters
-        ----------
-        matrix : (n_features, n_components) numpy.ndarray
-            Flat matrix to reshape.
-        component_coord : (n_components,) numpy.ndarray
-            Coordinate values for the component dimension.
-
-        Returns
-        -------
-        (..., n_components) xarray.DataArray
-            Matrix unstacked to the original spatial dimensions and transposed to
-            `(*spatial_dims_, "component")`, with `attrs["long_name"]` and
-            `attrs["cmap"]` set.
-        """
-        matrix_stacked = xr.DataArray(
-            matrix,
-            dims=["feature", "component"],
-            coords={"feature": self._feature_coord_, "component": component_coord},
-        )
-        reshaped = matrix_stacked.unstack("feature").transpose(
-            *self.spatial_dims_, "component"
-        )
-        reshaped.attrs.update({"long_name": "Mixing matrix", "cmap": "coolwarm"})
-        return reshaped
