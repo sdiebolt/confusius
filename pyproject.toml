@@ -22,6 +22,7 @@ classifiers = [
     "Typing :: Typed",
     "Framework :: napari",
 ]
+
 dependencies = [
     "brainglobe-atlasapi>=2.3.0",
     "dask[complete]>=2025.9.0",
@@ -75,10 +76,17 @@ dev = [
 ]
 
 [tool.uv]
-# Ensure the lock file resolves wheels compatible with Windows (win_amd64).
-# Napari's pyqt5 extra uses the wrong marker (sys_platform == 'Windows')
-# which can cause pyqt5-qt5 to resolve to a macOS-only version.
-required-environments = ["sys_platform == 'win32' and platform_machine == 'AMD64'"]
+# Force Windows wheel resolution so napari's pyqt5 extra (wrong marker:
+# sys_platform == 'Windows') resolves the correct pyqt5-qt5 wheel.
+# platform_machine == 'AMD64' omitted: uv 0.6.9 falsely rejects
+# pywin32>=303 under that constraint despite win_amd64 wheels existing.
+required-environments = ["sys_platform == 'win32'"]
+# cartopy and napari-cartopy have C extensions that are not available on Windows;
+# exclude them from the lock file to avoid resolution errors.
+override-dependencies = [
+    "cartopy ; sys_platform != 'win32'",
+    "napari-cartopy ; sys_platform != 'win32'",
+]
 
 [tool.numpydoc_validation]
 exclude = [
