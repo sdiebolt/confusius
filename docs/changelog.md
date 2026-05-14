@@ -12,14 +12,6 @@ Current development version for the next ConfUSIus release.
 
 ### :boom: Breaking changes
 
-- `register_volume` now returns a 3-tuple
-  `(registered, transform, diagnostics)` instead of a 2-tuple. Existing call sites
-  that unpack the two-element return value need to add a third variable (or
-  `_`)
-  ([#139](https://github.com/confusius-tools/confusius/pull/139)).
-
-### :sparkles: Enhancements
-
 - `register_volume` now also returns a
   [`RegistrationDiagnostics`][confusius.registration.RegistrationDiagnostics] dataclass
   with the per-iteration metric values, final metric value, iteration count, optimizer
@@ -27,6 +19,9 @@ Current development version for the next ConfUSIus release.
   diagnostics list under `attrs["registration_diagnostics"]` and adds
   `final_metric_value` and `n_iterations` columns to `motion_params`
   ([#139](https://github.com/confusius-tools/confusius/pull/139)).
+
+### :sparkles: Enhancements
+
 - Added `show_progress` to volumewise registration so joblib progress output can be
   disabled in scripted or quiet workflows
   ([#126](https://github.com/confusius-tools/confusius/pull/126)).
