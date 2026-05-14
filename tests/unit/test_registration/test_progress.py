@@ -233,7 +233,7 @@ class TestRegisterVolumeShowProgress:
                 "x": np.arange(16) * 0.1,
             },
         )
-        result, _ = register_volume(
+        result, _, _ = register_volume(
             da,
             da,
             transform_type="translation",
