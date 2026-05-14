@@ -40,6 +40,12 @@ Current development version for the next ConfUSIus release.
   Submodules and exported functions are only imported on first access, reducing `import
   confusius` overhead for workflows that use a subset of the package.
 
+### :wrench: Maintenance
+
+- Switched documentation hosting to GitHub Pages with `mike` versioning and automatic
+  PR preview deployments
+  ([#134](https://github.com/confusius-tools/confusius/pull/134)).
+
 ## 0.2.0
 
 Released 2026-05-05.
