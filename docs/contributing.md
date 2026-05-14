@@ -65,6 +65,28 @@ just pre-commit
 - Add tests for new functionality.
 - Update documentation as needed.
 
+### Documentation
+
+Documentation is built on GitHub Actions and deployed to a separate GitHub Pages
+repository (`confusius-tools/confusius-docs`). Every pull request gets an automatic
+preview deployed at `https://confusius-tools.github.io/confusius-docs/pr-preview/pr-N/`,
+with a link posted as a comment on the PR. The preview is cleaned up automatically
+when the PR is closed.
+
+To build the docs locally:
+
+```bash
+just docs
+```
+
+**Adding documentation images.** Image generators live in `docs/images/<topic>/generate.py`.
+Each generator is run in CI automatically. If you add a new one, register it in the
+**Generate documentation images** step of `.github/workflows/docs.yml`.
+
+**Adding examples.** Example scripts live in `docs/examples/` and are discovered
+automatically by the gallery builder. After adding a script, add its built output path
+to the `nav` in `zensical.toml`.
+
 ### Reporting Issues
 
 If you find a bug or have a feature request:
