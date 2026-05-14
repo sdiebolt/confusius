@@ -104,12 +104,12 @@ data_std = standardize(data)
 # scikit-learn [`PCA`][sklearn.decomposition.PCA] model while preserving the
 # fUSI DataArray metadata and coordinates. [`PCA`][confusius.decomposition.PCA] expects
 # the same arguments as the scikit-learn model, such as
-# [`n_components`][confusius.decomposition.PCA.fit(n_components)]] for the number of
+# [`n_components`][confusius.decomposition.PCA] for the number of
 # principal components to compute, and
-# [`random_state`][confusius.decomposition.PCA.fit(random_state)] for reproducibility
+# [`random_state`][confusius.decomposition.PCA] for reproducibility
 # (see the API documentation for more details). After fitting the model, the principal
 # axes—also known as spatial components—are stored in the
-# [`.maps_`][confusius.decomposition.PCA.maps_] attribute, and the corresponding time
+# [`.maps_`][confusius.decomposition.PCA] attribute, and the corresponding time
 # series—also known as temporal components or scores—can be obtained by transforming the
 # data with the [`.transform`][confusius.decomposition.PCA.transform] method.
 #
@@ -123,7 +123,7 @@ signals
 # %% [markdown]
 # ## Explained variance
 #
-# [`explained_variance_ratio_`][confusius.decomposition.PCA.explained_variance_ratio_]
+# [`explained_variance_ratio_`][confusius.decomposition.PCA]
 # gives the fraction of total variance captured along each selected principal axis. For
 # centered data with shape `(time, space)`, the rank is at most `min(space, time - 1)`,
 # so a final near-zero entry appears in the spectrum; we omit it here for clarity. The
@@ -138,7 +138,7 @@ variance_ratio = pca.explained_variance_ratio_.isel(component=slice(None, -1))
 component_ids = variance_ratio.component.values + 1
 cumulative_variance = np.cumsum(variance_ratio.values) * 100
 
-fig, axes = plt.subplots(1, 2, figsize=(13, 4.5), constrained_layout=True)
+fig, axes = plt.subplots(1, 2, figsize=(10, 3.4), constrained_layout=True)
 
 axes[0].plot(
     component_ids, variance_ratio.values * 100, marker="o", ms=4, color="tab:blue"
@@ -156,7 +156,7 @@ _ = axes[1].set_title("Cumulative variance")
 # %% [markdown]
 # ## Visualize the principal axes of variance
 #
-# [`maps_`][confusius.decomposition.PCA.maps_] is a `(component, z, y, x)` DataArray.
+# [`maps_`][confusius.decomposition.PCA] is a `(component, z, y, x)` DataArray.
 # Each map is a principal axis in voxel space and indicates how strongly each voxel
 # contributes to the corresponding component. Voxels with large positive weights tend to
 # increase together along that axis, whereas voxels with large negative weights tend to
@@ -168,13 +168,17 @@ _ = axes[1].set_title("Cumulative variance")
 # fluctuations, artifacts, and other dominant sources of shared variance.
 
 # %% tags=["thumbnail"]
+maps_12 = pca.maps_.isel(component=slice(0, 12))
+vmax = float(np.abs(maps_12).max())
 plotter = cf.plotting.plot_volume(
-    pca.maps_.isel(component=slice(0, 12)),
+    maps_12,
     slice_mode="component",
     cmap="coolwarm",
+    vmin=-vmax,
+    vmax=vmax,
     ncols=4,
     show_axes=False,
-    fontsize=16,
+    fontsize=24,
     bg_color=bg_color,
     fg_color=fg_color,
     cbar_label="Component weight",
@@ -197,7 +201,7 @@ _ = plotter.figure.suptitle("PCA spatial maps (first 12 components)", fontsize=2
 
 # %%
 n_show = 6
-fig = plt.figure(figsize=(14, 10), constrained_layout=True)
+fig = plt.figure(figsize=(10.5, 7.5), constrained_layout=True)
 fig.patch.set_facecolor(bg_color)
 gs = fig.add_gridspec(n_show, 2, width_ratios=[1, 3])
 
@@ -227,6 +231,7 @@ for i, comp in enumerate(range(n_show)):
     signals.sel(component=comp).plot(ax=axes_tc[i], lw=1.1)
     axes_tc[i].set_title(f"PC {comp + 1} ({var:.1f} %)")
     axes_tc[i].set_xlabel("")
+    axes_tc[i].set_ylabel("")
 
 for ax in axes_tc[:-1]:
     ax.tick_params(labelbottom=False)
