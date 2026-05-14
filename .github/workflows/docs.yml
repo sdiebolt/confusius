@@ -155,11 +155,15 @@ jobs:
           NEW_ENTRY="{\"version\":\"pr-${PR_NUM}\",\"title\":\"PR #${PR_NUM} Preview\",\"aliases\":[]}"
           NEW_CONTENT=$(echo "$OLD_CONTENT" | jq --argjson e "$NEW_ENTRY" \
             '[.[] | select(.version != $e.version)] + [$e]')
-          CONTENT_B64=$(printf '%s' "$NEW_CONTENT" | base64 -w 0)
-          PAYLOAD=$(jq -n --arg sha "$SHA" --arg c "$CONTENT_B64" \
-            '{message:"chore: update pr-preview/versions.json",content:$c,sha:($sha|if .=="" then null else . end)} | del(..|nulls)')
-          echo "$PAYLOAD" | gh api repos/confusius-tools/confusius-docs/contents/pr-preview/versions.json \
-            -X PUT --input -
+          if [ "$NEW_CONTENT" = "$OLD_CONTENT" ]; then
+            echo "pr-preview/versions.json already up to date, skipping"
+          else
+            CONTENT_B64=$(printf '%s' "$NEW_CONTENT" | base64 -w 0)
+            PAYLOAD=$(jq -n --arg sha "$SHA" --arg c "$CONTENT_B64" \
+              '{message:"chore: update pr-preview/versions.json",content:$c,sha:($sha|if .=="" then null else . end)} | del(..|nulls)')
+            echo "$PAYLOAD" | gh api repos/confusius-tools/confusius-docs/contents/pr-preview/versions.json \
+              -X PUT --input -
+          fi
 
       - name: Post preview URL comment
         uses: marocchino/sticky-pull-request-comment@v2
