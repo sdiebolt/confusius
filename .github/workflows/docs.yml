@@ -84,29 +84,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gallery-
 
-      # The gallery builds each example twice (light + dark) in separate
-      # kernels. If the first run triggers an OSF download, its rich-progress
-      # output ends up as a stream output that the second run does not emit,
-      # which breaks the light/dark zip in tools/gallery/render.py. Pre-warm
-      # the dataset cache so both runs find the files already present.
-      - name: Pre-fetch Nunez-Elizalde files used by the gallery
-        run: |
-          uv run python -c "
-          from confusius.datasets import fetch_nunez_elizalde_2022
-          fetch_nunez_elizalde_2022(
-              subjects='CR020',
-              sessions=['20191120', '20191122'],
-              tasks='spontaneous',
-              acqs='slice03',
-          )
-          fetch_nunez_elizalde_2022(
-              subjects='CR022',
-              sessions='20201011',
-              tasks='spontaneous',
-              acqs='slice03',
-          )
-          "
-
       - name: Build example gallery
         env:
           QT_QPA_PLATFORM: "xcb"
