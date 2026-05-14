@@ -21,12 +21,15 @@ This project uses [uv](https://docs.astral.sh/uv/) for dependency management and
 
 ### Documentation
 - `just docs` (or `just d`) - Build documentation using Zensical
+- `just serve-docs` (or `just sd`) - Build and serve documentation locally with live reload
 - `just clean-docs` (or `just cd`) - Clean documentation build directory and generated API files
+- `just generate-doc-images` (or `just gdi`) - Run all documentation image generators locally
 
 #### CI pipeline
 
 Documentation is built entirely on GitHub Actions and deployed to
-`confusius-tools/confusius-docs` (a separate public repo served via GitHub Pages).
+[confusius-tools/confusius-docs](https://github.com/confusius-tools/confusius-docs)
+(a separate public repo served via GitHub Pages at `https://confusius.tools/`).
 The workflow (`.github/workflows/docs.yml`) has three jobs:
 
 - **`build`** (every push and PR): generates all documentation images, builds the
@@ -52,13 +55,18 @@ Image generators live in `docs/images/<topic>/generate.py`. Each one is gitignor
 
 1. Create `docs/images/<topic>/generate.py` and a matching `.gitignore` (copy an
    existing one as a template).
-2. Add the script to the **Generate documentation images** step in `.github/workflows/docs.yml`:
+2. Add `uv run docs/images/<topic>/generate.py` to the `just generate-doc-images`
+   recipe in `justfile`.
+3. Add the script to the **Generate documentation images** step in
+   `.github/workflows/docs.yml`:
    ```yaml
    xvfb-run -a uv run docs/images/<topic>/generate.py
    ```
-3. If the script uses the Nunez-Elizalde dataset, add `docs/images/<topic>/generate.py`
-   to the `hashFiles(...)` call in the **Cache Nunez-Elizalde dataset** step. If it
-   uses a different dataset, add a dedicated cache step for it.
+4. **Cache**: if the script uses an already-cached dataset (e.g. Nunez-Elizalde), add
+   `docs/images/<topic>/generate.py` to the `hashFiles(...)` call of that dataset's
+   cache step — this ensures the cache is invalidated when the script changes. If it
+   fetches a different dataset, add a dedicated `actions/cache` step for it (see the
+   existing cache steps as a template).
 
 #### Adding new example scripts
 
@@ -69,8 +77,9 @@ and executes them automatically. To add a new example:
 1. Place the script under the appropriate subdirectory in `docs/examples/`.
 2. Add the built output path (`docs/examples/_built/<subdir>/<name>.md`) to the `nav`
    in `zensical.toml`.
-3. The gallery cache key in `.github/workflows/docs.yml` already includes
-   `docs/examples/**/*.py`, so the cache will invalidate automatically.
+3. **Cache**: no manual update needed. The gallery cache key in
+   `.github/workflows/docs.yml` already uses `docs/examples/**/*.py`, so it
+   invalidates automatically when any example script changes.
 
 ### Linting, Formatting & Type Checking
 - `just pre-commit` (or `just pc`) - Run all pre-commit hooks (recommended)
