@@ -9,6 +9,7 @@ import numpy.typing as npt
 import xarray as xr
 
 from confusius._utils import is_h5py_backed
+from confusius.registration.diagnostics import RegistrationDiagnostics
 from confusius.registration.motion import create_motion_dataframe
 from confusius.registration.volume import register_volume
 
@@ -111,7 +112,11 @@ def register_volumewise(
     -------
     xarray.DataArray
         Registered data with the same coordinates as input, input attributes, and added
-        motion metadata in `attrs["reference_time"]` and `attrs["motion_params"]`.
+        motion metadata in `attrs["reference_time"]`, `attrs["motion_params"]` (now
+        also including per-frame `final_metric_value` and `n_iterations` columns), and
+        `attrs["registration_diagnostics"]` (a list of
+        [`RegistrationDiagnostics`][confusius.registration.RegistrationDiagnostics],
+        one entry per frame).
 
     Raises
     ------
@@ -163,7 +168,7 @@ def register_volumewise(
 
     with progress_context:
         results = cast(
-            "list[tuple[xr.DataArray, npt.NDArray[np.floating] | None]]",
+            "list[tuple[xr.DataArray, npt.NDArray[np.floating] | None, RegistrationDiagnostics]]",  # noqa: E501
             Parallel(n_jobs=n_jobs)(
                 delayed(register_volume)(
                     volume,
@@ -194,9 +199,11 @@ def register_volumewise(
     arr = data_moved.values
     output = np.zeros_like(arr)
     affines: list[npt.NDArray[np.floating] | None] = []
-    for t, (registered_da, frame_affine) in enumerate(results):
+    diagnostics: list[RegistrationDiagnostics] = []
+    for t, (registered_da, frame_affine, frame_diag) in enumerate(results):
         output[t] = registered_da.values
         affines.append(frame_affine)
+        diagnostics.append(frame_diag)
 
     time_coords = (
         data_moved.coords["time"].values if "time" in data_moved.coords else None
@@ -204,6 +211,11 @@ def register_volumewise(
     motion_df = create_motion_dataframe(
         affines=affines, reference=ref_da, time_coords=time_coords
     )
+
+    # Attach per-frame final metric values as an extra motion_params column.
+    # Useful for spotting frames that failed to converge, if any.
+    motion_df["final_metric_value"] = [d.final_metric_value for d in diagnostics]
+    motion_df["n_iterations"] = [d.n_iterations for d in diagnostics]
 
     result = xr.DataArray(
         output,
@@ -214,5 +226,6 @@ def register_volumewise(
 
     result.attrs["reference_time"] = reference_time
     result.attrs["motion_params"] = motion_df
+    result.attrs["registration_diagnostics"] = diagnostics
 
     return result.transpose(*data.dims)

@@ -7,6 +7,7 @@ import numpy as np
 import numpy.typing as npt
 import xarray as xr
 
+from confusius.registration.diagnostics import RegistrationDiagnostics
 from confusius.registration.volume import register_volume
 from confusius.registration.volumewise import register_volumewise
 
@@ -51,7 +52,7 @@ class FUSIRegistrationAccessor:
         show_progress: bool = False,
         plot_metric: bool = True,
         plot_composite: bool = True,
-    ) -> "tuple[xr.DataArray, npt.NDArray[np.floating] | xr.DataArray | None]":
+    ) -> "tuple[xr.DataArray, npt.NDArray[np.floating] | xr.DataArray | None, RegistrationDiagnostics]":  # noqa: E501
         """Register this volume to a fixed reference volume.
 
         Parameters
@@ -118,6 +119,9 @@ class FUSIRegistrationAccessor:
             Estimated registration transform.  For linear transforms, a
             homogeneous affine matrix.  For `transform="bspline"`, a DataArray
             encoding the B-spline control-point grid.
+        diagnostics : confusius.registration.RegistrationDiagnostics
+            Per-iteration metric values and optimizer stop condition. See
+            [`register_volume`][confusius.registration.register_volume].
 
         Examples
         --------
