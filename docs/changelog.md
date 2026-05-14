@@ -15,6 +15,9 @@ Current development version for the next ConfUSIus release.
 - Added `show_progress` to volumewise registration so joblib progress output can be
   disabled in scripted or quiet workflows
   ([#126](https://github.com/confusius-tools/confusius/pull/126)).
+- Added shared `fontsize` parameter to `plot_volume`, `plot_contours`, and carpet
+  plotting entry points so text sizing is consistent across all plotting APIs
+  ([#128](https://github.com/confusius-tools/confusius/pull/128)).
 - Replaced plotting `black_bg` with explicit `bg_color` and `fg_color` controls for
   clearer visual customization ([#124](https://github.com/confusius-tools/confusius/pull/124)).
 - Added [`FastICA`][confusius.decomposition.FastICA] transformer for independent
