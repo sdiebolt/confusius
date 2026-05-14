@@ -171,6 +171,7 @@ class FUSIRegistrationAccessor:
         smoothing_sigmas: Sequence[int] = (6, 2, 1),
         resample_interpolation: Literal["linear", "bspline"] = "linear",
         show_progress: bool = True,
+        keep_diagnostics: bool = False,
     ) -> xr.DataArray:
         """Register all volumes to a reference time point.
 
@@ -218,6 +219,11 @@ class FUSIRegistrationAccessor:
             Interpolation method used for the final resample step.
         show_progress : bool, default: True
             Whether to display a progress bar while registering volumes.
+        keep_diagnostics : bool, default: False
+            Whether to keep per-frame registration diagnostics on the result.
+            See
+            [`register_volumewise`][confusius.registration.register_volumewise]
+            for the full description.
 
         Returns
         -------
@@ -247,4 +253,5 @@ class FUSIRegistrationAccessor:
             smoothing_sigmas=smoothing_sigmas,
             resample_interpolation=resample_interpolation,
             show_progress=show_progress,
+            keep_diagnostics=keep_diagnostics,
         )

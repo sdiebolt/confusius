@@ -15,10 +15,11 @@ Current development version for the next ConfUSIus release.
 - `register_volume` now also returns a
   [`RegistrationDiagnostics`][confusius.registration.RegistrationDiagnostics] dataclass
   with the per-iteration metric values, final metric value, iteration count, optimizer
-  stop condition, and the metric name. `register_volumewise` propagates the per-frame
-  diagnostics list under `attrs["registration_diagnostics"]` and adds
-  `final_metric_value` and `n_iterations` columns to `motion_params`
-  ([#139](https://github.com/confusius-tools/confusius/pull/139)).
+  stop condition, and the metric name. `register_volumewise` always adds per-frame
+  `final_metric_value` and `n_iterations` columns to `motion_params`, and exposes the
+  full per-frame diagnostics list under `attrs["registration_diagnostics"]` only when
+  called with `keep_diagnostics=True` to avoid retaining the full optimizer metric
+  trace by default ([#139](https://github.com/confusius-tools/confusius/pull/139)).
 
 ### :sparkles: Enhancements
 
