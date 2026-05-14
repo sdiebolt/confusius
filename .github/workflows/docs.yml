@@ -235,11 +235,10 @@ jobs:
             SITE_EXAMPLES_INDEX="${{ github.workspace }}/site/site/examples/index.html"
           fi
           cp "$SITE_EXAMPLES_INDEX" /tmp/confusius-examples-index.html
-          uv run --project ${{ github.workspace }} mike deploy --config-file ${{ github.workspace }}/zensical.toml --branch main --update-aliases dev latest
+          uv run --project ${{ github.workspace }} mike deploy --config-file ${{ github.workspace }}/zensical.toml --branch main dev
           cp /tmp/confusius-examples-index.html dev/examples/index.html
           git add dev/examples/index.html
           git diff --cached --quiet || git commit --amend --no-edit
-          uv run --project ${{ github.workspace }} mike list --config-file ${{ github.workspace }}/zensical.toml --branch main | grep -q "^stable " || uv run --project ${{ github.workspace }} mike set-default --config-file ${{ github.workspace }}/zensical.toml --branch main latest
           git push origin main
 
       - name: Deploy release docs
@@ -252,9 +251,9 @@ jobs:
             SITE_EXAMPLES_INDEX="${{ github.workspace }}/site/site/examples/index.html"
           fi
           cp "$SITE_EXAMPLES_INDEX" /tmp/confusius-examples-index.html
-          uv run --project ${{ github.workspace }} mike deploy --config-file ${{ github.workspace }}/zensical.toml --branch main --update-aliases "$VERSION" stable
+          uv run --project ${{ github.workspace }} mike deploy --config-file ${{ github.workspace }}/zensical.toml --branch main --update-aliases "$VERSION" latest
           cp /tmp/confusius-examples-index.html "$VERSION"/examples/index.html
           git add "$VERSION"/examples/index.html
           git diff --cached --quiet || git commit --amend --no-edit
-          uv run --project ${{ github.workspace }} mike set-default --config-file ${{ github.workspace }}/zensical.toml --branch main stable
+          uv run --project ${{ github.workspace }} mike set-default --config-file ${{ github.workspace }}/zensical.toml --branch main latest
           git push origin main
