@@ -1,0 +1,451 @@
+/* DM Sans — used for the hero title and navbar site name only.
+   Weights 500 (navbar) and 600 (hero display). */
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600&display=swap");
+
+/* Supplement Google-Fonts JetBrains Mono with box-drawing + block glyphs.
+   Google Fonts ships only latin/cyrillic/greek/vietnamese subsets, so chars in
+   U+2500–25FF (used by Rich tables, etc.) otherwise fall back to system mono
+   with mismatched metrics. Served via jsDelivr's GitHub mirror, pinned to a
+   tagged release for reproducibility. */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/webfonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2500-257F, U+2580-259F, U+25A0-25FF;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/webfonts/JetBrainsMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  unicode-range: U+2500-257F, U+2580-259F, U+25A0-25FF;
+}
+
+/* Light mode: red accent on soft gray background from logo palette. */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #d93a54;
+  --md-primary-fg-color--light: #f5c2ca;
+  --md-primary-fg-color--dark: #a82d3f;
+  --md-accent-fg-color: #d93a54;
+  --md-accent-fg-color--transparent: rgba(217, 58, 84, 0.1);
+  --md-accent-bg-color: #fff;
+  --md-accent-bg-color--light: rgba(255, 255, 255, 0.7);
+  --md-default-bg-color: #f8f9fb;
+  --md-default-bg-color--light: #f8f9fb;
+  --md-default-bg-color--lighter: #edf0f5;
+  --md-default-bg-color--lightest: #e3e7f0;
+  --md-code-bg-color: #e3e7f0;
+}
+
+/* Dark mode: brighter red accent on near-black background from logo palette. */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #e94b5f;
+  --md-primary-fg-color--light: #f5c2ca;
+  --md-primary-fg-color--dark: #d93a54;
+  --md-accent-fg-color: #e94b5f;
+  --md-accent-fg-color--transparent: rgba(233, 75, 95, 0.1);
+  --md-accent-bg-color: #fff;
+  --md-accent-bg-color--light: rgba(255, 255, 255, 0.7);
+  --md-default-bg-color: #090c10;
+  --md-default-bg-color--light: #090c10;
+  --md-default-bg-color--lighter: #111720;
+  --md-default-bg-color--lightest: #1a2030;
+  --md-code-bg-color: #111720;
+}
+
+/* ── Header ───────────────────────────────────────────────────────────────── */
+
+/* The modern theme uses --md-default-bg-color--light for the header, which
+   differs from the page background we set. Pin it to the page background. */
+.md-header {
+  background-color: var(--md-default-bg-color);
+}
+
+/* ── Logo ─────────────────────────────────────────────────────────────────── */
+
+/* Remove the default padding so the 2rem logo fits inside the 2.4rem header
+   without inflating the navbar height (total = 2rem image + 2×0.2rem margin). */
+.md-header__button.md-logo {
+  padding: 0;
+}
+
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 2rem;
+}
+
+/* ── Navbar title ─────────────────────────────────────────────────────────── */
+
+/* Increase the site name font size to match the 2rem logo visually. */
+.md-header__title,
+.md-header__title .md-header__topic {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 1.35rem;
+  font-weight: 500;
+}
+
+/* Accent span injected by docs/javascripts/theme.js to color "fUSI" red. */
+.fusi-accent {
+  color: var(--md-primary-fg-color);
+}
+
+/* ── Links ────────────────────────────────────────────────────────────────── */
+
+.md-typeset a {
+  text-decoration: none;
+}
+
+/* TODO: make this work */
+.doc-signature .autorefs a {
+  text-decoration: underline;
+  text-decoration-style: dotted;
+}
+
+/* ── Admonition color overrides using logo palette ────────────────────────── */
+/* Zensical modern puts the tint on the container, not the title bar.
+   Only override: container background, icon (::before), and chevron (::after). */
+
+/* note / abstract / summary / tldr / info / todo: logo blue. */
+.md-typeset .admonition.note,
+.md-typeset details.note,
+.md-typeset .admonition.abstract,
+.md-typeset details.abstract,
+.md-typeset .admonition.summary,
+.md-typeset details.summary,
+.md-typeset .admonition.tldr,
+.md-typeset details.tldr,
+.md-typeset .admonition.info,
+.md-typeset details.info,
+.md-typeset .admonition.todo,
+.md-typeset details.todo {
+  background-color: rgba(0, 153, 229, 0.1);
+}
+.md-typeset .note > .admonition-title::before,
+.md-typeset .note > summary::before,
+.md-typeset .abstract > .admonition-title::before,
+.md-typeset .abstract > summary::before,
+.md-typeset .summary > .admonition-title::before,
+.md-typeset .summary > summary::before,
+.md-typeset .tldr > .admonition-title::before,
+.md-typeset .tldr > summary::before,
+.md-typeset .info > .admonition-title::before,
+.md-typeset .info > summary::before,
+.md-typeset .todo > .admonition-title::before,
+.md-typeset .todo > summary::before {
+  background-color: #0099e5;
+}
+.md-typeset .note > .admonition-title::after,
+.md-typeset .note > summary::after,
+.md-typeset .abstract > .admonition-title::after,
+.md-typeset .abstract > summary::after,
+.md-typeset .summary > .admonition-title::after,
+.md-typeset .summary > summary::after,
+.md-typeset .tldr > .admonition-title::after,
+.md-typeset .tldr > summary::after,
+.md-typeset .info > .admonition-title::after,
+.md-typeset .info > summary::after,
+.md-typeset .todo > .admonition-title::after,
+.md-typeset .todo > summary::after {
+  color: #0099e5;
+}
+
+/* tip / hint / important / success / check / done: logo teal. */
+.md-typeset .admonition.tip,
+.md-typeset details.tip,
+.md-typeset .admonition.hint,
+.md-typeset details.hint,
+.md-typeset .admonition.important,
+.md-typeset details.important,
+.md-typeset .admonition.success,
+.md-typeset details.success,
+.md-typeset .admonition.check,
+.md-typeset details.check,
+.md-typeset .admonition.done,
+.md-typeset details.done {
+  background-color: rgba(58, 217, 164, 0.1);
+}
+.md-typeset .tip > .admonition-title::before,
+.md-typeset .tip > summary::before,
+.md-typeset .hint > .admonition-title::before,
+.md-typeset .hint > summary::before,
+.md-typeset .important > .admonition-title::before,
+.md-typeset .important > summary::before,
+.md-typeset .success > .admonition-title::before,
+.md-typeset .success > summary::before,
+.md-typeset .check > .admonition-title::before,
+.md-typeset .check > summary::before,
+.md-typeset .done > .admonition-title::before,
+.md-typeset .done > summary::before {
+  background-color: #3ad9a4;
+}
+.md-typeset .tip > .admonition-title::after,
+.md-typeset .tip > summary::after,
+.md-typeset .hint > .admonition-title::after,
+.md-typeset .hint > summary::after,
+.md-typeset .important > .admonition-title::after,
+.md-typeset .important > summary::after,
+.md-typeset .success > .admonition-title::after,
+.md-typeset .success > summary::after,
+.md-typeset .check > .admonition-title::after,
+.md-typeset .check > summary::after,
+.md-typeset .done > .admonition-title::after,
+.md-typeset .done > summary::after {
+  color: #3ad9a4;
+}
+
+/* question / help / faq: logo blue (informational). */
+.md-typeset .admonition.question,
+.md-typeset details.question,
+.md-typeset .admonition.help,
+.md-typeset details.help,
+.md-typeset .admonition.faq,
+.md-typeset details.faq {
+  background-color: rgba(0, 153, 229, 0.1);
+}
+.md-typeset .question > .admonition-title::before,
+.md-typeset .question > summary::before,
+.md-typeset .help > .admonition-title::before,
+.md-typeset .help > summary::before,
+.md-typeset .faq > .admonition-title::before,
+.md-typeset .faq > summary::before {
+  background-color: #0099e5;
+}
+.md-typeset .question > .admonition-title::after,
+.md-typeset .question > summary::after,
+.md-typeset .help > .admonition-title::after,
+.md-typeset .help > summary::after,
+.md-typeset .faq > .admonition-title::after,
+.md-typeset .faq > summary::after {
+  color: #0099e5;
+}
+
+/* warning / caution / attention: warm amber. */
+.md-typeset .admonition.warning,
+.md-typeset details.warning,
+.md-typeset .admonition.caution,
+.md-typeset details.caution,
+.md-typeset .admonition.attention,
+.md-typeset details.attention {
+  background-color: rgba(245, 166, 35, 0.1);
+}
+.md-typeset .warning > .admonition-title::before,
+.md-typeset .warning > summary::before,
+.md-typeset .caution > .admonition-title::before,
+.md-typeset .caution > summary::before,
+.md-typeset .attention > .admonition-title::before,
+.md-typeset .attention > summary::before {
+  background-color: #f5a623;
+}
+.md-typeset .warning > .admonition-title::after,
+.md-typeset .warning > summary::after,
+.md-typeset .caution > .admonition-title::after,
+.md-typeset .caution > summary::after,
+.md-typeset .attention > .admonition-title::after,
+.md-typeset .attention > summary::after {
+  color: #f5a623;
+}
+
+/* danger / error / failure / fail / missing / bug: logo red. */
+.md-typeset .admonition.danger,
+.md-typeset details.danger,
+.md-typeset .admonition.error,
+.md-typeset details.error,
+.md-typeset .admonition.failure,
+.md-typeset details.failure,
+.md-typeset .admonition.fail,
+.md-typeset details.fail,
+.md-typeset .admonition.missing,
+.md-typeset details.missing,
+.md-typeset .admonition.bug,
+.md-typeset details.bug {
+  background-color: rgba(217, 58, 84, 0.1);
+}
+.md-typeset .danger > .admonition-title::before,
+.md-typeset .danger > summary::before,
+.md-typeset .error > .admonition-title::before,
+.md-typeset .error > summary::before,
+.md-typeset .failure > .admonition-title::before,
+.md-typeset .failure > summary::before,
+.md-typeset .fail > .admonition-title::before,
+.md-typeset .fail > summary::before,
+.md-typeset .missing > .admonition-title::before,
+.md-typeset .missing > summary::before,
+.md-typeset .bug > .admonition-title::before,
+.md-typeset .bug > summary::before {
+  background-color: #d93a54;
+}
+.md-typeset .danger > .admonition-title::after,
+.md-typeset .danger > summary::after,
+.md-typeset .error > .admonition-title::after,
+.md-typeset .error > summary::after,
+.md-typeset .failure > .admonition-title::after,
+.md-typeset .failure > summary::after,
+.md-typeset .fail > .admonition-title::after,
+.md-typeset .fail > summary::after,
+.md-typeset .missing > .admonition-title::after,
+.md-typeset .missing > summary::after,
+.md-typeset .bug > .admonition-title::after,
+.md-typeset .bug > summary::after {
+  color: #d93a54;
+}
+
+/* example: soft purple — distinct from logo palette, pairs well with red/blue. */
+.md-typeset .admonition.example,
+.md-typeset details.example {
+  background-color: rgba(139, 127, 247, 0.1);
+}
+.md-typeset .example > .admonition-title::before,
+.md-typeset .example > summary::before {
+  background-color: #8b7ff7;
+}
+.md-typeset .example > .admonition-title::after,
+.md-typeset .example > summary::after {
+  color: #8b7ff7;
+}
+
+/* Custom admonition: references — logo blue. */
+:root {
+  --md-admonition-icon--references: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" class="lucide lucide-notebook-text" viewBox="0 0 24 24"><path d="M2 6h4m-4 4h4m-4 4h4m-4 4h4"/><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9.5 8h5m-5 4H16m-6.5 4H14"/></svg>');
+}
+
+.md-typeset .admonition.references,
+.md-typeset details.references {
+  background-color: rgba(0, 153, 229, 0.1);
+}
+
+.md-typeset .references > .admonition-title::before,
+.md-typeset .references > summary::before {
+  background-color: #0099e5;
+  -webkit-mask-image: var(--md-admonition-icon--references);
+          mask-image: var(--md-admonition-icon--references);
+}
+
+.md-typeset .references > .admonition-title::after,
+.md-typeset .references > summary::after {
+  color: #0099e5;
+}
+
+/* ── Accessibility ────────────────────────────────────────────────────────── */
+
+/* Visually hides content while keeping it in the accessibility tree. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Home page ────────────────────────────────────────────────────────────── */
+
+/* Zensical inserts an auto h1 when the page content has none; the hidden h1
+   in index.md suppresses it — this rule is a safety net for the hero layout.
+   Negative margin-top pulls the hero up flush with the content area top. */
+.hero-banner {
+  text-align: center;
+  margin-top: -1.5rem;
+  padding: 0 1rem 2.5rem;
+}
+
+.hero-logo {
+  /* Logo is nearly square (0.92 ratio): constrain by height for predictable size. */
+  max-height: 19rem;
+  max-width: 80%;
+  width: auto;
+  height: auto;
+  margin-bottom: 0;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* Use .md-typeset specificity to override browser default p margins.
+   clamp() scales the font with the viewport so the title never overflows
+   on narrow screens — which would break text-align:center relative to the
+   logo. line-height:1 eliminates half-leading at large sizes. */
+.md-typeset .hero-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(2.5rem, 10.5vw, 5.1rem);
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  margin: 0.15rem auto 0.3rem;
+}
+
+/* Light mode: logo navy for non-accent letters. */
+[data-md-color-scheme="default"] .hero-title {
+  color: #1e2c5d;
+}
+
+/* Dark mode: logo near-white for non-accent letters. */
+[data-md-color-scheme="slate"] .hero-title {
+  color: #f8f9fb;
+}
+
+.md-typeset .hero-tagline {
+  font-size: 1.1rem;
+  color: var(--md-default-fg-color--light);
+  margin: 0 auto 1.5rem;
+  max-width: 38rem;
+}
+
+.hero-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.hero-badges img {
+  height: 1.4rem;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Two-column Quick Start grid. */
+.quickstart-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  margin: 0.5rem 0 1.5rem;
+}
+
+@media (max-width: 60em) {
+  .quickstart-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.quickstart-grid img {
+  width: 100%;
+  border-radius: 0.4rem;
+  display: block;
+}
+
+/* Light/dark image switching for non-markdown HTML contexts. */
+[data-md-color-scheme="slate"] img[src$="#only-light"] { display: none; }
+[data-md-color-scheme="default"] img[src$="#only-dark"] { display: none; }
+
+/* Keep example tiles compact instead of stretching full-width when few are present. */
+.grid.cards.examples-cards > ul {
+  grid-template-columns: repeat(auto-fit, minmax(12.5rem, 14.5rem));
+  justify-content: start;
+}
+
+.grid.cards.examples-cards > ul > li {
+  max-width: 14.5rem;
+}
+
+.grid.cards.examples-cards img {
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+}
