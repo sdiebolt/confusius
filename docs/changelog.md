@@ -10,8 +10,23 @@ icon: lucide/history
 
 Current development version for the next ConfUSIus release.
 
+### :boom: Breaking changes
+
+- `register_volume` now returns a 3-tuple
+  `(registered, transform, diagnostics)` instead of a 2-tuple. Existing call sites
+  that unpack the two-element return value need to add a third variable (or
+  `_`)
+  ([#138](https://github.com/confusius-tools/confusius/issues/138)).
+
 ### :sparkles: Enhancements
 
+- `register_volume` now also returns a
+  [`RegistrationDiagnostics`][confusius.registration.RegistrationDiagnostics] dataclass
+  with the per-iteration metric values, final metric value, iteration count, optimizer
+  stop condition, and the metric name. `register_volumewise` propagates the per-frame
+  diagnostics list under `attrs["registration_diagnostics"]` and adds
+  `final_metric_value` and `n_iterations` columns to `motion_params`
+  ([#138](https://github.com/confusius-tools/confusius/issues/138)).
 - Added `show_progress` to volumewise registration so joblib progress output can be
   disabled in scripted or quiet workflows
   ([#126](https://github.com/confusius-tools/confusius/pull/126)).
@@ -19,6 +34,14 @@ Current development version for the next ConfUSIus release.
   clearer visual customization ([#124](https://github.com/confusius-tools/confusius/pull/124)).
 - Added example gallery helper utilities to streamline writing and maintaining docs
   examples ([#102](https://github.com/confusius-tools/confusius/pull/102)).
+
+### :books: Documentation
+
+- Added a [Registering two acquisitions](examples/_built/registration/register_volume_two_acquisitions.md)
+  example demonstrating `register_volume`, the new diagnostics, and confusius's
+  [`plot_volume`][confusius.plotting.plot_volume] overlay pattern for inspecting
+  alignment before and after registration
+  ([#138](https://github.com/confusius-tools/confusius/issues/138)).
 
 ### :bug: Fixes
 
