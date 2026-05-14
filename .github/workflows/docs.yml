@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/confusius/nunez-elizalde-2022-bids
-          key: ${{ runner.os }}-nunez-elizalde-bids-${{ hashFiles('docs/images/gui/generate.py', 'docs/images/qc/generate.py', 'docs/images/visualization/generate.py') }}
+          key: ${{ runner.os }}-nunez-elizalde-bids-${{ hashFiles('docs/images/gui/generate.py', 'docs/images/qc/generate.py', 'docs/images/visualization/generate.py', 'docs/images/home/generate.py') }}
           restore-keys: |
             ${{ runner.os }}-nunez-elizalde-bids-
 
@@ -71,6 +71,7 @@ jobs:
           xvfb-run -a uv run docs/images/gui/generate.py
           xvfb-run -a uv run docs/images/qc/generate.py
           xvfb-run -a uv run docs/images/visualization/generate.py
+          xvfb-run -a uv run docs/images/home/generate.py
 
       - name: Cache gallery artifacts
         uses: actions/cache@v5
@@ -138,14 +139,25 @@ jobs:
           destination_dir: pr-preview/pr-${{ github.event.number }}
           keep_files: true
 
-      - name: Deploy stub versions.json for mike version switcher
+      - name: Update pr-preview/versions.json for mike version switcher
         env:
           GH_TOKEN: ${{ secrets.DOCS_DEPLOY_TOKEN }}
         run: |
-          SHA=$(gh api repos/confusius-tools/confusius-docs/contents/pr-preview/versions.json \
-            --jq '.sha' 2>/dev/null || echo "")
-          PAYLOAD=$(jq -n --arg sha "$SHA" \
-            '{message:"chore: add stub versions.json",content:"W10=",sha:($sha|if .=="" then null else . end)} | del(..|nulls)')
+          PR_NUM="${{ github.event.number }}"
+          RESPONSE=$(gh api repos/confusius-tools/confusius-docs/contents/pr-preview/versions.json 2>/dev/null || echo "")
+          if [ -n "$RESPONSE" ]; then
+            SHA=$(echo "$RESPONSE" | jq -r '.sha')
+            OLD_CONTENT=$(echo "$RESPONSE" | jq -r '.content | gsub("\\n"; "") | @base64d')
+          else
+            SHA=""
+            OLD_CONTENT="[]"
+          fi
+          NEW_ENTRY="{\"version\":\"pr-${PR_NUM}\",\"title\":\"PR #${PR_NUM} Preview\",\"aliases\":[]}"
+          NEW_CONTENT=$(echo "$OLD_CONTENT" | jq --argjson e "$NEW_ENTRY" \
+            '[.[] | select(.version != $e.version)] + [$e]')
+          CONTENT_B64=$(printf '%s' "$NEW_CONTENT" | base64 -w 0)
+          PAYLOAD=$(jq -n --arg sha "$SHA" --arg c "$CONTENT_B64" \
+            '{message:"chore: update pr-preview/versions.json",content:$c,sha:($sha|if .=="" then null else . end)} | del(..|nulls)')
           echo "$PAYLOAD" | gh api repos/confusius-tools/confusius-docs/contents/pr-preview/versions.json \
             -X PUT --input -
 
