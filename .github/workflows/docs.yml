@@ -50,7 +50,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/confusius/nunez-elizalde-2022-bids
-          key: ${{ runner.os }}-nunez-elizalde-bids-${{ hashFiles('docs/images/gui/generate.py', 'docs/images/qc/generate.py', 'docs/images/visualization/generate.py', 'docs/images/home/generate.py') }}
+          key: ${{ runner.os }}-nunez-elizalde-bids-${{ hashFiles('docs/images/gui/generate.py', 'docs/images/qc/generate.py', 'docs/images/visualization/generate.py', 'docs/images/home/generate.py', 'docs/examples/registration/register_volume_two_acquisitions.py') }}
           restore-keys: |
             ${{ runner.os }}-nunez-elizalde-bids-
 

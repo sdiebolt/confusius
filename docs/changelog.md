@@ -10,6 +10,17 @@ icon: lucide/history
 
 Current development version for the next ConfUSIus release.
 
+### :boom: Breaking changes
+
+- `register_volume` now also returns a
+  [`RegistrationDiagnostics`][confusius.registration.RegistrationDiagnostics] dataclass
+  with the per-iteration metric values, final metric value, iteration count, optimizer
+  stop condition, and the metric name. `register_volumewise` always adds per-frame
+  `final_metric_value` and `n_iterations` columns to `motion_params`, and exposes the
+  full per-frame diagnostics list under `attrs["registration_diagnostics"]` only when
+  called with `keep_diagnostics=True` to avoid retaining the full optimizer metric
+  trace by default ([#139](https://github.com/confusius-tools/confusius/pull/139)).
+
 ### :sparkles: Enhancements
 
 - Added `datatypes` filter to `fetch_cybis_pereira_2026`, allowing downloads to be
@@ -22,6 +33,14 @@ Current development version for the next ConfUSIus release.
   clearer visual customization ([#124](https://github.com/confusius-tools/confusius/pull/124)).
 - Added example gallery helper utilities to streamline writing and maintaining docs
   examples ([#102](https://github.com/confusius-tools/confusius/pull/102)).
+
+### :books: Documentation
+
+- Added a [Registering two acquisitions](examples/_built/registration/register_volume_two_acquisitions.md)
+  example demonstrating `register_volume`, the new diagnostics, and confusius's
+  [`plot_volume`][confusius.plotting.plot_volume] overlay pattern for inspecting
+  alignment before and after registration
+  ([#139](https://github.com/confusius-tools/confusius/pull/139)).
 
 ### :bug: Fixes
 
