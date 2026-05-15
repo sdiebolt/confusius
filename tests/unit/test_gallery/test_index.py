@@ -11,6 +11,7 @@ from tools.gallery.index import build_index
 def _spec(source: Path, section: str) -> ExampleSpec:
     return ExampleSpec(
         source=source,
+        base_name=source.stem,
         section=section,
         section_intro=f"# {section.upper()}\n\nIntro for {section}.\n",
     )
@@ -111,6 +112,7 @@ def test_build_index_demotes_h1_section_intros(tmp_path: Path) -> None:
     src.touch()
     spec = ExampleSpec(
         source=src,
+        base_name=src.stem,
         section="io",
         section_intro="# Input/Output\n\nIntro paragraph.\n",
     )

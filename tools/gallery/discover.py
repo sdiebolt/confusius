@@ -7,9 +7,10 @@ from pathlib import Path
 
 from ._types import ExampleSpec
 
-# Strip leading "01_", "02_" etc. from section directory names so the built
-# output uses clean names ("io", "decomposition") while the source directories
-# can be prefixed for explicit ordering.
+# Strip leading "01_", "02_" etc. from section directory names and example file
+# names so the built output uses clean names ("io", "decomposition",
+# "pca_single_recording") while the source paths can be prefixed for explicit
+# ordering.
 _NUMERIC_PREFIX_RE = re.compile(r"^\d+_")
 
 
@@ -32,6 +33,7 @@ def discover(root: Path) -> list[ExampleSpec]:
             specs.append(
                 ExampleSpec(
                     source=source,
+                    base_name=_NUMERIC_PREFIX_RE.sub("", source.stem),
                     section=section_name,
                     section_intro=intro,
                 )
