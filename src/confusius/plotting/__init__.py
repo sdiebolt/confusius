@@ -12,10 +12,12 @@ __all__ = [
 
 from confusius.plotting.image import (
     VolumePlotter,
-    draw_napari_labels,
-    labels_from_layer,
     plot_carpet,
     plot_contours,
-    plot_napari,
     plot_volume,
+)
+from confusius.plotting.napari import (
+    draw_napari_labels,
+    labels_from_layer,
+    plot_napari,
 )

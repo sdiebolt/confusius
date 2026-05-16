@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from napari.layers.utils.layer_utils import calc_data_range
 from napari.utils.notifications import show_warning
 
-from confusius._utils import get_coordinate_spacings_best_effort
+from confusius._utils.coordinates import get_coordinate_spacings_best_effort
 from confusius.io import load
 
 if TYPE_CHECKING:

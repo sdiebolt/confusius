@@ -18,7 +18,8 @@ import pandas as pd
 import scipy.linalg as spla
 from scipy.interpolate import interp1d
 
-from confusius._utils import find_stack_level, get_representative_step
+from confusius._utils.coordinates import get_representative_step
+from confusius._utils.stack import find_stack_level
 from confusius.glm._hrf_models import HRFModel, _hrf_kernel
 
 if TYPE_CHECKING:
