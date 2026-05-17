@@ -69,7 +69,7 @@ concise syntax; both call the same underlying functions.
 
     bids_root = fetch_nunez_elizalde_2022(
         subjects=["CR022"],
-        sessions=["20201011"],
+        sessions=["20201011", "20201007"],
         tasks=["spontaneous"],
         acqs=["slice03"],
     )
@@ -484,11 +484,11 @@ against a reference, or a registered output against its target.
     ```python
     # Every third elevation slice keeps the figure compact while still showing the
     # anatomical depth range.
-    composite_slices = list(np.asarray(vol_3d["z"].values, dtype=float)[::3][:-1])
+    composite_slices = list(np.asarray(angio["z"].values, dtype=float)[::3][:-1])
 
     # Two angiography volumes from different sessions of the same subject.
-    plotter = vol_3d.fusi.plot.composite(
-        vol_3d_2, slice_coords=composite_slices, normalize_strategy="per_slice"
+    plotter = angio.fusi.plot.composite(
+        angio_2, slice_coords=composite_slices, normalize_strategy="per_slice"
     )
     ```
 
@@ -497,15 +497,15 @@ against a reference, or a registered output against its target.
     ```python
     # Every third elevation slice keeps the figure compact while still showing the
     # anatomical depth range.
-    composite_slices = list(np.asarray(vol_3d["z"].values, dtype=float)[::3][:-1])
+    composite_slices = list(np.asarray(angio["z"].values, dtype=float)[::3][:-1])
 
     # Two angiography volumes from different sessions of the same subject.
     plotter = cf.plotting.plot_composite(
-        vol_3d, vol_3d_2, slice_coords=composite_slices, normalize_strategy="per_slice"
+        angio, angio_2, slice_coords=composite_slices, normalize_strategy="per_slice"
     )
     ```
 
-By default `vol_3d_2` is resampled onto `vol_3d`'s grid (`resample=True`), so the two
+By default `angio_2` is resampled onto `angio`'s grid (`resample=True`), so the two
 volumes do not need to share the same shape, spacing, or origin. The function returns a
 [`VolumePlotter`][confusius.plotting.VolumePlotter] with one panel per slice — the same
 overlay machinery used by `plot_volume` and `plot_contours`, so you can chain
