@@ -44,7 +44,7 @@ def _compute_sampling_interval(
     uniformity_tolerance : float, default: 1e-2
         Maximum allowed per-interval relative deviation from the median consecutive
         interval (see
-        [`get_representative_step`][confusius._utils.get_representative_step]). Increase
+        [`get_representative_step`][confusius._utils.coordinates.get_representative_step]). Increase
         this value to tolerate slight timestamp jitter (e.g. from acquisition clocks).
 
     Returns
@@ -493,7 +493,7 @@ def _compute_condition_regressors(
     uniformity_tolerance : float, default: 1e-2
         Maximum allowed per-interval relative deviation from the median consecutive
         interval in `volume_times` (see
-        [`get_representative_step`][confusius._utils.get_representative_step]).
+        [`get_representative_step`][confusius._utils.coordinates.get_representative_step]).
 
     Returns
     -------
@@ -650,7 +650,7 @@ def make_first_level_design_matrix(
     uniformity_tolerance : float, default: 1e-2
         Maximum allowed per-interval relative deviation from the median consecutive
         interval in `volume_times` (see
-        [`get_representative_step`][confusius._utils.get_representative_step]).
+        [`get_representative_step`][confusius._utils.coordinates.get_representative_step]).
         Raise a `ValueError` if any interval exceeds this threshold. Increase this
         value to tolerate slight timestamp jitter (e.g. from acquisition clocks).
 
