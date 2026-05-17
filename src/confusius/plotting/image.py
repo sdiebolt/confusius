@@ -987,8 +987,9 @@ class VolumePlotter:
         Parameters
         ----------
         data1 : xarray.DataArray
-            First volume, plotted in red. Must be 2D or 3D after squeezing unitary
-            dimensions (except `slice_mode`).
+            First volume, plotted in red. 3D volume data. Unitary dimensions (except
+            `slice_mode`) are squeezed before processing. Complex-valued inputs are
+            converted to magnitude (`abs(data)`) with a warning.
         data2 : xarray.DataArray
             Second volume, plotted in cyan. Must have the same dimensionality as
             `data1` after squeezing; when `resample=True` it is resampled onto
@@ -1971,9 +1972,9 @@ def plot_composite(
     Parameters
     ----------
     data1 : xarray.DataArray
-        First volume, plotted in red. Must be 2D or 3D after squeezing unitary
-        dimensions (except `slice_mode`). Complex-valued data is converted to magnitude
-        before display.
+        First volume, plotted in red. 3D volume data. Unitary dimensions (except
+        `slice_mode`) are squeezed before processing. Complex-valued inputs are
+        converted to magnitude (`abs(data)`) with a warning.
     data2 : xarray.DataArray
         Second volume, plotted in cyan. Must have the same dimensionality as `data1`
         after squeezing; when `resample=True` it is resampled onto `data1`'s grid before
