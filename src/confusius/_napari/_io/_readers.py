@@ -30,7 +30,7 @@ def _convert_dataarray_to_layer_data(da: xr.DataArray, name: str) -> FullLayerDa
     Mirrors the logic of [`plot_napari`][confusius.plotting.plot_napari]
 
     * Uses
-      [`_compute_spacing_best_effort`][confusius._utils._compute_spacing_best_effort]
+      [`get_coordinate_spacings_best_effort`][confusius._utils.coordinates.get_coordinate_spacings_best_effort]
       for the `scale`: uniform coordinates use their exact spacing; non-uniform
       coordinates fall back to the median diff and a napari warning is shown.
     * Includes [`origin`][confusius.xarray.FUSIAccessor.origin] as `translate`
