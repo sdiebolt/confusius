@@ -7,7 +7,7 @@ import numpy as np
 import xarray as xr
 
 from confusius._utils.atlas import build_atlas_cmap_and_norm
-from confusius._utils.plotting import blend_red_cyan, normalize
+from confusius._utils.plotting import blend_red_cyan, scale_min_max
 from confusius._utils.stack import find_stack_level
 from confusius.extract import extract_with_mask
 from confusius.plotting._hover import (
@@ -1128,8 +1128,8 @@ class VolumePlotter:
                             )
 
         if normalize_strategy == "per_volume":
-            data1 = data1.copy(data=normalize(data1.values.astype(float)))
-            data2 = data2.copy(data=normalize(data2.values.astype(float)))
+            data1 = data1.copy(data=scale_min_max(data1.values.astype(float)))
+            data2 = data2.copy(data=scale_min_max(data2.values.astype(float)))
         elif normalize_strategy == "shared":
             arr1 = data1.values.astype(float)
             arr2 = data2.values.astype(float)
@@ -1182,8 +1182,8 @@ class VolumePlotter:
             arr1 = slice1.values.astype(float)
             arr2 = slice2.values.astype(float)
             if normalize_strategy == "per_slice":
-                arr1 = normalize(arr1)
-                arr2 = normalize(arr2)
+                arr1 = scale_min_max(arr1)
+                arr2 = scale_min_max(arr2)
             rgb = blend_red_cyan(arr1, arr2)
 
             x_edges, y_edges, _, _ = _slice_edges_and_centers(slice1, dim_row, dim_col)

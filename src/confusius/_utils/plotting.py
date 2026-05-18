@@ -4,7 +4,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-def normalize(arr: NDArray[np.floating]) -> NDArray[np.floating]:
+def scale_min_max(arr: NDArray[np.floating]) -> NDArray[np.floating]:
     """Linearly scale `arr` to [0, 1], handling flat arrays gracefully.
 
     Parameters
@@ -16,7 +16,7 @@ def normalize(arr: NDArray[np.floating]) -> NDArray[np.floating]:
     -------
     numpy.ndarray
         Float array with the same shape as `arr`, rescaled to `[0, 1]`. Returns an
-        all-zero array when `arr` is flat (``arr.min() == arr.max()``).
+        all-zero array when `arr` is flat (`arr.min() == arr.max()`).
     """
     lo, hi = arr.min(), arr.max()
     if hi == lo:
@@ -25,8 +25,7 @@ def normalize(arr: NDArray[np.floating]) -> NDArray[np.floating]:
 
 
 def blend_red_cyan(
-    fixed: NDArray[np.floating],
-    moving: NDArray[np.floating],
+    fixed: NDArray[np.floating], moving: NDArray[np.floating]
 ) -> NDArray[np.floating]:
     """Blend two 2D arrays as red (fixed) and cyan (moving) channels.
 
@@ -53,8 +52,7 @@ def blend_red_cyan(
 
 
 def make_mosaic(
-    fixed_vol: NDArray[np.floating],
-    moving_vol: NDArray[np.floating],
+    fixed_vol: NDArray[np.floating], moving_vol: NDArray[np.floating]
 ) -> NDArray[np.floating]:
     """Assemble a mosaic of per-slice red/cyan blends along the first axis.
 
@@ -79,8 +77,8 @@ def make_mosaic(
     for i in range(n):
         r, c = divmod(i, n_cols)
         blend = blend_red_cyan(
-            normalize(fixed_vol[i]),
-            normalize(moving_vol[i]),
+            scale_min_max(fixed_vol[i]),
+            scale_min_max(moving_vol[i]),
         )
         mosaic[r * h : (r + 1) * h, c * w : (c + 1) * w] = blend
     return mosaic

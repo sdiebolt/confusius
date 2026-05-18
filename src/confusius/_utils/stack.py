@@ -1,4 +1,4 @@
-"""Stack-introspection helpers for accurate ``warnings.warn`` stack levels."""
+"""Stack-introspection helpers for accurate `warnings.warn` stack levels."""
 
 import inspect
 from pathlib import Path

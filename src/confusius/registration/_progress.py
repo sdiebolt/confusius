@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from confusius._utils.plotting import blend_red_cyan, make_mosaic, scale_min_max
 from confusius._utils.stack import find_stack_level
-from confusius._utils.plotting import blend_red_cyan, make_mosaic, normalize
 
 if TYPE_CHECKING:
     import SimpleITK as sitk
@@ -158,8 +158,8 @@ class RegistrationProgressPlotter:
                 )
             else:
                 rgb = blend_red_cyan(
-                    normalize(fixed_arr),
-                    normalize(moving_arr),
+                    scale_min_max(fixed_arr),
+                    scale_min_max(moving_arr),
                 )
 
             if self._composite_im is None:
