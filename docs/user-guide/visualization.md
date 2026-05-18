@@ -506,11 +506,10 @@ against a reference, or a registered output against its target.
     ```
 
 By default `angio_2` is resampled onto `angio`'s grid (`resample=True`), so the two
-volumes do not need to share the same shape, spacing, or origin. The function returns a
-[`VolumePlotter`][confusius.plotting.VolumePlotter] with one panel per slice — the same
-overlay machinery used by `plot_volume` and `plot_contours`, so you can chain
-[`add_contours`][confusius.plotting.VolumePlotter.add_contours] on top to layer atlas
-outlines over the composite.
+volumes do not need to share the same coordinates. Additionally, the function returns a
+[`VolumePlotter`][confusius.plotting.VolumePlotter] so you can use
+[`add_contours`][confusius.plotting.VolumePlotter.add_contours] to layer atlas outlines
+over the composite.
 
 ![Red/cyan composite of two angiography sessions](../images/visualization/composite-light.png#only-light)
 ![Red/cyan composite of two angiography sessions](../images/visualization/composite-dark.png#only-dark)
